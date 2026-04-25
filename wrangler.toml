@@ -1,0 +1,18 @@
+name = "customer-site-router"
+main = "worker/src/index.js"
+compatibility_date = "2024-12-01"
+
+# Production env vars are set on the Cloudflare dashboard (or via
+# `wrangler secret put`). Local dev values come from .dev.vars (gitignored).
+#
+# Required:
+#   LOG_VIEWER_ORIGIN     — e.g. https://edgetx-log-parser.pages.dev
+#   CUSTOMER_SITE_ORIGIN  — e.g. https://customer-site.pages.dev
+
+# Wire the Worker to the apex domain. Uncomment + edit when the domain is
+# registered with Cloudflare:
+#
+# routes = [
+#   { pattern = "mydomain.com/*",     zone_name = "mydomain.com" },
+#   { pattern = "www.mydomain.com/*", zone_name = "mydomain.com" },
+# ]
