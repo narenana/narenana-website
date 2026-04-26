@@ -1,0 +1,33 @@
+# Staging router for `latest.narenana.com`. Tiny Worker — forwards to
+# whichever website + viewer branches you point it at. Defaults to the
+# production hosts so `latest.narenana.com` mirrors `narenana.com` until
+# you override one of the two vars.
+#
+# Override workflow (secrets take effect within seconds — no redeploy):
+#
+#   # Test a viewer branch:
+#   cd latest-router
+#   echo "feat-mweb-ui-polish.edgetx-log-parser.pages.dev" | npx wrangler secret put VIEWER_HOST
+#
+#   # Test a website branch:
+#   echo "feat-foo.narenana-website.workers.dev" | npx wrangler secret put WEBSITE_HOST
+#
+#   # Reset to production:
+#   npx wrangler secret delete VIEWER_HOST
+#   npx wrangler secret delete WEBSITE_HOST
+#
+# (Production defaults are baked into src/index.js as constants. Secrets,
+# when present, override them. We don't use wrangler [vars] because
+# Cloudflare rejects a secret with the same name as an existing [vars]
+# binding — see the comment in src/index.js.)
+
+name = "narenana-latest"
+main = "src/index.js"
+compatibility_date = "2024-12-01"
+
+# Bind the Worker to `latest.narenana.com`. The `custom_domain = true` flag
+# tells Wrangler to auto-create the DNS record (proxied) on first deploy —
+# without it, `routes` would expect an existing DNS record to match.
+routes = [
+  { pattern = "latest.narenana.com", custom_domain = true },
+]

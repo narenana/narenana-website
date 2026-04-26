@@ -1,0 +1,16 @@
+{
+  "name": "narenana-latest-router",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker bound to latest.narenana.com — routes /log-viewer/* to a configurable viewer branch and everything else to a configurable website branch.",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "use-viewer": "scripts/use-branch.sh viewer",
+    "use-website": "scripts/use-branch.sh website",
+    "reset": "scripts/use-branch.sh reset",
+    "status": "scripts/status.sh"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}
