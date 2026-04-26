@@ -27,4 +27,4 @@ LOG_VIEWER_ORIGIN = "https://edgetx-log-parser.pages.dev"
 # Then paste the returned id below.
 [[kv_namespaces]]
 binding = "VIDEOS_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "e048dd7b7b0849bcba7b51557c4c6752"
