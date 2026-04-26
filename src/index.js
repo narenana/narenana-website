@@ -118,6 +118,12 @@ function decode(s) {
  * Forward `request` to `origin`, optionally stripping `prefix` from the path.
  * Preserves query string, method, headers and body. Drops Host so the
  * upstream Pages deployment dispatches to its own project.
+ *
+ * For 3xx responses with absolute-path Location headers, prepend `prefix` so
+ * redirects stay inside our path namespace. Cloudflare Pages issues a 308
+ * `/log-viewer/index.html` → `Location: /` which would otherwise jump the
+ * user out of the prefix and hit the landing page (and the SW would then
+ * cache the landing page as the precached `index.html` for the viewer).
  */
 async function forward(request, origin, prefix) {
   if (!origin) {
@@ -135,5 +141,23 @@ async function forward(request, origin, prefix) {
   const target = origin.replace(/\/$/, '') + path + url.search
   const upstream = new Request(target, request)
   upstream.headers.delete('host')
-  return fetch(upstream)
+
+  // redirect: 'manual' so we can rewrite Location ourselves before passing on.
+  const response = await fetch(upstream, { redirect: 'manual' })
+
+  if (prefix && response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('Location')
+    if (location && location.startsWith('/') && !location.startsWith(prefix + '/') && location !== prefix) {
+      const headers = new Headers(response.headers)
+      // `/` → `/log-viewer/`,  `/foo` → `/log-viewer/foo`
+      headers.set('Location', prefix + (location === '/' ? '/' : location))
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      })
+    }
+  }
+
+  return response
 }
