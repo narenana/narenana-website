@@ -1,5 +1,5 @@
-# Copy to .dev.vars for local Pages Function development. .dev.vars is
-# gitignored. Values here OVERRIDE [vars] in wrangler.toml for local runs.
+# Copy to .dev.vars for local Worker development. .dev.vars is gitignored.
+# Values here OVERRIDE [vars] in wrangler.toml for local `wrangler dev` runs.
 # In production these are set on the Cloudflare dashboard or kept in
 # wrangler.toml [vars] (non-secret values).
 

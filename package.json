@@ -1,12 +1,12 @@
 {
   "name": "narenana-website",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "narenana.com landing page — Cloudflare Pages site with embedded routing/cron Function",
+  "description": "narenana.com — Cloudflare Worker with static assets, routing, and YouTube feed cache",
   "scripts": {
-    "dev": "wrangler pages dev",
+    "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
-    "deploy": "wrangler pages deploy"
+    "deploy": "wrangler deploy"
   },
   "devDependencies": {
     "wrangler": "^3.90.0"
