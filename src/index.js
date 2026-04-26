@@ -1,9 +1,9 @@
-// Cloudflare Pages Function — single-handler routing + scheduled feed cache.
+// Cloudflare Worker (with static assets) — single-handler routing + cron.
 //
 // fetch() routes:
 //   /videos.json                → JSON of latest videos (KV-backed cache)
 //   /log-viewer, /log-viewer/*  → strip prefix → LOG_VIEWER_ORIGIN
-//   everything else             → static assets in this Pages project
+//   everything else             → env.ASSETS.fetch(request) → site/ files
 //
 // scheduled() (hourly cron): fetch RSS for YOUTUBE_CHANNEL_ID, parse, write to
 // KV under key "feed". Page reloads naturally pick up the new payload.

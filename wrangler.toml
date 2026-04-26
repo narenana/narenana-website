@@ -1,13 +1,21 @@
-# Cloudflare Pages config.
+# Cloudflare Worker (with static assets) config.
 #
-# This repo deploys to a single Pages project (the existing `narenana` slot
-# wired to narenana.com). The `site/_worker.js` file is auto-detected as a
-# Pages Function and runs as a Worker for every request, doing routing, the
-# /videos.json endpoint, and the hourly YouTube feed refresh cron.
+# Cloudflare's unified Workers create-from-Git flow deploys this repo as a
+# Worker that serves static assets from `site/` and runs `src/index.js` as
+# its entry point. The Worker handles routing (forwards /log-viewer/* to the
+# tool's own deployment), serves /videos.json from KV, and runs an hourly
+# cron that refreshes the YouTube feed cache. Static files fall through via
+# env.ASSETS.fetch(request).
+#
+# Project name on Cloudflare: narenana-website. Bound to narenana.com.
 
-name = "narenana"
+name = "narenana-website"
+main = "src/index.js"
 compatibility_date = "2024-12-01"
-pages_build_output_dir = "./site"
+
+[assets]
+directory = "./site"
+binding = "ASSETS"
 
 # Hourly RSS fetch — refreshes the YouTube feed cache in KV.
 [triggers]
@@ -17,14 +25,13 @@ crons = ["0 * * * *"]
 # Channel mirrored at /videos.json. Public, no API key needed.
 YOUTUBE_CHANNEL_ID = "UCaf-AGOmL7jLve1M1jibfRw"
 
-# Where /log-viewer/* gets forwarded. The Pages deployment URL of the tool's
-# own repo (narenana/edgetx-log-parser). Override per-environment in the CF
-# dashboard if needed (e.g. point Preview at a staging deployment).
+# Where /log-viewer/* gets forwarded. The Pages/Workers deployment URL of
+# the tool's own repo (narenana/edgetx-log-parser). Override per-environment
+# in the CF dashboard if needed.
 LOG_VIEWER_ORIGIN = "https://edgetx-log-parser.pages.dev"
 
 # KV namespace for the parsed feed JSON.
-# Create with:  npx wrangler kv namespace create VIDEOS_KV
-# Then paste the returned id below.
+# Created with:  npx wrangler kv namespace create VIDEOS_KV
 [[kv_namespaces]]
 binding = "VIDEOS_KV"
 id = "e048dd7b7b0849bcba7b51557c4c6752"
