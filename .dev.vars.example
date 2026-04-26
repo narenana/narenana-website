@@ -1,12 +1,8 @@
-# Copy to .dev.vars for local Worker development. .dev.vars is gitignored.
-# In production these are set on the Cloudflare dashboard or via:
-#   wrangler secret put LOG_VIEWER_ORIGIN
-#   wrangler secret put CUSTOMER_SITE_ORIGIN
+# Copy to .dev.vars for local Pages Function development. .dev.vars is
+# gitignored. Values here OVERRIDE [vars] in wrangler.toml for local runs.
+# In production these are set on the Cloudflare dashboard or kept in
+# wrangler.toml [vars] (non-secret values).
 
-# Where the log viewer lives. Local dev: point at Vite dev server.
-# Production: the Pages deployment URL of edgetx-log-parser.
+# Where /log-viewer/* gets forwarded. Local dev: point at the tool's Vite
+# dev server. Production: the Pages deployment URL of edgetx-log-parser.
 LOG_VIEWER_ORIGIN=http://localhost:5173
-
-# Where the customer site lives. Local dev: point at the static `site/` server.
-# Production: the Pages deployment URL of this repo's site/.
-CUSTOMER_SITE_ORIGIN=http://localhost:3000

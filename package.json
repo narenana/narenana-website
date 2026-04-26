@@ -1,13 +1,12 @@
 {
-  "name": "customer-website",
-  "version": "0.1.0",
+  "name": "narenana-website",
+  "version": "0.2.0",
   "private": true,
-  "description": "Customer-facing site + path-prefix router for tool deployments",
+  "description": "narenana.com landing page — Cloudflare Pages site with embedded routing/cron Function",
   "scripts": {
-    "dev:worker": "wrangler dev",
-    "dev:site": "npx serve site -l 3000",
-    "deploy:worker": "wrangler deploy",
-    "deploy:site": "wrangler pages deploy site --project-name=customer-site"
+    "dev": "wrangler pages dev",
+    "dev:static": "npx serve site -l 3000",
+    "deploy": "wrangler pages deploy"
   },
   "devDependencies": {
     "wrangler": "^3.90.0"
