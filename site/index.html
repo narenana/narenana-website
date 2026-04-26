@@ -32,7 +32,7 @@
       .hero-banner {
         display: block;
         width: 100%;
-        height: clamp(220px, 38vh, 480px);
+        height: clamp(140px, 26vh, 420px);
         object-fit: cover;
         object-position: center;
         background: #1580c4;
@@ -41,43 +41,13 @@
       .wrap {
         max-width: 760px;
         margin: 0 auto;
-        padding: 28px 24px 64px;
-      }
-
-      .topbar {
-        display: flex;
-        align-items: center;
-        margin: 0 0 48px;
-      }
-
-      .brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-        color: var(--muted);
-        font-size: 0.95rem;
-        font-weight: 600;
-        transition: color 120ms;
-      }
-
-      .brand:hover {
-        color: var(--fg);
-      }
-
-      .avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        object-fit: cover;
-        display: block;
-        border: 1px solid var(--border);
+        padding: 20px 24px 64px;
       }
 
       h1 {
         font-size: clamp(2.2rem, 6vw, 3.6rem);
         font-weight: 800;
-        margin: 0 0 16px;
+        margin: 0 0 12px;
         letter-spacing: -0.025em;
         line-height: 1.1;
       }
@@ -89,8 +59,22 @@
       .lede {
         font-size: 1.2rem;
         color: var(--muted);
-        margin: 0 0 40px;
+        margin: 0 0 24px;
         max-width: 38em;
+      }
+
+      /* On wider screens promote the CTA above the supporting bullets,
+         so it lands inside the top fold. The reorder uses CSS `order`,
+         not DOM order, so the bullets stay readable for screen readers. */
+      .top-block {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .top-block .features { order: 2; margin-bottom: 0; }
+      .top-block .tools-wrap { order: 1; }
+      .top-block .tools-wrap h2 {
+        margin: 0 0 10px;
       }
 
       .features {
@@ -125,7 +109,7 @@
         text-transform: uppercase;
         letter-spacing: 0.08em;
         color: var(--muted);
-        margin: 64px 0 16px;
+        margin: 40px 0 12px;
       }
 
       .tools {
@@ -286,35 +270,32 @@
     <img class="hero-banner" src="/assets/banner.jpg" alt="narenana — RC drones and flying wings in flight" width="1600" height="900" loading="eager" />
 
     <main class="wrap">
-      <header class="topbar">
-        <a class="brand" href="https://www.youtube.com/@narenana" target="_blank" rel="noopener">
-          <img class="avatar" src="/assets/avatar.jpg" alt="" width="36" height="36" />
-          <span>narenana</span>
-        </a>
-      </header>
-
       <h1>Replay every flight <span class="accent">in 3D.</span></h1>
       <p class="lede">Drop your transmitter log — get a 3D flyby synced to telemetry charts. All in your browser. <strong style="color: var(--fg)">Nothing ever leaves your machine.</strong></p>
 
-      <ul class="features">
-        <li><strong>Zero uploads. Zero servers.</strong> Your logs never leave your device.</li>
-        <li><strong>Open source.</strong> Read it, fork it, host it yourself.</li>
-        <li><strong>Built at the field.</strong> By pilots who actually fly.</li>
-      </ul>
+      <div class="top-block">
+        <ul class="features">
+          <li><strong>Zero uploads. Zero servers.</strong> Your logs never leave your device.</li>
+          <li><strong>Open source.</strong> Read it, fork it, host it yourself.</li>
+          <li><strong>Built at the field.</strong> By pilots who actually fly.</li>
+        </ul>
 
-      <h2>Available now</h2>
-      <ul class="tools">
-        <li>
-          <a class="tool" href="/log-viewer/">
-            <img class="tool-icon" src="/assets/log-viewer-icon.svg" alt="" width="56" height="56" />
-            <div class="tool-body">
-              <h3>EdgeTX Log Viewer</h3>
-              <p>Replay any flight on a 3D globe with synced charts. iNAV, Betaflight, ExpressLRS.</p>
-            </div>
-            <span class="cta">Try now →</span>
-          </a>
-        </li>
-      </ul>
+        <div class="tools-wrap">
+          <h2>Available now</h2>
+          <ul class="tools">
+            <li>
+              <a class="tool" href="/log-viewer/">
+                <img class="tool-icon" src="/assets/log-viewer-icon.svg" alt="" width="56" height="56" />
+                <div class="tool-body">
+                  <h3>EdgeTX Log Viewer</h3>
+                  <p>Replay any flight on a 3D globe with synced charts. iNAV, Betaflight, ExpressLRS.</p>
+                </div>
+                <span class="cta">Try now →</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
 
       <h2>Latest from YouTube</h2>
       <ul class="videos" id="videos" aria-live="polite">
