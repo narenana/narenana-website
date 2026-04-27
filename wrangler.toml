@@ -16,6 +16,13 @@ compatibility_date = "2024-12-01"
 [assets]
 directory = "./site"
 binding = "ASSETS"
+# Run the Worker BEFORE the static-asset matcher. Without this, requests
+# whose path maps to a file under site/ are served from Cloudflare's edge
+# cache and the Worker is never invoked — meaning the apex→www redirect
+# (and any future early-pipeline logic) is silently bypassed for the home
+# page. With this flag, the Worker runs on every request and falls
+# through to env.ASSETS.fetch() for paths it doesn't handle.
+run_worker_first = true
 
 # Hourly RSS fetch — refreshes the YouTube feed cache in KV.
 [triggers]
