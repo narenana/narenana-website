@@ -1,6 +1,7 @@
 // Cloudflare Worker (with static assets) — single-handler routing + cron.
 //
 // fetch() routes:
+//   apex (narenana.com)         → 301 redirect → www.narenana.com (canonical)
 //   /videos.json                → JSON of latest videos (KV-backed cache)
 //   /log-viewer, /log-viewer/*  → strip prefix → LOG_VIEWER_ORIGIN
 //   everything else             → env.ASSETS.fetch(request) → site/ files
@@ -11,6 +12,14 @@
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+
+    // Canonicalize: apex → www. Runs first so every path (incl. /log-viewer
+    // and /videos.json) gets the same canonical host, search-engine and
+    // social-card crawlers see one URL, and cookies / SW scope are stable.
+    if (url.hostname === 'narenana.com') {
+      url.hostname = 'www.narenana.com'
+      return Response.redirect(url.toString(), 301)
+    }
 
     if (url.pathname === '/videos.json') {
       return videosResponse(env)
