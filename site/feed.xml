@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>narenana blog</title>
+  <link href="https://www.narenana.com/feed.xml" rel="self"/>
+  <link href="https://www.narenana.com/blog/"/>
+  <id>https://www.narenana.com/blog/</id>
+  <updated>2026-05-16T00:00:00.000Z</updated>
+  <author><name>narenana</name></author>
+  <subtitle>Browser-native tools for RC pilots — flight log replay, telemetry visualisation. Open source.</subtitle>
+
+  <entry>
+    <title>Browser-native tools for RC pilots</title>
+    <link href="https://www.narenana.com/blog/welcome/"/>
+    <id>https://www.narenana.com/blog/welcome/</id>
+    <updated>2026-05-16T00:00:00.000Z</updated>
+    <published>2026-05-16T00:00:00.000Z</published>
+    <summary>Why this site exists, what it&#39;s for, and what&#39;s coming. The first post on the narenana blog. Read more at https://www.narenana.com/blog/welcome/</summary>
+    <author><name>narenana</name></author>
+    <category term="meta"/>
+  </entry>
+</feed>

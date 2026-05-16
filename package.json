@@ -1,14 +1,20 @@
 {
   "name": "narenana-website",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
+  "type": "module",
   "description": "narenana.com — Cloudflare Worker with static assets, routing, and YouTube feed cache",
   "scripts": {
     "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
-    "deploy": "wrangler deploy"
+    "build:blog": "node scripts/build-blog.js",
+    "build": "npm run build:blog",
+    "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
+    "gray-matter": "^4.0.3",
+    "marked": "^14.1.3",
+    "shiki": "^1.22.2",
     "wrangler": "^3.90.0"
   }
 }
