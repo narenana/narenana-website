@@ -1,0 +1,13 @@
+# Crawl policy for narenana.com
+#
+# Allow everything by default — both the landing page and the
+# /log-viewer/ subpath (which is a separate Cloudflare Pages project
+# proxied through this Worker; that origin's own robots.txt is not
+# user-visible).
+#
+# The sitemap lists canonical URLs that should be indexed.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://www.narenana.com/sitemap.xml

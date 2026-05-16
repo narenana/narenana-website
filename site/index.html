@@ -4,18 +4,33 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0e1117" />
-    <title>narenana — replay every flight</title>
+    <title>narenana — replay every flight in 3D</title>
     <meta name="description" content="Drop a flight log — EdgeTX CSV or iNAV / Betaflight blackbox — and get a 3D flyby with synced charts. Browser-native tools for RC pilots; nothing ever leaves your machine." />
+    <meta name="author" content="narenana" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <!-- Canonical URL. The Worker 301s narenana.com → www.narenana.com, so
+         this is the one URL search engines and social-card crawlers see. -->
+    <link rel="canonical" href="https://www.narenana.com/" />
+
     <link rel="icon" type="image/jpeg" href="/assets/avatar.jpg" />
     <link rel="apple-touch-icon" href="/assets/avatar.jpg" />
+
+    <!-- Speed up the YouTube-thumbnail fetch the "Latest from YouTube" grid
+         does. Both DNS and TLS handshake start before the script even
+         parses /videos.json. -->
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <link rel="dns-prefetch" href="https://i.ytimg.com" />
 
     <!-- Open Graph (Facebook, LinkedIn, Slack, Discord, iMessage, etc.) -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="narenana" />
-    <meta property="og:url" content="https://narenana.com/" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://www.narenana.com/" />
     <meta property="og:title" content="narenana — replay every flight in 3D" />
     <meta property="og:description" content="Drop a flight log — EdgeTX CSV or iNAV / Betaflight blackbox — and get a 3D flyby with synced charts. Browser-native tools for RC pilots; nothing ever leaves your machine." />
-    <meta property="og:image" content="https://narenana.com/assets/banner.jpg" />
+    <meta property="og:image" content="https://www.narenana.com/assets/banner.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1600" />
     <meta property="og:image:height" content="900" />
     <meta property="og:image:alt" content="narenana — RC drones and flying wings in flight" />
@@ -24,8 +39,40 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="narenana — replay every flight in 3D" />
     <meta name="twitter:description" content="Drop your transmitter log, get a 3D flyby with synced charts. Browser-native tools for RC pilots." />
-    <meta name="twitter:image" content="https://narenana.com/assets/banner.jpg" />
+    <meta name="twitter:image" content="https://www.narenana.com/assets/banner.jpg" />
     <meta name="twitter:image:alt" content="narenana — RC drones and flying wings in flight" />
+
+    <!-- Schema.org structured data. Organization establishes the entity
+         (helps with knowledge-panel signals and disambiguation); WebSite
+         names the site as a distinct thing search engines can sitelink. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.narenana.com/#org",
+            "name": "narenana",
+            "url": "https://www.narenana.com/",
+            "logo": "https://www.narenana.com/assets/avatar.jpg",
+            "description": "Browser-native tools for RC pilots — flight log replay, telemetry visualisation. Open source.",
+            "sameAs": [
+              "https://www.youtube.com/@narenana",
+              "https://github.com/narenana"
+            ]
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.narenana.com/#website",
+            "url": "https://www.narenana.com/",
+            "name": "narenana",
+            "description": "Replay every flight in 3D. Drop your EdgeTX or iNAV log, get an annotated flyby — all in the browser.",
+            "publisher": { "@id": "https://www.narenana.com/#org" },
+            "inLanguage": "en-US"
+          }
+        ]
+      }
+    </script>
 
     <style>
       :root {
