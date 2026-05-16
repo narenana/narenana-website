@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0e1117" />
+    <title>Browser-native tools for RC pilots · narenana</title>
+    <meta name="description" content="Why this site exists, what it&#39;s for, and what&#39;s coming. The first post on the narenana blog." />
+    <meta name="author" content="narenana" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://www.narenana.com/blog/welcome/" />
+    <link rel="icon" type="image/jpeg" href="/assets/avatar.jpg" />
+    <link rel="apple-touch-icon" href="/assets/avatar.jpg" />
+    <link rel="alternate" type="application/atom+xml" title="narenana blog" href="/feed.xml" />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="narenana" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:url" content="https://www.narenana.com/blog/welcome/" />
+    <meta property="og:title" content="Browser-native tools for RC pilots · narenana" />
+    <meta property="og:description" content="Why this site exists, what it&#39;s for, and what&#39;s coming. The first post on the narenana blog." />
+    <meta property="og:image" content="https://www.narenana.com/assets/banner.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Browser-native tools for RC pilots · narenana" />
+    <meta name="twitter:description" content="Why this site exists, what it&#39;s for, and what&#39;s coming. The first post on the narenana blog." />
+    <meta name="twitter:image" content="https://www.narenana.com/assets/banner.jpg" />
+    <meta property="article:published_time" content="2026-05-16T00:00:00.000Z" />
+    <meta property="article:tag" content="meta" />
+
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BlogPosting","headline":"Browser-native tools for RC pilots","description":"Why this site exists, what it's for, and what's coming. The first post on the narenana blog.","datePublished":"2026-05-16T00:00:00.000Z","image":"https://www.narenana.com/assets/banner.jpg","url":"https://www.narenana.com/blog/welcome/","mainEntityOfPage":{"@type":"WebPage","@id":"https://www.narenana.com/blog/welcome/"},"author":{"@type":"Organization","name":"narenana","url":"https://www.narenana.com/"},"publisher":{"@type":"Organization","name":"narenana","logo":{"@type":"ImageObject","url":"https://www.narenana.com/assets/avatar.jpg"}},"isPartOf":{"@type":"Blog","url":"https://www.narenana.com/blog/","name":"narenana blog"},"keywords":"meta"}</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"narenana","item":"https://www.narenana.com/"},{"@type":"ListItem","position":2,"name":"Blog","item":"https://www.narenana.com/blog/"},{"@type":"ListItem","position":3,"name":"Browser-native tools for RC pilots","item":"https://www.narenana.com/blog/welcome/"}]}</script>
+
+    <style>
+      :root {
+        --bg: #0e1117;
+        --fg: #e6edf3;
+        --muted: #8b949e;
+        --accent: #1f9bd9;
+        --accent-bright: #3eb5e8;
+        --card: #161b22;
+        --border: #30363d;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+        line-height: 1.6;
+      }
+      a { color: var(--accent-bright); }
+      a:hover { color: var(--fg); }
+      .wrap {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 32px 24px 64px;
+      }
+      .site-nav {
+        margin-bottom: 32px;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      .site-nav a { color: var(--muted); text-decoration: none; }
+      .site-nav a:hover { color: var(--accent-bright); }
+      h1 {
+        font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+        font-weight: 800;
+        margin: 0 0 12px;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+      }
+      h2, h3, h4 { margin-top: 2em; }
+      .post-meta {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin: 0 0 32px;
+      }
+      .post-meta .tag {
+        display: inline-block;
+        padding: 2px 8px;
+        margin-right: 6px;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 0.8rem;
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .post-meta .tag:hover { border-color: var(--accent); color: var(--accent-bright); }
+      article p { margin: 0 0 1.2em; }
+      article ul, article ol { margin: 0 0 1.2em; padding-left: 1.4em; }
+      article li { margin-bottom: 0.4em; }
+      article blockquote {
+        margin: 1.2em 0;
+        padding: 8px 16px;
+        border-left: 3px solid var(--accent);
+        background: var(--card);
+        color: var(--muted);
+      }
+      article img { max-width: 100%; height: auto; border-radius: 8px; }
+      article code {
+        background: var(--card);
+        border: 1px solid var(--border);
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 0.92em;
+      }
+      article pre {
+        background: #161b22;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+        margin: 0 0 1.2em;
+        font-size: 0.9em;
+        line-height: 1.5;
+      }
+      article pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: inherit;
+      }
+      article h2 a.anchor, article h3 a.anchor, article h4 a.anchor {
+        color: var(--border);
+        text-decoration: none;
+        font-weight: 400;
+        margin-right: 6px;
+      }
+      article h2:hover a.anchor, article h3:hover a.anchor { color: var(--accent); }
+      .post-nav {
+        margin-top: 48px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        font-size: 0.95rem;
+      }
+      .post-nav a { color: var(--muted); text-decoration: none; max-width: 45%; }
+      .post-nav a:hover { color: var(--accent-bright); }
+      .post-nav .prev::before { content: "← "; }
+      .post-nav .next::after { content: " →"; }
+      .archive-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .archive-list li {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .archive-list li:last-child { border-bottom: none; }
+      .archive-list h2 {
+        font-size: 1.3rem;
+        margin: 0 0 4px;
+      }
+      .archive-list h2 a { color: var(--fg); text-decoration: none; }
+      .archive-list h2 a:hover { color: var(--accent-bright); }
+      .archive-list .archive-meta {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin: 0 0 6px;
+      }
+      .archive-list .archive-desc {
+        color: var(--muted);
+        margin: 0;
+      }
+      footer.site-footer {
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      footer.site-footer a { color: var(--muted); }</style>
+  </head>
+  <body>
+    <main class="wrap">
+
+      <nav class="site-nav" aria-label="Breadcrumb">
+        <a href="/">narenana</a>
+        / <a href="/blog/">blog</a>
+      </nav>
+
+      <article>
+        <h1>Browser-native tools for RC pilots</h1>
+        <p class="post-meta">
+          <time datetime="2026-05-16T00:00:00.000Z">May 16, 2026</time>
+           · <a class="tag" href="/blog/tag/meta/">meta</a>
+        </p>
+
+        <p>This is the first post on a blog I should have started months ago.</p>
+<p><code>narenana.com</code> is where I build small, browser-native tools for RC pilots
+— starting with the <a href="/log-viewer/">RC Log Viewer</a>, a 3D replay of
+EdgeTX, iNAV, and Betaflight flight logs. No upload, no install, runs
+entirely on your machine.</p>
+<h2 id="why-a-blog"><a class="anchor" href="#why-a-blog" aria-hidden="true">#</a> Why a blog</h2><p>There are a handful of things I keep wanting to write up — usually
+after a long debug session, or after someone in a Discord thread
+asks the same question for the third time.</p>
+<p>A few examples queued up:</p>
+<ul>
+<li><strong>&quot;View iNAV blackbox in your browser — no install&quot;</strong> — how the
+Rust → WASM parser works, the two-tier fallback with the C parser,
+and why the iNAV 9 enum rollover broke everything for two weeks.</li>
+<li><strong>&quot;What EdgeTX captures in a CSV — and what it doesn&#39;t&quot;</strong> — the
+fields, the units, the assumptions baked into the OpenTX-era
+schema, and why telemetry resolution affects what the viewer can
+reconstruct.</li>
+<li><strong>&quot;How the flicker turned out to be browser rAF cadence&quot;</strong> — the
+multi-day investigation behind the camera-director release, with
+the diagnostic probes that finally found it.</li>
+<li><strong>&quot;Why offline-first matters for flight log analysis&quot;</strong> — the
+privacy case, the build-time case, and the deployment case.</li>
+</ul>
+<p>If any of those would be useful to you in a particular order, the
+GitHub issue tracker at
+<a href="https://github.com/narenana/edgetx-log-parser">narenana/edgetx-log-parser</a>
+is the right place to ask.</p>
+<h2 id="what-s-actually-here"><a class="anchor" href="#what-s-actually-here" aria-hidden="true">#</a> What&#39;s actually here</h2><p>Right now: this post and the <a href="/log-viewer/">log viewer</a>. The viewer
+parses two formats — EdgeTX/OpenTX CSV from your transmitter SD card,
+and iNAV / Betaflight blackbox binaries from your flight controller —
+and renders a 3D flyby with synced telemetry charts. It&#39;s open source
+under GPL-3.0 and ships as a PWA, so it works offline once you&#39;ve
+loaded it.</p>
+<p>If you find a log that doesn&#39;t parse, that&#39;s a bug I want to know
+about. Open an issue with the file (you can scrub the GPS coords if
+you want; the parser doesn&#39;t care).</p>
+<p>— <code>narenana</code></p>
+
+      </article>
+
+      <nav class="post-nav" aria-label="Post navigation">
+        <span></span>
+        <span></span>
+      </nav>
+
+
+      <footer class="site-footer">
+        <p>
+          More on <a href="/">narenana.com</a> ·
+          Source on <a href="https://github.com/narenana">GitHub</a> ·
+          <a href="/feed.xml">RSS</a>
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>
