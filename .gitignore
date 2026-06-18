@@ -5,3 +5,12 @@ node_modules/
 .env.local
 *.log
 .DS_Store
+
+# Blog build artefacts are committed (CF Workers Builds doesn't run
+# `npm run build` by default — see scripts/build-blog.js header). If
+# the build step gets wired into CI later, uncomment the next block to
+# stop tracking the generated files:
+#
+# site/blog/
+# site/feed.xml
+# site/sitemap.xml
