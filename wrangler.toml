@@ -37,6 +37,15 @@ YOUTUBE_CHANNEL_ID = "UCaf-AGOmL7jLve1M1jibfRw"
 # in the CF dashboard if needed.
 LOG_VIEWER_ORIGIN = "https://edgetx-log-parser.pages.dev"
 
+# Staging origin used ONLY for the latest.narenana.com host — points at the
+# `latest` Pages branch alias so latest.narenana.com/log-viewer/ mirrors the
+# newest preview build while www / apex stay on production (LOG_VIEWER_ORIGIN).
+# Deploy a new staging build with:
+#   npm --prefix ../edgetx-log-parser run build
+#   npx wrangler pages deploy ../edgetx-log-parser/dist \
+#     --project-name=edgetx-log-parser --branch=latest
+LOG_VIEWER_ORIGIN_LATEST = "https://latest.edgetx-log-parser.pages.dev"
+
 # KV namespace for the parsed feed JSON.
 # Created with:  npx wrangler kv namespace create VIDEOS_KV
 [[kv_namespaces]]
