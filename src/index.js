@@ -1,7 +1,7 @@
 // Cloudflare Worker (with static assets) — single-handler routing + cron.
 //
 // fetch() routes:
-//   apex (narenana.com)         → 301 redirect → www.narenana.com (canonical)
+//   http:// or apex             → 301 redirect → https://www.narenana.com (canonical)
 //   /videos.json                → JSON of latest videos (KV-backed cache)
 //   /log-viewer, /log-viewer/*  → strip prefix → LOG_VIEWER_ORIGIN
 //   everything else             → env.ASSETS.fetch(request) → site/ files
@@ -13,11 +13,19 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
 
-    // Canonicalize: apex → www. Runs first so every path (incl. /log-viewer
-    // and /videos.json) gets the same canonical host, search-engine and
-    // social-card crawlers see one URL, and cookies / SW scope are stable.
-    if (url.hostname === 'narenana.com') {
-      url.hostname = 'www.narenana.com'
+    // Canonicalize scheme + host: force HTTPS and redirect the apex → www.
+    // Runs first so every path (incl. /log-viewer and /videos.json) resolves to
+    // one canonical https://www URL — search-engine and social-card crawlers see
+    // a single URL, and cookies / SW scope stay stable. Localhost is exempt so
+    // `wrangler dev` (served over http://127.0.0.1) isn't bounced to https.
+    const isLocal =
+      url.hostname === 'localhost' ||
+      url.hostname === '127.0.0.1' ||
+      url.hostname.endsWith('.localhost')
+    const isApex = url.hostname === 'narenana.com'
+    if (!isLocal && (url.protocol === 'http:' || isApex)) {
+      url.protocol = 'https:'
+      if (isApex) url.hostname = 'www.narenana.com'
       return Response.redirect(url.toString(), 301)
     }
 
