@@ -34,7 +34,14 @@ export default {
     }
 
     if (url.pathname === '/log-viewer' || url.pathname.startsWith('/log-viewer/')) {
-      return forward(request, env.LOG_VIEWER_ORIGIN, '/log-viewer')
+      // latest.narenana.com mirrors the LATEST log-viewer preview build (the
+      // `latest` Pages branch alias); www / apex stay on the production
+      // origin. Falls back to production if the staging var is unset.
+      const origin =
+        url.hostname === 'latest.narenana.com' && env.LOG_VIEWER_ORIGIN_LATEST
+          ? env.LOG_VIEWER_ORIGIN_LATEST
+          : env.LOG_VIEWER_ORIGIN
+      return forward(request, origin, '/log-viewer')
     }
 
     return env.ASSETS.fetch(request)
