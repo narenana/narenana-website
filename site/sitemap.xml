@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Canonical URL list for search engines. Maintained manually for Phase 1;
-  Phase 2 will switch this to a build-time generator once the blog ships.
-  When updating, keep host as www.narenana.com (the apex 301s here).
+  Canonical URL list for search engines. Hand-maintained and host-scoped to
+  www.narenana.com (the apex 301s here) — keep entries to pages served on
+  this host. Tools on their own subdomain (e.g. sim.narenana.com) ship their
+  own sitemap from their own deployment, so they don't belong here.
+  Revisit a build-time generator only if the URL count outgrows hand-editing.
 -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://www.narenana.com/</loc>
+    <lastmod>2026-06-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>

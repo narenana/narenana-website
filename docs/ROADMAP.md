@@ -1,6 +1,6 @@
 # narenana.com — Product Roadmap
 
-*Last updated: 2026-04-27*
+*Last updated: 2026-06-20*
 
 ## Vision
 
@@ -51,7 +51,7 @@ Strengthen the foundation, ship one new tool, learn what users actually want.
 
 #### Foundation
 
-- **Tool listing page polish** — current grid is one tool. As soon as we have two, we need clearer hierarchy: featured tool, recent additions, "by use case" categories.
+- **Tool listing page polish** — the grid now holds two tools (RC Log Viewer + FPV Wing Simulator). With more than one live, revisit hierarchy: featured tool, recent additions, "by use case" categories.
 - **Search-friendly tool meta** — each tool's landing route gets a proper `<meta>` block (titles, descriptions, OG card, sitemap entry). The log viewer already has this; new tools must too.
 - **Sitemap + structured data** — `/sitemap.xml` listing all tools + key landing routes; tool pages emit `SoftwareApplication` JSON-LD for rich Google results.
 - **Newsletter sign-up form** *(S)* — single form, email + zip optional, deliver via Buttondown or similar. Use it sparingly — quarterly digest of new tools + standout community flights.
@@ -139,6 +139,11 @@ Each new tool gets its own repo. The umbrella Worker bumps a single line in `[va
 
 ## Recently shipped (umbrella site)
 
+- 2026-06-16 · Google Analytics 4 (gtag.js, `G-1KY518LPBH`) on the landing page
+- 2026-06-16 · **Second tool live** — FPV Wing Simulator card → `sim.narenana.com`
+- 2026-05-16 · SEO Phase 1 — `robots.txt`, `sitemap.xml`, canonical link, Organization + WebSite JSON-LD
+- 2026-04-29 · Landing copy — hero names both log formats; tool card renamed "RC Log Viewer"
+- 2026-04-27 · Apex → www 301 redirect (`run_worker_first` so it fires at the root path)
 - 2026-04-27 · `latest.narenana.com` staging router with `use-branch.sh` script
 - 2026-04-26 · Tighter top fold, CTA above bullets
 - 2026-04-26 · Open Graph + Twitter Card meta on landing
