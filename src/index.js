@@ -175,12 +175,28 @@ async function forward(request, origin, prefix) {
       const headers = new Headers(response.headers)
       // `/` → `/log-viewer/`,  `/foo` → `/log-viewer/foo`
       headers.set('Location', prefix + (location === '/' ? '/' : location))
+      headers.delete('x-robots-tag')
       return new Response(response.body, {
         status: response.status,
         statusText: response.statusText,
         headers,
       })
     }
+  }
+
+  // Strip any upstream X-Robots-Tag before serving on narenana.com hosts.
+  // The Pages project sets `X-Robots-Tag: noindex` via _headers to keep the
+  // duplicate *.pages.dev hosts out of the index — but this Worker fetches
+  // that same origin, and forwarding the header verbatim would noindex the
+  // canonical www.narenana.com/log-viewer/ (and latest.narenana.com) too.
+  if (response.headers.has('x-robots-tag')) {
+    const headers = new Headers(response.headers)
+    headers.delete('x-robots-tag')
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
   }
 
   return response
