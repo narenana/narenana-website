@@ -215,6 +215,20 @@
         transform: translateY(-1px);
       }
 
+      /* Product screenshot strip across the top of each tool card —
+         the visual proof of what you're clicking into. */
+      .tool-shot {
+        grid-column: 1 / -1;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+        object-position: top;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        display: block;
+      }
+
       .tool-icon {
         width: 56px;
         height: 56px;
@@ -256,10 +270,12 @@
         .tool {
           grid-template-columns: 56px 1fr;
           grid-template-areas:
+            "shot shot"
             "icon body"
             "cta cta";
           gap: 16px;
         }
+        .tool-shot { grid-area: shot; }
         .tool-icon { grid-area: icon; }
         .tool-body { grid-area: body; }
         .cta {
@@ -361,6 +377,14 @@
           <ul class="tools">
             <li>
               <a class="tool" href="/log-viewer/">
+                <img
+                  class="tool-shot"
+                  src="/assets/shot-log-viewer.jpg"
+                  alt="RC Log Viewer replaying a fixed-wing flight in 3D — satellite terrain, cyan flight path, live telemetry bar and synced charts"
+                  width="1200"
+                  height="750"
+                  loading="lazy"
+                />
                 <img class="tool-icon" src="/assets/log-viewer-icon.svg" alt="" width="56" height="56" />
                 <div class="tool-body">
                   <h3>RC Log Viewer — replay EdgeTX &amp; blackbox flight logs in 3D</h3>
@@ -371,6 +395,14 @@
             </li>
             <li>
               <a class="tool" href="https://sim.narenana.com">
+                <img
+                  class="tool-shot"
+                  src="/assets/shot-nanawing.jpg"
+                  alt="Nanawing FPV simulator in flight — a flying wing lining up on a race gate over farmland, with an iNAV-style OSD"
+                  width="1200"
+                  height="750"
+                  loading="lazy"
+                />
                 <img class="tool-icon" src="/assets/fpvsim-icon.svg" alt="" width="56" height="56" />
                 <div class="tool-body">
                   <h3>Nanawing — free browser FPV flying-wing simulator</h3>
