@@ -29,10 +29,9 @@ export default {
       return Response.redirect(url.toString(), 301)
     }
 
-    if (url.pathname === '/videos.json') {
-      return videosResponse(env)
-    }
-
+    // /log-viewer/* is a separate proxied app — leave its responses untouched
+    // (the delicate redirect + X-Robots-Tag handling lives in forward()).
+    // Cloudflare-dashboard edge HSTS covers those hosts belt-and-suspenders.
     if (url.pathname === '/log-viewer' || url.pathname.startsWith('/log-viewer/')) {
       // latest.narenana.com mirrors the LATEST log-viewer preview build (the
       // `latest` Pages branch alias); www / apex stay on the production
@@ -44,7 +43,19 @@ export default {
       return forward(request, origin, '/log-viewer')
     }
 
-    return env.ASSETS.fetch(request)
+    if (url.pathname === '/videos.json') {
+      return harden(await videosResponse(env), url, isLocal)
+    }
+
+    // The home page's "Latest from YouTube" grid hydrates client-side, so
+    // crawlers / AI answer engines would otherwise see none of it. Inject a
+    // <noscript> fallback list from the KV feed the Worker already holds.
+    const response =
+      url.pathname === '/' || url.pathname === '/index.html'
+        ? await renderHome(request, env)
+        : await env.ASSETS.fetch(request)
+
+    return harden(response, url, isLocal)
   },
 
   async scheduled(event, env, ctx) {
@@ -63,8 +74,71 @@ async function videosResponse(env) {
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'cache-control': 'public, max-age=300',
+      // It's a data endpoint, not a page — keep it out of the search index.
+      'x-robots-tag': 'noindex',
     },
   })
+}
+
+// Add security + caching headers to responses this Worker serves directly.
+// HSTS goes on HTTPS responses (browsers ignore it over http and we skip
+// localhost); static art under /assets/ gets a real cache lifetime since the
+// Workers-Assets default is `max-age=0, must-revalidate` — every repeat visit
+// would otherwise revalidate. Filenames aren't content-hashed, so a bounded
+// TTL + stale-while-revalidate rather than `immutable`.
+function harden(response, url, isLocal) {
+  const headers = new Headers(response.headers)
+  if (!isLocal) {
+    headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+  }
+  if (url.pathname.startsWith('/assets/')) {
+    headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
+// Server-rendered <noscript> fallback for the client-hydrated YouTube grid,
+// built from the same KV feed. Crawlers and AI answer engines that don't run
+// the page script still get the latest video titles + links as crawlable text.
+async function renderHome(request, env) {
+  const response = await env.ASSETS.fetch(request)
+  if (!(response.headers.get('content-type') || '').includes('text/html')) {
+    return response
+  }
+
+  let videos = []
+  try {
+    const json = await env.VIDEOS_KV.get('feed')
+    if (json) videos = (JSON.parse(json).videos || []).slice(0, 6)
+  } catch {
+    // Leave the page untransformed rather than inject garbage on a KV blip.
+  }
+  if (videos.length === 0) return response
+
+  const items = videos
+    .map((v) => `<li><a href="${esc(v.url)}">${esc(v.title)}</a></li>`)
+    .join('')
+  const noscript = `<noscript><ul>${items}</ul></noscript>`
+
+  return new HTMLRewriter()
+    .on('#videos', {
+      element(el) {
+        el.after(noscript, { html: true })
+      },
+    })
+    .transform(response)
+}
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
 }
 
 async function refreshFeed(env) {
