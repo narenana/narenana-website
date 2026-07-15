@@ -22,8 +22,10 @@
          this is the one URL search engines and social-card crawlers see. -->
     <link rel="canonical" href="https://www.narenana.com/" />
 
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" type="image/jpeg" href="/assets/avatar.jpg" />
     <link rel="apple-touch-icon" href="/assets/avatar.jpg" />
+    <link rel="manifest" href="/manifest.json" />
 
     <!-- Speed up the YouTube-thumbnail fetch the "Latest from YouTube" grid
          does. Both DNS and TLS handshake start before the script even
@@ -47,7 +49,7 @@
     <!-- Twitter Card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="narenana — free browser tools for RC pilots" />
-    <meta name="twitter:description" content="Drop your transmitter log, get a 3D flyby with synced charts. Browser-native tools for RC pilots." />
+    <meta name="twitter:description" content="Replay EdgeTX & iNAV/Betaflight flight logs in 3D, or fly the Nanawing FPV wing simulator. Free, open source, in your browser — nothing ever leaves your machine." />
     <meta name="twitter:image" content="https://www.narenana.com/assets/banner.jpg" />
     <meta name="twitter:image:alt" content="narenana — RC drones and flying wings in flight" />
 
@@ -64,7 +66,7 @@
             "name": "narenana",
             "url": "https://www.narenana.com/",
             "logo": "https://www.narenana.com/assets/avatar.jpg",
-            "description": "Browser-native tools for RC pilots — flight log replay, telemetry visualisation. Open source.",
+            "description": "Free, open-source browser tools for RC pilots — replay EdgeTX, iNAV and Betaflight flight logs in 3D, and fly the Nanawing FPV flying-wing simulator. No uploads, no servers.",
             "sameAs": [
               "https://www.youtube.com/@narenana",
               "https://github.com/narenana"
@@ -75,9 +77,43 @@
             "@id": "https://www.narenana.com/#website",
             "url": "https://www.narenana.com/",
             "name": "narenana",
-            "description": "Replay every flight in 3D. Drop your EdgeTX or iNAV log, get an annotated flyby — all in the browser.",
+            "description": "Free browser tools for RC pilots: 3D flight-log replay for EdgeTX / iNAV / Betaflight, plus the Nanawing FPV flying-wing simulator. Everything runs locally — nothing ever leaves your device.",
             "publisher": { "@id": "https://www.narenana.com/#org" },
             "inLanguage": "en-US"
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://sim.narenana.com/#app",
+            "name": "Nanawing",
+            "url": "https://sim.narenana.com/",
+            "applicationCategory": "GameApplication",
+            "operatingSystem": "Web browser (Windows, macOS, Linux, ChromeOS)",
+            "browserRequirements": "Requires WebGL. No download or signup.",
+            "description": "Free browser FPV flying-wing simulator — hand-launch a fixed-wing over realistic farmland with keyboard, gamepad or your real RC radio. iNAV-style OSD, simulated LiPo, race course.",
+            "isAccessibleForFree": true,
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "screenshot": "https://www.narenana.com/assets/shot-nanawing.jpg",
+            "publisher": { "@id": "https://www.narenana.com/#org" }
+          },
+          {
+            "@type": "ItemList",
+            "@id": "https://www.narenana.com/#tools",
+            "name": "narenana tools",
+            "numberOfItems": 2,
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "RC Log Viewer",
+                "url": "https://www.narenana.com/log-viewer/"
+              },
+              {
+                "@type": "ListItem",
+                "position": 2,
+                "name": "Nanawing",
+                "item": { "@id": "https://sim.narenana.com/#app" }
+              }
+            ]
           }
         ]
       }
@@ -104,6 +140,8 @@
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
         line-height: 1.6;
       }
+
+      .hero-pic { display: block; }
 
       .hero-banner {
         display: block;
@@ -219,6 +257,10 @@
          the visual proof of what you're clicking into. */
       .tool-shot {
         grid-column: 1 / -1;
+        display: block;
+      }
+
+      .tool-shot img {
         width: 100%;
         height: auto;
         aspect-ratio: 16 / 10;
@@ -359,7 +401,11 @@
     </style>
   </head>
   <body>
-    <img class="hero-banner" src="/assets/banner.jpg" alt="narenana — RC drones and flying wings in flight" width="1600" height="900" loading="eager" />
+    <picture class="hero-pic">
+      <source type="image/avif" srcset="/assets/banner-800.avif 800w, /assets/banner-1600.avif 1600w" sizes="100vw" />
+      <source type="image/webp" srcset="/assets/banner-800.webp 800w, /assets/banner-1600.webp 1600w" sizes="100vw" />
+      <img class="hero-banner" src="/assets/banner.jpg" alt="narenana — RC drones and flying wings in flight" width="1600" height="900" loading="eager" fetchpriority="high" decoding="async" />
+    </picture>
 
     <main class="wrap">
       <h1>Free browser tools <span class="accent">for RC pilots.</span></h1>
@@ -373,18 +419,21 @@
         </ul>
 
         <div class="tools-wrap">
-          <h2>Available now</h2>
+          <h2>Free RC flight tools — available now</h2>
           <ul class="tools">
             <li>
               <a class="tool" href="/log-viewer/">
-                <img
-                  class="tool-shot"
-                  src="/assets/shot-log-viewer.jpg"
-                  alt="RC Log Viewer replaying a fixed-wing flight in 3D — satellite terrain, cyan flight path, live telemetry bar and synced charts"
-                  width="1200"
-                  height="750"
-                  loading="lazy"
-                />
+                <picture class="tool-shot">
+                  <source type="image/avif" srcset="/assets/shot-log-viewer.avif" />
+                  <source type="image/webp" srcset="/assets/shot-log-viewer.webp" />
+                  <img
+                    src="/assets/shot-log-viewer.jpg"
+                    alt="RC Log Viewer replaying a fixed-wing flight in 3D — satellite terrain, cyan flight path, live telemetry bar and synced charts"
+                    width="1200"
+                    height="750"
+                    loading="lazy"
+                  />
+                </picture>
                 <img class="tool-icon" src="/assets/log-viewer-icon.svg" alt="" width="56" height="56" />
                 <div class="tool-body">
                   <h3>RC Log Viewer — replay EdgeTX &amp; blackbox flight logs in 3D</h3>
@@ -395,14 +444,17 @@
             </li>
             <li>
               <a class="tool" href="https://sim.narenana.com">
-                <img
-                  class="tool-shot"
-                  src="/assets/shot-nanawing.jpg"
-                  alt="Nanawing FPV simulator in flight — a flying wing lining up on a race gate over farmland, with an iNAV-style OSD"
-                  width="1200"
-                  height="750"
-                  loading="lazy"
-                />
+                <picture class="tool-shot">
+                  <source type="image/avif" srcset="/assets/shot-nanawing.avif" />
+                  <source type="image/webp" srcset="/assets/shot-nanawing.webp" />
+                  <img
+                    src="/assets/shot-nanawing.jpg"
+                    alt="Nanawing FPV simulator in flight — a flying wing lining up on a race gate over farmland, with an iNAV-style OSD"
+                    width="1200"
+                    height="750"
+                    loading="lazy"
+                  />
+                </picture>
                 <img class="tool-icon" src="/assets/fpvsim-icon.svg" alt="" width="56" height="56" />
                 <div class="tool-body">
                   <h3>Nanawing — free browser FPV flying-wing simulator</h3>
@@ -415,7 +467,7 @@
         </div>
       </div>
 
-      <h2>Latest from YouTube</h2>
+      <h2>Latest FPV &amp; RC flying from YouTube</h2>
       <ul class="videos" id="videos" aria-live="polite">
         <li class="vempty" id="videos-status">Loading…</li>
       </ul>
@@ -433,7 +485,7 @@
 
         let data
         try {
-          const res = await fetch('/videos.json', { cache: 'no-cache' })
+          const res = await fetch('/videos.json')
           if (!res.ok) throw new Error()
           data = await res.json()
         } catch {
