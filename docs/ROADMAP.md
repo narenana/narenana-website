@@ -1,6 +1,6 @@
 # narenana.com — Product Roadmap
 
-*Last updated: 2026-06-20*
+*Last updated: 2026-07-16*
 
 ## Vision
 
@@ -139,6 +139,11 @@ Each new tool gets its own repo. The umbrella Worker bumps a single line in `[va
 
 ## Recently shipped (umbrella site)
 
+- 2026-07-16 · High-res brand icon + cinematic hero — regenerated favicon/PWA/apple icons and a new `og:image`; hand-authored masters kept in `assets-src/`
+- 2026-07-16 · PWA — web manifest + **maskable** Android icon; modern AVIF/WebP image variants for hero + card shots
+- 2026-07-16 · SEO — metadata/structured-data consistency (`SoftwareApplication` + `ItemList` JSON-LD), keyword-bearing headings and title
+- 2026-07-16 · Perf/security — edge-cache static assets, HSTS, `noindex` on `/videos.json`, server-rendered `<noscript>` YouTube fallback
+- 2026-07-16 · Homepage repositioned as the suite hub; sim card rebranded **Nanawing**; real product screenshots on both tool cards
 - 2026-06-16 · Google Analytics 4 (gtag.js, `G-1KY518LPBH`) on the landing page
 - 2026-06-16 · **Second tool live** — FPV Wing Simulator card → `sim.narenana.com`
 - 2026-05-16 · SEO Phase 1 — `robots.txt`, `sitemap.xml`, canonical link, Organization + WebSite JSON-LD
