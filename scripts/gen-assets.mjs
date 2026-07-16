@@ -4,9 +4,11 @@
 //   node scripts/gen-assets.mjs
 //
 // Hand-authored SOURCE masters live in ../assets-src/ (versioned, NOT deployed):
-//   - icon-master.png   crisp, full-bleed square brand mark
-//   - hero-master.png   16:9 hero photo
-//   - og-master.png     1.91:1 branded social card (wordmark + tagline)
+//   - icon-master.png     crisp, full-bleed square brand mark (quad + wing)
+//   - favicon-master.png  simplified single-wing mark — the full mark turns to
+//                         mush at 16px, so the tab icon uses this instead
+//   - hero-master.png     16:9 hero photo
+//   - og-master.png       1.91:1 branded social card (wordmark + tagline)
 //
 // Produces, under site/assets/ (+ site/favicon.ico):
 //   - favicon.ico              multi-res 16/32/48 from icon-master
@@ -64,10 +66,12 @@ async function icons() {
     .png()
     .toFile(a('icon-maskable-512.png'))
 
-  // Multi-res .ico for legacy / browser-tab favicons.
+  // Multi-res .ico for the browser tab. Built from the SIMPLIFIED mark: at 16px
+  // the full quad+wing mark collapses into an unreadable blob, whereas the lone
+  // wing silhouette still reads. Larger icons above keep the full mark.
   const icoSizes = [16, 32, 48]
   const pngBufs = await Promise.all(
-    icoSizes.map((s) => sharp(MASTER).resize(s, s, { fit: 'cover' }).png().toBuffer()),
+    icoSizes.map((s) => sharp(src('favicon-master.png')).resize(s, s, { fit: 'cover' }).png().toBuffer()),
   )
   await writeFile(site('favicon.ico'), await pngToIco(pngBufs))
 
