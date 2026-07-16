@@ -5,7 +5,8 @@
 //
 // Hand-authored SOURCE masters live in ../assets-src/ (versioned, NOT deployed):
 //   - icon-master.png   crisp, full-bleed square brand mark
-//   - hero-master.png   16:9 hero / social photo
+//   - hero-master.png   16:9 hero photo
+//   - og-master.png     1.91:1 branded social card (wordmark + tagline)
 //
 // Produces, under site/assets/ (+ site/favicon.ico):
 //   - favicon.ico              multi-res 16/32/48 from icon-master
@@ -13,7 +14,8 @@
 //   - icon-maskable-512.png    Android adaptive icon — glyph in the 80% safe zone
 //   - apple-touch-icon.png     180px iOS home-screen icon
 //   - avatar.jpg               512px logo (rel=icon jpeg + JSON-LD logo)
-//   - banner.jpg               1600x900 hero (og:image / twitter:image fallback)
+//   - banner.jpg               1600x900 hero (kept text-free)
+//   - og.jpg                   1200x630 branded card (og:image / twitter:image)
 //   - banner-800/-1600 .webp/.avif   responsive hero variants
 //   - shot-log-viewer / shot-nanawing .webp/.avif   right-sized card screenshots
 //
@@ -88,6 +90,18 @@ async function hero() {
   console.log('hero: banner.jpg')
 }
 
+async function og() {
+  // 1200x630 branded social card (og:image / twitter:image). Deliberately a
+  // separate image from banner.jpg: the hero stays text-free (the page has its
+  // own H1), while the share card carries the wordmark + tagline so unfurls
+  // name the product even when the caption is truncated.
+  await sharp(src('og-master.png'))
+    .resize(1200, 630, { fit: 'cover' })
+    .jpeg({ quality: 84, mozjpeg: true })
+    .toFile(a('og.jpg'))
+  console.log('og: og.jpg')
+}
+
 async function variants(name, widths, { webpQ = 80, avifQ = 52 } = {}) {
   const stem = name.replace(/\.[^.]+$/, '')
   for (const w of widths) {
@@ -100,6 +114,7 @@ async function variants(name, widths, { webpQ = 80, avifQ = 52 } = {}) {
 
 await icons()
 await hero()
+await og()
 // Hero: full-width, responsive — 800 for phones, 1600 for desktop/retina.
 await variants('banner.jpg', [800, 1600])
 // Card screenshots: shown small & lazy — a single right-sized width is plenty.
