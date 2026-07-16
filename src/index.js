@@ -84,14 +84,21 @@ async function videosResponse(env) {
 // HSTS goes on HTTPS responses (browsers ignore it over http and we skip
 // localhost); static art under /assets/ gets a real cache lifetime since the
 // Workers-Assets default is `max-age=0, must-revalidate` — every repeat visit
-// would otherwise revalidate. Filenames aren't content-hashed, so a bounded
-// TTL + stale-while-revalidate rather than `immutable`.
+// would otherwise revalidate.
 function harden(response, url, isLocal) {
   const headers = new Headers(response.headers)
   if (!isLocal) {
-    headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+    // 2-year max-age + `preload` makes the domain eligible for the HSTS preload
+    // list (still has to be submitted once at hstspreload.org — a one-way door:
+    // every subdomain must then stay HTTPS-only). Everything here already is.
+    headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   }
-  if (url.pathname.startsWith('/assets/')) {
+  // Cache static art for a day — but ONLY successful responses. Caching a 404 or
+  // 5xx here (e.g. a request that races a deploy before an asset propagates)
+  // would otherwise pin the error at the edge for the full TTL. Filenames aren't
+  // content-hashed, but Workers-Assets re-versions changed files on deploy so
+  // in-place edits still go live; stale-while-revalidate bounds the rest.
+  if (url.pathname.startsWith('/assets/') && response.ok) {
     headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
   }
   return new Response(response.body, {
