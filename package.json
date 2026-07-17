@@ -11,6 +11,7 @@
     "wings:discover": "node wings/jobs/discover.mjs",
     "wings:refresh": "node wings/jobs/refresh.mjs",
     "wings:images": "node wings/jobs/fetch-images.mjs",
+    "wings:admin": "node wings/admin/server.mjs",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {

@@ -129,7 +129,7 @@
       "listUrls": [
         "https://www.drkstore.in/rtf-pnp-quads/"
       ],
-      "notes": "Owner-supplied root. NOTE: this root is 'RTF/PNP QUADS' — quadcopters, not fixed wings; it may be the wrong link for a wings index. Also non-standard permalinks (products sit at /<slug>/, not /product/<slug>/) and JS-rendered listings, so only the Store API works."
+      "notes": "Owner-supplied root. The category is named 'RTF/PNP QUADS' but it DOES carry fixed wings — only one today, and the owner reports they add more over time, so keep crawling it and let triage find them. Non-standard permalinks (products sit at /<slug>/, not /product/<slug>/) and JS-rendered listings, so only the WooCommerce Store API works."
     },
     {
       "id": "tujorc",
