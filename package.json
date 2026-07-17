@@ -7,6 +7,7 @@
     "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
     "assets": "node scripts/gen-assets.mjs",
+    "wings:build": "node wings/build.mjs",
     "deploy": "wrangler deploy"
   },
   "devDependencies": {
