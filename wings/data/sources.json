@@ -1,5 +1,5 @@
 {
-  "$comment": "Vendor registry. This is what makes discovery a standing capability rather than a one-off sweep: `npm run wings:discover` walks each source's listUrls looking for airframes we don't have yet and writes them to candidates.json for review; `npm run wings:refresh` re-checks price/stock for kits already in kits.json. Everything here was learned by fetching these sites live on 2026-07-17 — the quirks are real, don't 'clean them up' without re-checking.",
+  "$comment": "Vendor registry — the root resources discovery walks. `npm run wings:discover` reads each source's listUrls, pulls the shop's product feed (WooCommerce Store API / Shopify products.json / HTML for Zoho), and writes anything not already in kits.json to candidates.json for review. `npm run wings:refresh` re-checks price/stock for indexed kits. Platform + quirks below were established by probing each site live — don't 'tidy' them without re-probing.",
   "schemaVersion": 1,
   "sources": [
     {
@@ -13,10 +13,11 @@
       "taxIncluded": true,
       "affiliate": null,
       "listUrls": [
-        "https://www.vortex-rc.com/product-category/rc-plane-kits/rc-flying-wings/",
-        "https://www.vortex-rc.com/product-category/rc-plane-kits/laser-cut-rc-airplane-kits-india/"
+        "https://www.vortex-rc.com/product-category/rc-plane-kits/",
+        "https://www.vortex-rc.com/product-category/tuff-birds-planes/",
+        "https://www.vortex-rc.com/product-category/laser-cut-rc-airplane-kits-india/"
       ],
-      "notes": "The backbone of the Indian wing market — designs and makes EPP wings domestically. Variable products: read the `data-product_variations` JSON blob on the product page for per-variant price + is_in_stock. There are NO kit/PNP labels; the axes are Kit Options x Electronics x Center Bay x Colour, so a flat kit/pnp field cannot represent them. Price is a RANGE and the top of the range is often the out-of-stock variant — never show the range max as 'the price'."
+      "notes": "The backbone of the Indian wing market — designs and makes EPP wings domestically. There is NO flying-wings category: the wings sit inside rc-plane-kits (51), tuff-birds-planes (14) and laser-cut-rc-airplane-kits-india (13), so discovery pulls planes+trainers too and triage has to sort them. Product pages: read the `data-product_variations` JSON for per-variant price + is_in_stock. There are NO kit/PNP labels; the axes are Kit Options x Electronics x Center Bay x Colour, so a flat kit/pnp field cannot represent them. Price is a RANGE and the top of the range is often the out-of-stock variant — never show the range max as 'the price'."
     },
     {
       "id": "uavmarketplace",
@@ -29,8 +30,7 @@
       "taxIncluded": true,
       "affiliate": null,
       "listUrls": [
-        "https://www.uavmarketplace.in/collections/fixed-wing-offer/895789000050146426",
-        "https://www.uavmarketplace.in/fpv-and-hobby-drone-category"
+        "https://www.uavmarketplace.in/categories/fixed-wing-frames-accessories/895789000000247687"
       ],
       "notes": "Clean schema.org Product JSON-LD with price + availability. Stocks LDARC / Skywalker / HEEWING / MAPBIRD / ATOMRC. Deep MRP strike-throughs (e.g. 6,999 against 17,899 MRP) — store both, and don't trust MRP as a real reference price. Root links: the /category/fixed-wing path is a 404 — the real listings live under /collections/<slug>/<id>."
     },
@@ -100,6 +100,66 @@
       "blocked": "tos-use-paapi",
       "affiliate": "associates-in",
       "notes": "Do not scrape — use the Product Advertising API once enrolled in Associates. Gotcha: Amazon SUPPRESSES the price on unavailable ASINs (renders outOfStockBuyBox with no corePrice), and any rupee figures left in the HTML belong to sponsored carousels, not the product. Also seen: /dp/<asin> silently serving a different ASIN."
+    },
+    {
+      "id": "anubisrc",
+      "name": "Anubis RC",
+      "home": "https://anubisrc.com/",
+      "country": "IN",
+      "madeInIndia": false,
+      "platform": "woocommerce",
+      "scrapable": true,
+      "taxIncluded": true,
+      "affiliate": null,
+      "listUrls": [
+        "https://anubisrc.com/product-category/flying-wingsfixed-wingsvtol/"
+      ],
+      "notes": "Owner-supplied root. Category HTML is JS-rendered — zero product links in the markup — so HTML scraping finds nothing. Use the WooCommerce Store API (/wp-json/wc/store/v1/products?category=<id>), which works and returns price + stock."
+    },
+    {
+      "id": "drkstore",
+      "name": "DRK Store",
+      "home": "https://www.drkstore.in/",
+      "country": "IN",
+      "madeInIndia": false,
+      "platform": "woocommerce",
+      "scrapable": true,
+      "taxIncluded": true,
+      "affiliate": null,
+      "listUrls": [
+        "https://www.drkstore.in/rtf-pnp-quads/"
+      ],
+      "notes": "Owner-supplied root. NOTE: this root is 'RTF/PNP QUADS' — quadcopters, not fixed wings; it may be the wrong link for a wings index. Also non-standard permalinks (products sit at /<slug>/, not /product/<slug>/) and JS-rendered listings, so only the Store API works."
+    },
+    {
+      "id": "tujorc",
+      "name": "TujoRC",
+      "home": "https://tujorc.com/",
+      "country": "IN",
+      "madeInIndia": false,
+      "platform": "woocommerce",
+      "scrapable": true,
+      "taxIncluded": true,
+      "affiliate": null,
+      "listUrls": [
+        "https://tujorc.com/product-category/fixed-wings/"
+      ],
+      "notes": "Owner-supplied root. Standard WooCommerce; stocks Durafly/FMS-class PNF airframes."
+    },
+    {
+      "id": "aeromodellingtutor",
+      "name": "Aeromodelling Tutor",
+      "home": "https://aeromodellingtutor.in/",
+      "country": "IN",
+      "madeInIndia": false,
+      "platform": "shopify",
+      "scrapable": true,
+      "taxIncluded": true,
+      "affiliate": null,
+      "listUrls": [
+        "https://aeromodellingtutor.in/collections/electric-planes"
+      ],
+      "notes": "Owner-supplied root. Shopify — /collections/<handle>/products.json returns everything with prices, no HTML parsing. Intermittently answers 503 on the first hit; retry (the job does)."
     }
   ]
 }

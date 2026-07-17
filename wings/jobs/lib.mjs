@@ -35,6 +35,107 @@ export async function get(url, { tries = 2 } = {}) {
   return null
 }
 
+export async function getJson(url, { tries = 3 } = {}) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, { headers: { 'user-agent': UA, accept: 'application/json' }, redirect: 'follow' })
+      if (res.ok) return await res.json()
+      if (res.status === 404) return null
+    } catch {
+      /* retry — 503s on these hosts are usually transient */
+    }
+    await new Promise((r) => setTimeout(r, 1200 * (i + 1)))
+  }
+  return null
+}
+
+// --- platform APIs (preferred over HTML) ----------------------------------
+// Every WooCommerce and Shopify shop exposes a JSON product feed. Using it
+// instead of parsing HTML is both more reliable (JS-rendered category pages
+// return no links at all — anubisrc and drkstore both do) and richer: we get
+// price and stock in the same call, so discovery and refresh share one path.
+
+const slugOf = (listUrl) => {
+  const segs = new URL(listUrl).pathname.split('/').filter(Boolean)
+  return segs[segs.length - 1] || null
+}
+
+async function wooCategoryId(origin, slug) {
+  const cats = await getJson(`${origin}/wp-json/wc/store/v1/products/categories?per_page=100`)
+  if (!Array.isArray(cats)) return null
+  const hit = cats.find((c) => c.slug === slug)
+  return hit?.id ?? null
+}
+
+async function wooProducts(source, listUrl) {
+  const origin = new URL(source.home).origin
+  const slug = slugOf(listUrl)
+  const id = await wooCategoryId(origin, slug)
+  // Refuse rather than fall back to the whole shop. A root link that doesn't
+  // resolve to a real category is a broken root link — silently returning 400
+  // unrelated products (as this did for a fabricated vortex-rc URL) is worse
+  // than returning nothing, because it looks like it worked.
+  if (!id) return { products: [], scoped: false, error: `no category matches slug "${slug}" — is the root link right?` }
+  const out = []
+  for (let page = 1; page <= 10; page++) {
+    const rows = await getJson(`${origin}/wp-json/wc/store/v1/products?category=${id}&per_page=100&page=${page}`)
+    if (!Array.isArray(rows) || !rows.length) break
+    for (const p of rows) {
+      const minor = p.prices?.currency_minor_unit ?? 2
+      const div = 10 ** minor
+      out.push({
+        url: norm(p.permalink),
+        title: (p.name || '').replace(/&amp;/g, '&').replace(/&#8211;/g, '–'),
+        priceINR: p.prices?.price ? Math.round(Number(p.prices.price) / div) : null,
+        inStock: p.is_in_stock !== false,
+      })
+    }
+    if (rows.length < 100) break
+  }
+  return { products: out, scoped: true }
+}
+
+async function shopifyProducts(source, listUrl) {
+  const out = []
+  for (let page = 1; page <= 6; page++) {
+    const d = await getJson(`${listUrl.replace(/\/$/, '')}/products.json?limit=250&page=${page}`)
+    const rows = d?.products
+    if (!Array.isArray(rows) || !rows.length) break
+    for (const p of rows) {
+      const v = p.variants?.[0]
+      out.push({
+        url: norm(`${new URL(source.home).origin}/products/${p.handle}`),
+        title: p.title || '',
+        priceINR: v?.price ? Math.round(Number(v.price)) : null,
+        inStock: p.variants?.some((x) => x.available) ?? true,
+      })
+    }
+    if (rows.length < 250) break
+  }
+  return { products: out, scoped: true }
+}
+
+// Fall back to HTML for platforms without a usable feed (Zoho Commerce).
+async function htmlProducts(source, listUrl) {
+  const out = []
+  const seen = new Set()
+  let url = listUrl
+  for (let page = 0; page < 12 && url; page++) {
+    seen.add(norm(url))
+    const html = await get(url)
+    if (!html) break
+    for (const u of productLinks(html, source, url)) out.push({ url: u, title: '', priceINR: null, inStock: null })
+    url = nextPage(html, url, seen)
+  }
+  return { products: [...new Map(out.map((p) => [p.url, p])).values()], scoped: true }
+}
+
+export async function fetchCatalog(source, listUrl) {
+  if (source.platform === 'woocommerce') return wooProducts(source, listUrl)
+  if (source.platform === 'shopify') return shopifyProducts(source, listUrl)
+  return htmlProducts(source, listUrl)
+}
+
 // --- product-link extraction (discovery) ----------------------------------
 // Pull every href and resolve it against the page URL. Matching raw absolute
 // URLs in the HTML looks simpler but silently finds nothing on any site that

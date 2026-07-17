@@ -11,7 +11,7 @@
 // keeps the index trustworthy.
 
 import { writeFile } from 'node:fs/promises'
-import { get, productLinks, nextPage, norm, path, readJson, titleOf } from './lib.mjs'
+import { fetchCatalog, get, norm, path, readJson, titleOf } from './lib.mjs'
 
 const { sources } = await readJson('wings/data/sources.json')
 const { kits } = await readJson('wings/data/kits.json')
@@ -34,27 +34,25 @@ console.log(`discovering across ${active.length} sources\n`)
 
 const found = []
 for (const source of active) {
-  let seen = new Set()
-  let hits = new Set()
+  const hits = new Map()
+  const errors = []
   for (const listUrl of source.listUrls) {
-    let url = listUrl
-    for (let page = 0; page < MAX_PAGES && url; page++) {
-      seen.add(norm(url))
-      const html = await get(url)
-      if (!html) break
-      productLinks(html, source, url).forEach((u) => hits.add(u))
-      url = nextPage(html, url, seen)
-    }
+    const { products, error } = await fetchCatalog(source, listUrl)
+    if (error) errors.push(`${listUrl} — ${error}`)
+    for (const p of products) if (!hits.has(p.url)) hits.set(p.url, p)
   }
-  const fresh = [...hits].filter((u) => !known.has(u) && !dismissed.has(u))
-  console.log(`  ${source.id.padEnd(16)} ${String(hits.size).padStart(3)} products · ${String(fresh.length).padStart(3)} new`)
-  for (const u of fresh) found.push({ url: u, source: source.id })
+  const fresh = [...hits.values()].filter((p) => !known.has(p.url) && !dismissed.has(p.url))
+  console.log(`  ${source.id.padEnd(18)} ${String(hits.size).padStart(3)} products · ${String(fresh.length).padStart(3)} new`)
+  for (const e of errors) console.log(`    ✗ BROKEN ROOT LINK: ${e}`)
+  for (const p of fresh) found.push({ ...p, source: source.id })
 }
 
-// Title each new candidate so review is possible without opening every tab.
+// The feeds already give us titles; only fall back to fetching for HTML sources.
 for (const c of found) {
-  const html = await get(c.url)
-  c.title = html ? titleOf(html).slice(0, 110) : '(could not fetch)'
+  if (!c.title) {
+    const html = await get(c.url)
+    c.title = html ? titleOf(html).slice(0, 110) : '(could not fetch)'
+  }
   c.status = 'new'
   c.seenAt = new Date().toISOString().slice(0, 10)
 }
