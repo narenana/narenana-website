@@ -1,0 +1,657 @@
+{
+  "$comment": "Output of `npm run wings:discover` — product URLs found under the root listUrls that are not yet in kits.json. Review these: set status to \"accepted\" and copy into kits.json, or \"rejected\" to stop it resurfacing. This file is machine-written; kits.json is not.",
+  "updated": "2026-07-17",
+  "candidates": [
+    {
+      "url": "https://www.vortex-rc.com/product/super-trainer-epp-rc-plane",
+      "source": "vortex-rc",
+      "title": "Super Trainer EPP, Full Epp, Lightweight, Beginners RC Plane Kit",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/tuffstar-epp-trainer-v2",
+      "source": "vortex-rc",
+      "title": "TuffStar - 1500MM EPP Trainer -TuffBirds - Super Tough Wings &amp; Planes - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/interceptor-160",
+      "source": "vortex-rc",
+      "title": "Interceptor - 160 - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/epp-super-twin-1400mm-rc-plane",
+      "source": "vortex-rc",
+      "title": "VT-Super Twin, Made of Full Epp, Lightweight RC plane Kit- Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/epp-aerostar-aerobatic-rc-plane-1070mm",
+      "source": "vortex-rc",
+      "title": "Vortex-RC - Aerostar - 3D Rc plane Made of full EPP",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/speedster-ep",
+      "source": "vortex-rc",
+      "title": "Speedster-V2-TuffBirds - Super Tough Wings &amp; Planes - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/batman-v2",
+      "source": "vortex-rc",
+      "title": "Batman V2 - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/epp-profile-3d-rc-plane-740mm",
+      "source": "vortex-rc",
+      "title": "EPP 3D Profile, Made of Full Epp a 3D RC plane kit-Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/vt-simple-trainer",
+      "source": "vortex-rc",
+      "title": "VT-Simple Trainer Laser Cut Foamboard Speed Build RC Plane kit Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-viggen",
+      "source": "vortex-rc",
+      "title": "Viggen - Laser Cut Paper Laminated Foam board RC Plane kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-mustang",
+      "source": "vortex-rc",
+      "title": "Mustang - Laser Cut Paper Laminated Foam board kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-spitfire",
+      "source": "vortex-rc",
+      "title": "Spitfire - Laser Cut Foamboard Speed Build kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-spear",
+      "source": "vortex-rc",
+      "title": "FT-Spear Flying Wing - Laser Cut Foamboard Speed Build kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/bloody-baron-lasercut-foamboard-kit",
+      "source": "vortex-rc",
+      "title": "Bloody Baron Laser Cut Foamboard Speed Build kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-guinea-pig",
+      "source": "vortex-rc",
+      "title": "Guinea Pig - Laser Cut Foamboard Speed Build kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-explorer-lasercut-foamboard-kit",
+      "source": "vortex-rc",
+      "title": "FT-Explorer Lasercut Foamboard Speed Build Kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-22-f-22-raptor-lasercut-foamboard-rc-plane-speed-build-kit",
+      "source": "vortex-rc",
+      "title": "F-22 Raptor Laser Cut Foamboard Speed Build RC Plane kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-storch",
+      "source": "vortex-rc",
+      "title": "Storch - Laser Cut Foamboard Speed Build kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-old-fogey",
+      "source": "vortex-rc",
+      "title": "FT Old Fogey - Laser Cut RC Foamboard Speed Build kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/3-pack-swappable-nutball-flyer-delta",
+      "source": "vortex-rc",
+      "title": "Ft-Nutball, Ft-Flyer and FT-Delta Swappable RC Plane Kits",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/vt-allrounder-v5",
+      "source": "vortex-rc",
+      "title": "All new! VT Allrounder V5, Trainer RC Plane Kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/firewall-control-horn-set",
+      "source": "vortex-rc",
+      "title": "FT Elements Motor Mount Firewall &amp; Control Horns. - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/swappable-firewall-and-control-horns",
+      "source": "vortex-rc",
+      "title": "Swappable Simple Firewall and Control Horns FT Elements - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/control-horns-wo-backplate-20-pieces",
+      "source": "vortex-rc",
+      "title": "Flite Test Control Horns (20 pieces) Laser cut on Light Aeroply. - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-spear-aeroply-parts",
+      "source": "vortex-rc",
+      "title": "FT-Spear Plywood parts - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/thrust-vectoring-motor-mount",
+      "source": "vortex-rc",
+      "title": "FT Elements Thrust Vectoring Motor Mount - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/universal-aeroply-camera-mounting-kit",
+      "source": "vortex-rc",
+      "title": "Universal Aeroply Camera Mounting Kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/motor-mount-micro-bee",
+      "source": "vortex-rc",
+      "title": "Replacement Motor Mount / Plywood Parts for Micro Bee - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/motor-mount-spec-racer",
+      "source": "vortex-rc",
+      "title": "Replacement Motor Mount / Plywood Parts for Spec Racer - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/4-axis-diy-hot-wire-cnc-for-rc-hobbyists-aeromodellers-and-designers",
+      "source": "vortex-rc",
+      "title": "4 Axis DIY Hot wire CNC for RC Hobbyists, Aeromodellers and Designers - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/reprap-prusa-3d-printer-enclosure-kit",
+      "source": "vortex-rc",
+      "title": "Reprap Prusa 3D Printer Enclosure kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/ft-cruiser",
+      "source": "vortex-rc",
+      "title": "FT-Cruiser Laser Cut Foamboard Speed Build RC Plane kit - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/3mm-epp-sheets-60g-l-white",
+      "source": "vortex-rc",
+      "title": "3MM EPP Foam Block Multiple Sizes in India 1000x600mm, - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/100mm-epp-block-60g-l-1000x600-mm-white",
+      "source": "vortex-rc",
+      "title": "100MM EPP Foam Block in India 1000x600 MM - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.vortex-rc.com/product/100mm-epp-block-60g-l-1000x600-mm-black",
+      "source": "vortex-rc",
+      "title": "100MM EPP Foam Block in India 1000x600 MM - Vortex-RC",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/mapbird-skysurfer-1400mm-fpv-uav-trainer-kit/895789000000359389",
+      "source": "uavmarketplace",
+      "title": "MAPBIRD Skysurfer 1400mm UAV Kit | Best FPV Trainer India",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/heewing-hunter-lico-pnp-kit/895789000041490813",
+      "source": "uavmarketplace",
+      "title": "HEEWING Hunter Lico PNP Kit – Buy Crash Durable PP Board Micro Airplane",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/heewing-hunter-p51-mustang-pnp-kit/895789000041490750",
+      "source": "uavmarketplace",
+      "title": "HEEWING Hunter P51 Mustang PNP Kit | 540mm EPP Foam Fixed-Wing Airplane with Motor ESC Servos",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/heewing-hunter-j20-pnp-kit/895789000041490713",
+      "source": "uavmarketplace",
+      "title": "HEEWING Hunter J20 PNP Kit Micro Delta Wing Jet | UAV Marketplace",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/mapbird-evo-model-mini-talon-pro-kit/895789000000359376",
+      "source": "uavmarketplace",
+      "title": "MAPBIRD Evo Model Mini Drone - Precision Aerial Mapping & Surveying UAV",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/mapbird-skysurfer-kit-with-electronic/895789000025871468",
+      "source": "uavmarketplace",
+      "title": "MAPBIRD Skysurfer PNP Kit",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/hglrc-sector-fpv-v3-hd-freestyle-drone-kit/895789000002651341",
+      "source": "uavmarketplace",
+      "title": "HGLRC Sector FPV V3 HD Freestyle Drone Kit - High-Performance FPV Quadcopter",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/geprc-gep-mk5x-o3-pro-squashed-x-frame/895789000002659621",
+      "source": "uavmarketplace",
+      "title": "GEPRC-GEP MK5X O3 PRO SQUASHED X FRAME",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/hglrc-veyron35-cr-pusher-cinewhoop-frame-kit/895789000002651288",
+      "source": "uavmarketplace",
+      "title": "HGLRC Veyron35CR 3.5\" Pusher CineWhoop Frame Kit | GoPro Ready FPV Drone",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/gnb-2200mah-3s1p-11-1v-100c-lipo-battery/895789000000358362",
+      "source": "uavmarketplace",
+      "title": "GNB 2200mAh 3S1P 11.1V 100C Lipo Battery",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/foxeer-caesar-3-racing-frame-kit/895789000002615106",
+      "source": "uavmarketplace",
+      "title": "FOXEER Caesar 3 Racing Frame Kit - Durable 3-inch FPV Drone Frame",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/gemfam-d90-ducted-cinewhoop-pc-2l2r-m5-adapter-2mm-propeller/895789000000955446",
+      "source": "uavmarketplace",
+      "title": "GEMFAM D90 Ducted Cinewhoop PC Propeller | 2L2R M5 Adapter | 2MM Shaft | FPV Drone",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/radiomaster-pocket-radio-controller-%e2%80%93-elrs-version/895789000030555738",
+      "source": "uavmarketplace",
+      "title": "Radiomaster Pocket ELRS Radio Controller",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/gemfan%2051466%20hurricane%20v2%20pc%202l2r%203%20blade%20propeller/895789000000945368",
+      "source": "uavmarketplace",
+      "title": "GEMFAN 51466 Hurricane V2 3 Blade Propeller - High Performance FPV Drone Props",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/gnb-1000mah-4s1p-14-8v-120c-lipo-battery/895789000000962847",
+      "source": "uavmarketplace",
+      "title": "GNB 1100mAh 4S 14.8V 130C LiPo Battery for FPV Drones - High Performance",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://www.uavmarketplace.in/products/caddx-nebula-pro-nano-black-fpv-camera/895789000000802963",
+      "source": "uavmarketplace",
+      "title": "CADDX Nebula Pro Nano Black FPV Camera Low Latency 720p DJI Vista India",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/albabird-xl-1500mm-vtol-plane-x41-pnp-comborecommend-41-to-most-of-the-users",
+      "source": "robosynckits",
+      "title": "Albabird-XL 1500MM VTOL Plane X4+1 PNP Combo(recommend 4+1 to most of the users) - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/amitasha-battery-operated-bird-flying-toy-with-flash-light-rechargeable-battery",
+      "source": "robosynckits",
+      "title": "Amitasha Battery Operated Bird Flying Toy with Flash Light &amp; Rechargeable Battery - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/atomrc-dolphin-pro-fpv-flight-800mm-fixed-wing-pnps",
+      "source": "robosynckits",
+      "title": "ATOMRC DOLPHIN PRO FPV FLIGHT 800MM FIXED WING-PNP+S In India - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/atomrc-swordfish-fpv-fixed-wing-kit-versionno-electronics-in-india",
+      "source": "robosynckits",
+      "title": "Atomrc Swordfish FPV Fixed Wing-KIT VERSION(NO ELECTRONICS) IN INDIA - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/4k-wifi-dual-camera-selfie-gesture-foldable-remote-control-drone-with-obstacle-avoidance-90-camera-rotate-one-key-take-off-landing-altitude-hold-headless-mode-360-flip-action",
+      "source": "robosynckits",
+      "title": "Brushlesss Remote Control Drone with Obstacle Avoidance Drone for kids and Adults in india - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/cuav-airspeed-sensor-with-modified-pitot-tube-digital-one",
+      "source": "robosynckits",
+      "title": "CUAV MS4525 Airspeed Sensor with Modified pitot tube Sensor for pixhawk - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/dolphin-845mm-wingspan-fpv-rc-airplane-pnp",
+      "source": "robosynckits",
+      "title": "Dolphin 845mm Wingspan FPV RC Airplane – PNP - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/eft-drone-parts-power-distribution-board-four-axes-e4p-1pcs-for-eft-e410p-e416p-e420p-agriculture-drone-frame-pdb",
+      "source": "robosynckits",
+      "title": "EFT Drone Parts Power Distribution Board Four Axes/E4P/1pcs For EFT E410P E416P E420P Agriculture Drone Frame ",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/fix-wing-dragon-vtol-plane-fly-2160-e-vtol-ready-to-fly-version-in-india",
+      "source": "robosynckits",
+      "title": "Fix Wing Dragon VTOL Plane FLY-2160 E-VTOL Ready to Fly Version In India - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/flying-bear-fx9630-four-channel-bypass-j-20-aerobatic-fighter",
+      "source": "robosynckits",
+      "title": "Flying Bear FX9630 Four-Channel Bypass J-20 Aerobatic Fighter - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/fs-sm600-6ch-usb-powered-controller-with-supersimx-simulator-mode-2",
+      "source": "robosynckits",
+      "title": "FS-SM600 6CH USB Powered Controller with SuperSimX Simulator (Mode 2) - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/goosky-s1-new-edition-rc-helicopter-rtf-elrs-ready-3d-dual-brushless",
+      "source": "robosynckits",
+      "title": "Goosky S1 Legend New Edition RC Helicopter RTF ELRS Ready 3D Dual Brushless - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/h16-mini-rc-foldable-drone-with-4k-single-camera-wifi-fpv-brushless-photography-quadcopter-professional-drones-toys-for-children-rs6113",
+      "source": "robosynckits",
+      "title": "H16 Mini RC Foldable Drone With 4K Single Camera Wifi FPV Brushless Photography Quadcopter Professional Drones",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/rc-airplanes-remote-control-airplanes-glider-2-4-ghz-epp-foam-rc-aircraft-with-automatic-balance",
+      "source": "robosynckits",
+      "title": "HAPTIME Rc Airplanes, Remote Control Airplanes Glider 2.4 GHZ, 2 Channels RC Plane, Easy to Fly Yellow Remote ",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/js2-pro-drone-with-3-camera-intelligent-flight-brushless-motor",
+      "source": "robosynckits",
+      "title": "JS2 PRO DRONE with 3 Camera | Intelligent Flight | Brushless Motor - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/mays-rc-helicopter-for-adults-f09-1-47-2-4g-6ch-brushless-direct-drive-remote-control-military-helicopter-for-american-uh60-black-hawk-helicopter-rtf-edition",
+      "source": "robosynckits",
+      "title": "MAYS RC Helicopter for Adults, F09 1/47 2.4G 6CH Brushless Direct Drive Remote Control Military Helicopter for",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/mini-selfie-gesture-wi-fi-camera-drone-with-live-video-and-2-batteries",
+      "source": "robosynckits",
+      "title": "Mini Selfie Gesture Wi-Fi Camera Drone With Live Video and 2 batteries - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/nano-talon-evo-860mm-wingspan-aio-v-tail-epp-molded-fpv-fixed-wing-rc-airplane-pnp-with-power-system-w-o-fpv-system",
+      "source": "robosynckits",
+      "title": "Nano Talon EVO 860mm Wingspan AIO V-Tail EPP Molded FPV Fixed Wing - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/epp-trainer-v2",
+      "source": "robosynckits",
+      "title": "Non breakable Trainer Rc plane Kit - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/pakshi-diy-rc-plane-kit-made-in-india",
+      "source": "robosynckits",
+      "title": "Pakshi DIY RC Plane Kit - Made in India - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/qidi-560-rtf-rc-plane-brushless-motor-2-4ghz-control-led-wing-lights",
+      "source": "robosynckits",
+      "title": "Qidi 560 RTF RC Plane – Brushless Motor, 2.4GHz Control, LED Wing Lights - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/1-16-1220mm-ranger-ep-v2-rtf-kit-m2-with-reflex-v3-yellow",
+      "source": "robosynckits",
+      "title": "Ranger EP V2 PNP kit (M2) with reflex V3 (Yellow) 1220 mm - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/rc-era-c138-pro-bell-206-brushless-6ch-rc-helicopter-rtf-133-scale",
+      "source": "robosynckits",
+      "title": "RC ERA C138 PRO Bell-206 Brushless 6CH RC Helicopter (RTF) – 1:33 Scale - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/rc-helicopter-1-28-md500-c189-rc-helicopter-2-4g-4ch-remote-control-helicopter-with-single-propeller",
+      "source": "robosynckits",
+      "title": "RC Helicopter 1/28 MD500 C189 RC Helicopter, 2.4G 4CH Remote Control Helicopter with Single Propeller - Robosy",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/rc-paraglider-kit-split-1-6",
+      "source": "robosynckits",
+      "title": "RC Paraglider Kit - Split 1.6 - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/rc-paramotor-with-pilot-in-india",
+      "source": "robosynckits",
+      "title": "RC paramotor with pilot In India - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/rc-plane-fix-wing-kits",
+      "source": "robosynckits",
+      "title": "RC Plane Fix wing Kits - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/robotics-birds-ornithopter-wildcard-india-techboy-98007-2-4ghz-remote-control-authentic-rc-ornithopter-in-india",
+      "source": "robosynckits",
+      "title": "Robotics Birds Ornithopter WildCard India Techboy 98007+ 2.4Ghz Remote Control Authentic Rc ornithopter in ind",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/eal-wing-g1500-1500mm-wingspan-epo-fpv-glider-rc-airplane-pnp-kit",
+      "source": "robosynckits",
+      "title": "Seal Wing G1500 1500mm Wingspan EPO FPV Glider RC Airplane PNP-KIT - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/small-rubber-powered-flying-plane-kit",
+      "source": "robosynckits",
+      "title": "Small Rubber Powered Flying Plane Kit for your Children&#039;s - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/striver-vtol-in-india",
+      "source": "robosynckits",
+      "title": "STRIVER MINI VTOL (fully Assemble and Kits also available) - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/t1-ranger-vtol-pnp",
+      "source": "robosynckits",
+      "title": "T1 Ranger VTOL Plane - PNP with Electronics - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/t2-cruza-1-2m-wingspan-pnp",
+      "source": "robosynckits",
+      "title": "T2 Cruza - 1.2M wingspan PNP with VTOL Kits - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/tbs-chupito-800mm-pnp-crash-a-lot-kit",
+      "source": "robosynckits",
+      "title": "TBS CHUPITO 800MM-PNP-CRASH A LOT KIT - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/tbs-mojito-pnp-set-fpv-flying-wing-in-india",
+      "source": "robosynckits",
+      "title": "TBS Mojito (PNP Set) – FPV Flying Wing in India - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/tuffstar-epp-trainer-ready-to-fly-planes",
+      "source": "robosynckits",
+      "title": "TuffStar* EPP Trainer Ready to Fly Planes - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/wltoys-f959-sky-king-2-4g-3ch-radio-control-rc-airplane-aircraft-rtf-red",
+      "source": "robosynckits",
+      "title": "Wltoys F959 Sky-King 2.4G 3CH Radio Control RC Airplane Aircraft RTF (Red) - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/wltoys-xk-x450-aviator-airplane-2-4ghz-6-channel-brushless-motor-rc-aircraft",
+      "source": "robosynckits",
+      "title": "WLtoys XK X450 Aviator Airplane 2.4GHz 6 Channel Brushless Motor RC Aircraft - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/x-drone-3-axis-gimbal-camera-drone-with-2k-video-quality",
+      "source": "robosynckits",
+      "title": "X-Drone 3 Axis Gimbal Camera Drone with 2K Video Quality - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/x-uav-clouds-survey-1880mm-wingspan-twin-motor-epo-fpv-aircraft-rc-airplane-kit",
+      "source": "robosynckits",
+      "title": "X-UAV Clouds Survey 1880mm Wingspan Twin Motor EPO FPV Aircraft RC Airplane KITNE - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/x-uav-sky-surfer-x8-kit-epo-foam",
+      "source": "robosynckits",
+      "title": "X-UAV SKY-SURFER X8 KIT (EPO FOAM) - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    },
+    {
+      "url": "https://robosynckits.in/product/xuav-talon-pnp-epo-1800mm-wingspan-v-tail-fpv-plane-aircraft",
+      "source": "robosynckits",
+      "title": "XUAV Talon PNP EPO 1718mm Wingspan V-tail FPV Plane Aircraft - Robosync",
+      "status": "new",
+      "seenAt": "2026-07-17"
+    }
+  ]
+}

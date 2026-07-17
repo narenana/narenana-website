@@ -1,5 +1,5 @@
 {
-  "$comment": "Curated source of truth for narenana Wings. Hand-edited + PR-able. The refresh job (wings/jobs/refresh.mjs) may only ever update price/stock/checkedAt on an existing offer — it must never invent a kit. Add new kits here (or accept them from wings/data/candidates.json).",
+  "$comment": "Curated source of truth for narenana Wings. Hand-edited + PR-able. The refresh job (wings/jobs/refresh.mjs) may only ever update price/stock/checkedAt on an existing offer — it must never invent a kit. Add new kits here (or accept them from wings/data/candidates.json). Only list kits someone can actually buy.",
   "schemaVersion": 1,
   "kits": [
     {
@@ -9,16 +9,25 @@
       "airframe": "flying-wing",
       "spanMM": 600,
       "madeIn": "IN",
-      "blurb": "The cheapest way into an FPV wing in India. Tiny 600mm EPP park flyer — bounces off things that would end a bigger wing.",
+      "blurb": "600mm EPP flying-wing kit. Airframe only, or with power pack.",
       "source": "vortex-rc",
       "url": "https://www.vortex-rc.com/product/tuffbirds-micro-bee-600mm-epp-fpv-flying-wing/",
       "availability": "domestic",
       "taxIncluded": true,
       "checkedAt": "2026-07-17",
       "variants": [
-        { "label": "No Power Pack", "priceINR": 1650, "inStock": true },
-        { "label": "With Power Pack", "priceINR": 4149, "inStock": false }
-      ]
+        {
+          "label": "No Power Pack",
+          "priceINR": 1650,
+          "inStock": true
+        },
+        {
+          "label": "With Power Pack",
+          "priceINR": 4149,
+          "inStock": false
+        }
+      ],
+      "img": "/wings/img/vortex-rc-micro-bee-600.jpg"
     },
     {
       "slug": "vortex-rc-spec-racer-900",
@@ -27,7 +36,7 @@
       "airframe": "flying-wing",
       "spanMM": 900,
       "madeIn": "IN",
-      "blurb": "Built to the FPVWRA spec-racing rules. The closest thing India has to an AR Wing Classic — and a fifth of the landed price.",
+      "blurb": "900mm EPP racing wing kit, built to FPVWRA spec rules. White or black.",
       "source": "vortex-rc",
       "url": "https://www.vortex-rc.com/product/fpvwra-spec-racer-epp-fpv-flying-wing/",
       "availability": "domestic",
@@ -40,15 +49,48 @@
         }
       ],
       "variants": [
-        { "label": "Standard Kit / No Electronics", "priceINR": 2699, "inStock": true },
-        { "label": "Standard Kit + Center Bay / No Electronics", "priceINR": 2999, "inStock": true },
-        { "label": "+ Balsa Elevons / No Electronics", "priceINR": 3099, "inStock": true },
-        { "label": "+ Balsa Elevons + Center Bay / No Electronics", "priceINR": 3399, "inStock": true },
-        { "label": "Standard Kit / With Electronics", "priceINR": 4699, "inStock": true },
-        { "label": "Standard Kit + Center Bay / With Electronics", "priceINR": 4999, "inStock": true },
-        { "label": "+ Balsa Elevons / With Electronics", "priceINR": 5099, "inStock": true },
-        { "label": "+ Balsa Elevons + Center Bay / With Electronics", "priceINR": 5399, "inStock": true }
-      ]
+        {
+          "label": "Standard Kit / No Electronics",
+          "priceINR": 2699,
+          "inStock": true
+        },
+        {
+          "label": "Standard Kit + Center Bay / No Electronics",
+          "priceINR": 2999,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons / No Electronics",
+          "priceINR": 3099,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons + Center Bay / No Electronics",
+          "priceINR": 3399,
+          "inStock": true
+        },
+        {
+          "label": "Standard Kit / With Electronics",
+          "priceINR": 4699,
+          "inStock": true
+        },
+        {
+          "label": "Standard Kit + Center Bay / With Electronics",
+          "priceINR": 4999,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons / With Electronics",
+          "priceINR": 5099,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons + Center Bay / With Electronics",
+          "priceINR": 5399,
+          "inStock": true
+        }
+      ],
+      "img": "/wings/img/vortex-rc-spec-racer-900.jpg"
     },
     {
       "slug": "vortex-rc-chiquita-100",
@@ -58,21 +100,50 @@
       "spanMM": 1000,
       "auwG": 750,
       "madeIn": "IN",
-      "blurb": "Enclosed electronics bay and a camera mount option — the endurance/HD-carrying wing. The sane domestic answer to an AR Wing Pro.",
+      "blurb": "1000mm EPP wing kit with enclosed electronics bay. Camera mount optional.",
       "source": "vortex-rc",
       "url": "https://www.vortex-rc.com/product/chiquita-100-1meter-fpv-wing/",
       "availability": "domestic",
       "taxIncluded": true,
       "checkedAt": "2026-07-17",
       "variants": [
-        { "label": "Standard Kit / No Electronics", "priceINR": 2899, "inStock": true },
-        { "label": "+ Balsa Elevons / No Electronics", "priceINR": 3299, "inStock": true },
-        { "label": "+ Camera Mount / No Electronics", "priceINR": 3349, "inStock": true },
-        { "label": "+ Balsa Elevons + Camera Mount / No Electronics", "priceINR": 3749, "inStock": true },
-        { "label": "Standard Kit / With Electronics", "priceINR": 4899, "inStock": true },
-        { "label": "+ Camera Mount / With Electronics", "priceINR": 5349, "inStock": true },
-        { "label": "Top combo", "priceINR": 5749, "inStock": false }
-      ]
+        {
+          "label": "Standard Kit / No Electronics",
+          "priceINR": 2899,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons / No Electronics",
+          "priceINR": 3299,
+          "inStock": true
+        },
+        {
+          "label": "+ Camera Mount / No Electronics",
+          "priceINR": 3349,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons + Camera Mount / No Electronics",
+          "priceINR": 3749,
+          "inStock": true
+        },
+        {
+          "label": "Standard Kit / With Electronics",
+          "priceINR": 4899,
+          "inStock": true
+        },
+        {
+          "label": "+ Camera Mount / With Electronics",
+          "priceINR": 5349,
+          "inStock": true
+        },
+        {
+          "label": "Top combo",
+          "priceINR": 5749,
+          "inStock": false
+        }
+      ],
+      "img": "/wings/img/vortex-rc-chiquita-100.jpg"
     },
     {
       "slug": "vortex-rc-interceptor-100",
@@ -82,7 +153,7 @@
       "spanMM": 1050,
       "auwG": 700,
       "madeIn": "IN",
-      "blurb": "Forward-swept 1050mm EPP. The fast one — and the domestic stand-in for a ZOHD Dart XL at roughly a tenth of the landed cost.",
+      "blurb": "1050mm forward-swept EPP wing kit. ~700g AUW. Balsa elevons optional.",
       "source": "vortex-rc",
       "url": "https://www.vortex-rc.com/product/interceptor-epp-1050mm-rc-flying-wing/",
       "availability": "domestic",
@@ -95,11 +166,28 @@
         }
       ],
       "variants": [
-        { "label": "Standard Kit / No Electronics", "priceINR": 2999, "inStock": true },
-        { "label": "+ Balsa Elevons / No Electronics", "priceINR": 3399, "inStock": true },
-        { "label": "Standard Kit / With Electronics", "priceINR": 4999, "inStock": true },
-        { "label": "+ Balsa Elevons / With Electronics", "priceINR": 5399, "inStock": true }
-      ]
+        {
+          "label": "Standard Kit / No Electronics",
+          "priceINR": 2999,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons / No Electronics",
+          "priceINR": 3399,
+          "inStock": true
+        },
+        {
+          "label": "Standard Kit / With Electronics",
+          "priceINR": 4999,
+          "inStock": true
+        },
+        {
+          "label": "+ Balsa Elevons / With Electronics",
+          "priceINR": 5399,
+          "inStock": true
+        }
+      ],
+      "img": "/wings/img/vortex-rc-interceptor-100.jpg"
     },
     {
       "slug": "vortex-rc-mapper-v4-1400",
@@ -108,16 +196,25 @@
       "airframe": "flying-wing",
       "spanMM": 1400,
       "madeIn": "IN",
-      "blurb": "Big 1400mm lifting wing for mapping and camera work. Kit only — you bring the power system.",
+      "blurb": "1400mm EPP mapping wing. Kit only — no electronics included.",
       "source": "vortex-rc",
       "url": "https://www.vortex-rc.com/product/mapper-v4-1400mm/",
       "availability": "domestic",
       "taxIncluded": true,
       "checkedAt": "2026-07-17",
       "variants": [
-        { "label": "Standard Kit", "priceINR": 5500, "inStock": true },
-        { "label": "+ Camera Mounting Kit", "priceINR": 5950, "inStock": true }
-      ]
+        {
+          "label": "Standard Kit",
+          "priceINR": 5500,
+          "inStock": true
+        },
+        {
+          "label": "+ Camera Mounting Kit",
+          "priceINR": 5950,
+          "inStock": true
+        }
+      ],
+      "img": "/wings/img/vortex-rc-mapper-v4-1400.jpg"
     },
     {
       "slug": "vortex-rc-vt-speedster-v2",
@@ -126,18 +223,35 @@
       "airframe": "flying-wing",
       "spanMM": 990,
       "madeIn": "IN",
-      "blurb": "990mm speed wing. Currently out of stock across every variant.",
+      "blurb": "990mm EPP speed wing kit. Center bay optional.",
       "source": "vortex-rc",
       "url": "https://www.vortex-rc.com/product/vt-speedster-v2-fpv-flying-wing/",
       "availability": "domestic",
       "taxIncluded": true,
       "checkedAt": "2026-07-17",
       "variants": [
-        { "label": "Standard Kit / No Electronics", "priceINR": 1100, "inStock": false },
-        { "label": "+ Center Bay / No Electronics", "priceINR": 1350, "inStock": false },
-        { "label": "Standard Kit / With Electronics", "priceINR": 2500, "inStock": false },
-        { "label": "+ Center Bay / With Electronics", "priceINR": 2950, "inStock": false }
-      ]
+        {
+          "label": "Standard Kit / No Electronics",
+          "priceINR": 1100,
+          "inStock": false
+        },
+        {
+          "label": "+ Center Bay / No Electronics",
+          "priceINR": 1350,
+          "inStock": false
+        },
+        {
+          "label": "Standard Kit / With Electronics",
+          "priceINR": 2500,
+          "inStock": false
+        },
+        {
+          "label": "+ Center Bay / With Electronics",
+          "priceINR": 2950,
+          "inStock": false
+        }
+      ],
+      "img": "/wings/img/vortex-rc-vt-speedster-v2.jpg"
     },
     {
       "slug": "ldarc-tiny-wing-450x-v2",
@@ -146,18 +260,27 @@
       "airframe": "flying-wing",
       "spanMM": 430,
       "madeIn": "CN",
-      "blurb": "Ready-to-fly micro wing, no build required. Good first wing if you want to fly today rather than glue.",
+      "blurb": "430mm EPP micro wing. Ready to fly — motor, ESC, servos and radio link fitted.",
       "source": "uavmarketplace",
       "url": "https://www.uavmarketplace.in/products/ldarc-tiny-wing-450x-v2-rtf-epp-rc-airplane/895789000000358960",
       "availability": "domestic",
       "taxIncluded": true,
       "checkedAt": "2026-07-17",
       "flags": [
-        { "level": "note", "text": "\"450X\" is a model designation, not the wingspan — the spec table says 430mm." }
+        {
+          "level": "note",
+          "text": "\"450X\" is a model designation, not the wingspan — the spec table says 430mm."
+        }
       ],
       "variants": [
-        { "label": "RTF (without camera)", "priceINR": 6999, "inStock": true, "mrpINR": 17899 }
-      ]
+        {
+          "label": "RTF (without camera)",
+          "priceINR": 6999,
+          "inStock": true,
+          "mrpINR": 17899
+        }
+      ],
+      "img": "/wings/img/ldarc-tiny-wing-450x-v2.jpg"
     },
     {
       "slug": "skywalker-x2-mini",
@@ -166,15 +289,21 @@
       "airframe": "flying-wing",
       "spanMM": 950,
       "madeIn": "CN",
-      "blurb": "950mm EPO wing, PNP with motor/ESC/servos fitted. Out of stock at the moment.",
+      "blurb": "950mm EPO flying wing. PNP — motor, ESC and servos pre-fitted.",
       "source": "uavmarketplace",
       "url": "https://www.uavmarketplace.in/products/skywalker-x2-mini-fpv-pnp-flying-wing-epo-950mm-wingspan-rc-airplane-selection-long-range-system-x-2/895789000000359155",
       "availability": "domestic",
       "taxIncluded": true,
       "checkedAt": "2026-07-17",
       "variants": [
-        { "label": "PNP", "priceINR": 6649, "inStock": false, "mrpINR": 14500 }
-      ]
+        {
+          "label": "PNP",
+          "priceINR": 6649,
+          "inStock": false,
+          "mrpINR": 14500
+        }
+      ],
+      "img": "/wings/img/skywalker-x2-mini.jpg"
     },
     {
       "slug": "zohd-dart-xl-extreme",
@@ -183,7 +312,7 @@
       "airframe": "flying-wing",
       "spanMM": 1000,
       "madeIn": "CN",
-      "blurb": "The famous one. Orderable in India only as a US grey-import — and the listing is a bare airframe kit, not the PNP the title implies.",
+      "blurb": "1000mm EPP wing. Bare airframe kit — no motor, ESC, servos or prop.",
       "source": "ubuy",
       "url": "https://www.ubuy.co.in/product/87QTS061O-buddy-rc-zohd-dart-xl-extreme-fpv-airplane-enhanced-fpv-wing-rc-airplane-for-adults-with-1000mm-wingspan-easy-controlled-rc-plane-for-the-skilled",
       "availability": "grey-import",
@@ -192,53 +321,17 @@
       "flags": [
         {
           "level": "warn",
-          "text": "₹17,953 is the listed price only — it EXCLUDES shipping and customs, which you pay as importer of record. Realistic landed cost ₹25,000–30,000, 10+ business days, and manufacturer warranty may not be valid. The listing is a bare KIT: no motor, ESC, servos or prop."
+          "text": "Imported from the US — shipping and customs are charged at checkout, on top of the listed price."
         }
       ],
-      "alternativeSlug": "vortex-rc-interceptor-100",
       "variants": [
-        { "label": "KIT version (bare airframe)", "priceINR": 17953, "inStock": true }
-      ]
-    },
-    {
-      "slug": "sonicmodell-ar-wing-pro",
-      "brand": "SonicModell",
-      "name": "AR Wing Pro",
-      "airframe": "flying-wing",
-      "spanMM": 1000,
-      "madeIn": "CN",
-      "blurb": "The wing everyone asks about. Not sold in India — absent from every domestic retailer and both grey importers.",
-      "source": "ubuy",
-      "url": "https://www.ubuy.co.in/product/7C7FWPFK-sonicmodell-ar-wing-pro-1000mm-wingspan-epp-fpv-flying-wing-rc-airplane-pnp-version",
-      "availability": "not-available",
-      "taxIncluded": false,
-      "checkedAt": "2026-07-17",
-      "importEstimateINR": { "from": 20000, "to": 28000 },
-      "alternativeSlug": "vortex-rc-chiquita-100",
-      "flags": [
-        { "level": "warn", "text": "Personal import only: ~$150–190 PNP + freight + duty ≈ ₹20,000–28,000, 2–4 weeks, and you clear customs yourself." }
+        {
+          "label": "KIT version (bare airframe)",
+          "priceINR": 17953,
+          "inStock": true
+        }
       ],
-      "variants": []
-    },
-    {
-      "slug": "sonicmodell-ar-wing-classic",
-      "brand": "SonicModell",
-      "name": "AR Wing Classic",
-      "airframe": "flying-wing",
-      "spanMM": 900,
-      "madeIn": "CN",
-      "blurb": "The 900mm classic. Also unobtainable in India — no domestic listing, no grey-import listing.",
-      "source": "none",
-      "url": "",
-      "availability": "not-available",
-      "taxIncluded": false,
-      "checkedAt": "2026-07-17",
-      "importEstimateINR": { "from": 12000, "to": 22000 },
-      "alternativeSlug": "vortex-rc-spec-racer-900",
-      "flags": [
-        { "level": "warn", "text": "Personal import only: ~$70–110 kit / ~$130–160 PNP + freight + duty ≈ ₹12,000–22,000, 2–4 weeks." }
-      ],
-      "variants": []
+      "img": "/wings/img/zohd-dart-xl-extreme.jpg"
     }
   ]
 }

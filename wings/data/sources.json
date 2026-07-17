@@ -29,9 +29,10 @@
       "taxIncluded": true,
       "affiliate": null,
       "listUrls": [
-        "https://www.uavmarketplace.in/category/fixed-wing"
+        "https://www.uavmarketplace.in/collections/fixed-wing-offer/895789000050146426",
+        "https://www.uavmarketplace.in/fpv-and-hobby-drone-category"
       ],
-      "notes": "Clean schema.org Product JSON-LD with price + availability. Stocks LDARC / Skywalker / HEEWING / MAPBIRD / ATOMRC. Deep MRP strike-throughs (e.g. 6,999 against 17,899 MRP) — store both, and don't trust MRP as a real reference price."
+      "notes": "Clean schema.org Product JSON-LD with price + availability. Stocks LDARC / Skywalker / HEEWING / MAPBIRD / ATOMRC. Deep MRP strike-throughs (e.g. 6,999 against 17,899 MRP) — store both, and don't trust MRP as a real reference price. Root links: the /category/fixed-wing path is a 404 — the real listings live under /collections/<slug>/<id>."
     },
     {
       "id": "robosynckits",
@@ -47,7 +48,7 @@
       "listUrls": [
         "https://robosynckits.in/product-category/fix-wing-rc-planes/"
       ],
-      "notes": "The ONLY domestic source of a ZOHD airframe (Nano Talon EVO). Fixed-wing shelf is ATOMRC / Mapbird / XUAV / TBS. Mostly V-tail pushers, so most of it lands outside a wings-only scope — relevant when scope widens."
+      "notes": "The ONLY domestic source of a ZOHD airframe (Nano Talon EVO). Fixed-wing shelf is ATOMRC / Mapbird / XUAV / TBS. Mostly V-tail pushers, so most of it lands outside a wings-only scope — relevant when scope widens. Writes PROTOCOL-RELATIVE hrefs (//robosynckits.in/product/...), so the crawler must resolve hrefs against the page URL rather than regex absolute URLs."
     },
     {
       "id": "ubuy",

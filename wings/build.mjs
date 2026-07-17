@@ -7,7 +7,7 @@
 // without running JS. The umbrella Worker already serves site/ statically, so
 // there is no separate deploy: /wings/ is live the moment master deploys.
 
-import { mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { mkdir, writeFile, readFile, rm, cp } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = new URL('../', import.meta.url)
@@ -67,27 +67,35 @@ const badge = (kit) => {
 const flags = (kit) =>
   (kit.flags ?? []).map((f) => `<p class="flag flag-${f.level}"><strong>${f.level === 'warn' ? 'Heads up' : 'Note'}</strong> ${esc(f.text)}</p>`).join('')
 
+// Product card: image first, price loud, one action. Standard shop anatomy.
 function kitCard(kit) {
   const p = priceState(kit)
-  const dead = kit.availability === 'not-available'
-  const alt = kit.alternativeSlug ? kits.find((k) => k.slug === kit.alternativeSlug) : null
+  const oos = p.kind === 'oos'
+  const mrp = (kit.variants ?? []).find((v) => v.mrpINR)?.mrpINR
+  const off = mrp && p.amount ? Math.round((1 - p.amount / mrp) * 100) : null
+  const build = buildTotal(kit)
+
   return `
-    <li>
-      <a class="card ${dead ? 'is-dead' : ''}" href="/wings/${kit.slug}/">
-        <div class="card-top">
-          <div>
-            <h3 class="card-title">${esc(kit.brand)} ${esc(kit.name)}</h3>
-            <p class="card-meta">${kit.spanMM}mm${kit.auwG ? ` · ~${kit.auwG}g` : ''}</p>
+    <li class="prod" data-span="${kit.spanMM}" data-price="${p.amount ?? 999999}" data-stock="${oos ? '0' : '1'}" data-india="${kit.madeIn === 'IN' ? '1' : '0'}">
+      <a class="prod-link" href="/wings/${kit.slug}/">
+        <div class="prod-img">
+          ${kit.img ? `<img src="${kit.img}" alt="${esc(kit.brand)} ${esc(kit.name)}" width="800" height="600" loading="lazy" />` : `<div class="prod-noimg">No image</div>`}
+          ${kit.madeIn === 'IN' ? `<span class="tag tag-in">Made in India</span>` : ''}
+          ${off && off > 10 ? `<span class="tag tag-off">${off}% off</span>` : ''}
+          ${oos ? `<span class="prod-veil">Out of stock</span>` : ''}
+        </div>
+        <div class="prod-body">
+          <p class="prod-brand">${esc(kit.brand)}</p>
+          <h3 class="prod-name">${esc(kit.name)}</h3>
+          <p class="prod-spec">${kit.spanMM}mm${kit.auwG ? ` · ${kit.auwG}g` : ''}</p>
+          <div class="prod-price">
+            ${priceBlock(kit)}
+            ${mrp && !oos ? `<span class="mrp">${inr(mrp)}</span>` : ''}
           </div>
-          ${priceBlock(kit)}
+          ${build ? `<p class="prod-build">Flying build from <strong>${inr(build)}</strong></p>` : ''}
         </div>
-        <p class="card-blurb">${esc(kit.blurb)}</p>
-        <div class="card-foot">
-          ${badge(kit)}
-          ${p.kind === 'oos' ? '<span class="badge bad">Out of stock</span>' : ''}
-        </div>
-        ${alt ? `<p class="card-alt">Buy instead → <strong>${esc(alt.brand)} ${esc(alt.name)}</strong></p>` : ''}
       </a>
+      <span class="prod-cta ${oos ? 'is-off' : ''}">${oos ? 'See options' : 'View & buy'}</span>
     </li>`
 }
 
@@ -103,6 +111,18 @@ const recipesForKit = (kit) =>
   rec.recipes.filter(
     (r) => r.appliesTo.airframe === kit.airframe && kit.spanMM >= r.appliesTo.spanMM[0] && kit.spanMM <= r.appliesTo.spanMM[1],
   )
+
+// Cheapest complete flying build: airframe + the cheapest recipe's electronics.
+// This is the number people actually want — the kit price alone is misleading
+// when most of these are airframe-only.
+function buildTotal(kit) {
+  const p = priceState(kit)
+  if (p.kind !== 'from') return null
+  const rs = recipesForKit(kit)
+  if (!rs.length) return null
+  const totals = rs.map((r) => r.picks.reduce((n, x) => n + (COMP[x.id]?.priceINR ?? 0), 0))
+  return p.amount + Math.min(...totals)
+}
 
 function recipePanel(r, kit, active) {
   const picks = r.picks.map((p) => ({ ...p, c: COMP[p.id] })).filter((p) => p.c)
@@ -223,24 +243,77 @@ const buyable = wings.filter((k) => k.availability === 'domestic')
 const notBuyable = wings.filter((k) => k.availability !== 'domestic')
 const cheapest = Math.min(...buyable.flatMap((k) => (k.variants ?? []).filter((v) => v.inStock).map((v) => v.priceINR)))
 
+const inStockCount = buyable.filter((k) => priceState(k).kind === 'from').length
+
 const indexBody = `
-  <main class="wrap">
-    <h1>Every flying wing you can<br /><span class="accent">actually buy in India.</span></h1>
-    <p class="lede">Live prices from Indian sellers, checked by hand. Plus the honest answer to the question we get most: <em>should I import that wing I saw on YouTube?</em></p>
+  <div class="shop-head">
+    <div class="shop-head-in">
+      <h1 class="shop-h1">Flying wing kits in India</h1>
+      <p class="shop-sub">${wings.length} wings from ${new Set(wings.filter((k) => k.url).map((k) => k.source)).size} sellers · ${inStockCount} in stock · prices checked 17 Jul 2026</p>
+    </div>
+  </div>
 
-    <section class="insight">
-      <h2 class="insight-h">Short answer: don't import.</h2>
-      <p>The famous wings are effectively unobtainable here. A <strong>ZOHD Dart XL</strong> lands at <strong>₹25,000–30,000</strong> after shipping and duty — and arrives as a bare airframe with no motor, ESC or servos. The <strong>SonicModell AR Wing</strong> isn't sold in India at all.</p>
-      <p>Meanwhile <strong>Vortex-RC build EPP wings in Bangalore from ${inr(cheapest)}</strong>, in stock, with crash spares and a GST invoice. For most people that's the whole answer.</p>
-    </section>
+  <main class="shop">
+    <div class="bar">
+      <div class="chips">
+        <button class="chip is-on" data-f="all">All <span>${wings.length}</span></button>
+        <button class="chip" data-f="stock">In stock <span>${inStockCount}</span></button>
+        <button class="chip" data-f="india">Made in India <span>${wings.filter((k) => k.madeIn === 'IN').length}</span></button>
+        <button class="chip" data-f="small">Under 1m <span>${wings.filter((k) => k.spanMM < 1000).length}</span></button>
+        <button class="chip" data-f="big">1m and up <span>${wings.filter((k) => k.spanMM >= 1000).length}</span></button>
+      </div>
+      <label class="sort">Sort
+        <select id="sort">
+          <option value="stock">In stock first</option>
+          <option value="price-asc">Price: low to high</option>
+          <option value="price-desc">Price: high to low</option>
+          <option value="span-asc">Wingspan: small to large</option>
+        </select>
+      </label>
+    </div>
 
-    <h2 class="sec">Buy in India <span class="count">${buyable.length}</span></h2>
-    <ul class="grid">${buyable.map(kitCard).join('')}</ul>
+    <ul class="prods" id="prods">${wings.map(kitCard).join('')}</ul>
+    <p class="empty" id="empty" hidden>Nothing matches that filter.</p>
+  </main>
 
-    <h2 class="sec">Asked about, but you can't really buy <span class="count">${notBuyable.length}</span></h2>
-    <p class="sec-sub">Kept here on purpose — these are the ones people ask about. Each points at the domestic wing that does the same job.</p>
-    <ul class="grid">${notBuyable.map(kitCard).join('')}</ul>
-  </main>`
+  <script>
+    const grid = document.getElementById('prods');
+    const items = [...grid.children];
+    const tests = {
+      all: () => true,
+      stock: (el) => el.dataset.stock === '1',
+      india: (el) => el.dataset.india === '1',
+      small: (el) => +el.dataset.span < 1000,
+      big: (el) => +el.dataset.span >= 1000,
+    };
+    let filter = 'all';
+    const sorts = {
+      stock: (a, b) => b.dataset.stock - a.dataset.stock || a.dataset.price - b.dataset.price,
+      'price-asc': (a, b) => a.dataset.price - b.dataset.price,
+      'price-desc': (a, b) => b.dataset.price - a.dataset.price,
+      'span-asc': (a, b) => a.dataset.span - b.dataset.span,
+    };
+    function apply() {
+      let shown = 0;
+      items.forEach((el) => {
+        const ok = tests[filter](el);
+        el.hidden = !ok;
+        if (ok) shown++;
+      });
+      document.getElementById('empty').hidden = shown > 0;
+    }
+    document.querySelectorAll('.chip').forEach((c) =>
+      c.addEventListener('click', () => {
+        document.querySelectorAll('.chip').forEach((x) => x.classList.toggle('is-on', x === c));
+        filter = c.dataset.f;
+        apply();
+      }),
+    );
+    document.getElementById('sort').addEventListener('change', (e) => {
+      [...items].sort(sorts[e.target.value]).forEach((el) => grid.appendChild(el));
+    });
+    [...items].sort(sorts.stock).forEach((el) => grid.appendChild(el));
+  </script>`
 
 // --- kit page -------------------------------------------------------------
 function kitPage(kit) {
@@ -325,6 +398,9 @@ await writeFile(new URL('index.html', `file://${OUT.replace(/\\/g, '/')}/`), pag
   body: indexBody,
 }))
 await writeFile(new URL('wings.css', `file://${OUT.replace(/\\/g, '/')}/`), await readFile(fileURLToPath(new URL('wings/wings.css', ROOT)), 'utf8'))
+// Product shots live in wings/img/ (source, fetched from sellers) and are copied
+// in — this dir is wiped on every build, so nothing generated may live here.
+await cp(fileURLToPath(new URL('wings/img/', ROOT)), `${OUT}img/`, { recursive: true })
 
 for (const kit of wings) {
   const dir = `${OUT}${kit.slug}/`

@@ -98,7 +98,142 @@ h1 .accent { color: var(--accent-bright); }
 }
 .sec-sub { color: var(--muted); font-size: 0.9rem; margin: 0 0 16px; }
 
-/* --- kit grid ----------------------------------------------------------- */
+/* --- shop header -------------------------------------------------------- */
+.shop-head { border-bottom: 1px solid var(--border); background: var(--card); }
+.shop-head-in { max-width: 1140px; margin: 0 auto; padding: 26px 24px; }
+.shop-h1 { font-size: clamp(1.5rem, 3.2vw, 2rem); margin: 0 0 4px; letter-spacing: -0.02em; }
+.shop-sub { margin: 0; color: var(--muted); font-size: 0.88rem; }
+
+.shop { max-width: 1140px; margin: 0 auto; padding: 20px 24px 64px; }
+
+/* --- filter / sort bar -------------------------------------------------- */
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 0 16px;
+}
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.chip span { opacity: 0.55; margin-left: 4px; font-weight: 500; }
+.chip:hover { color: var(--fg); border-color: var(--accent); }
+.chip.is-on { background: var(--accent); border-color: var(--accent); color: #06222e; }
+.chip.is-on span { opacity: 0.7; }
+.sort { color: var(--muted); font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+.sort select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.banner {
+  background: rgba(31, 155, 217, 0.09);
+  border: 1px solid rgba(31, 155, 217, 0.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 0 0 20px;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.banner strong { color: var(--accent-bright); }
+
+/* --- product grid ------------------------------------------------------- */
+.prods {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+}
+.prod {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: border-color 120ms, transform 120ms;
+}
+.prod:hover { border-color: var(--accent); transform: translateY(-2px); }
+.prod-link { text-decoration: none; color: inherit; display: flex; flex-direction: column; flex: 1; }
+
+/* White image tile — sellers' shots are a mix of studio cutouts and grass
+   photos; a white ground is the only thing that makes them sit together. */
+.prod-img { position: relative; background: #fff; aspect-ratio: 4 / 3; }
+.prod-img img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.prod-noimg {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: #bbb; font-size: 0.8rem; background: #f4f4f4;
+}
+.prod-veil {
+  position: absolute; inset: 0;
+  background: rgba(14, 17, 23, 0.62);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.78rem; font-weight: 700;
+  letter-spacing: 0.03em; text-transform: uppercase;
+}
+.tag {
+  position: absolute; top: 8px; left: 8px;
+  font-size: 0.65rem; font-weight: 700;
+  padding: 3px 7px; border-radius: 5px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  z-index: 1;
+}
+.tag-in { background: var(--accent); color: #06222e; }
+.tag-off { background: var(--ok); color: #04260c; left: auto; right: 8px; }
+
+.prod-body { padding: 12px 13px 10px; flex: 1; display: flex; flex-direction: column; }
+.prod-brand { margin: 0; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.prod-name { margin: 2px 0 3px; font-size: 0.95rem; font-weight: 700; line-height: 1.25; }
+.prod-spec { margin: 0 0 10px; font-size: 0.78rem; color: var(--muted); }
+.prod-price { margin-top: auto; display: flex; align-items: baseline; gap: 7px; }
+.mrp { color: var(--muted); text-decoration: line-through; font-size: 0.78rem; }
+.prod-build {
+  margin: 6px 0 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+  border-top: 1px dashed var(--border);
+  padding-top: 6px;
+}
+.prod-build strong { color: var(--fg); font-weight: 700; }
+
+.prod-cta {
+  display: block;
+  margin: 0 13px 13px;
+  background: var(--accent);
+  color: #06222e;
+  text-align: center;
+  padding: 9px;
+  border-radius: 8px;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+.prod:hover .prod-cta { background: var(--accent-bright); }
+.prod-cta.is-off { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.prod:hover .prod-cta.is-off { background: transparent; border-color: var(--accent); color: var(--fg); }
+
+.empty { color: var(--muted); text-align: center; padding: 40px 0; }
+
+/* --- legacy card (kept for the detail page's alt block) ----------------- */
 .grid { display: grid; gap: 14px; margin: 16px 0 0; padding: 0; list-style: none; }
 @media (min-width: 680px) { .grid { grid-template-columns: 1fr 1fr; } }
 
