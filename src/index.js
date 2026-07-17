@@ -7,7 +7,10 @@
 //   everything else             → env.ASSETS.fetch(request) → site/ files
 //
 // scheduled() (hourly cron): fetch RSS for YOUTUBE_CHANNEL_ID, parse, write to
-// KV under key "feed". Page reloads naturally pick up the new payload.
+// KV under key "feed". Page reloads naturally pick up the new payload. Also
+// runs the Wings pipeline (availability refresh + discovery), gated internally.
+
+import { handleWings, wingsScheduled } from '../wings/lib/worker.mjs'
 
 export default {
   async fetch(request, env, ctx) {
@@ -47,6 +50,13 @@ export default {
       return harden(await videosResponse(env), url, isLocal)
     }
 
+    // Wings — the India flying-wing directory. The Worker renders it live from
+    // KV (catalogue + candidates), serves the admin approval panel, and exposes
+    // the pipeline APIs. See wings/lib/worker.mjs.
+    if (url.pathname === '/wings' || url.pathname.startsWith('/wings/')) {
+      return harden(await handleWings(request, url, env, ctx), url, isLocal)
+    }
+
     // The home page's "Latest from YouTube" grid hydrates client-side, so
     // crawlers / AI answer engines would otherwise see none of it. Inject a
     // <noscript> fallback list from the KV feed the Worker already holds.
@@ -60,6 +70,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil(refreshFeed(env))
+    ctx.waitUntil(wingsScheduled(env, ctx))
   },
 }
 

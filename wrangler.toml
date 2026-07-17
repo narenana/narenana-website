@@ -51,3 +51,17 @@ LOG_VIEWER_ORIGIN_LATEST = "https://latest.edgetx-log-parser.pages.dev"
 [[kv_namespaces]]
 binding = "VIDEOS_KV"
 id = "e048dd7b7b0849bcba7b51557c4c6752"
+
+# Live source of truth for the Wings tool: catalogue + candidates + cron
+# timestamps + resolved product-image URLs. The committed wings/data/*.json is
+# only a seed used until KV is written. Created with:
+#   npx wrangler kv namespace create WINGS_KV
+[[kv_namespaces]]
+binding = "WINGS_KV"
+id = "4f958a40e81545a58443fdd0c7fd9f13"
+
+# The admin approval panel at /wings/admin is gated by this token. It is NOT set
+# here (secrets never live in the repo). Enable admin in production with:
+#   npx wrangler secret put WINGS_ADMIN_TOKEN
+# When unset, the admin APIs return 503 and the panel shows "not configured" —
+# so the gate is closed by default.

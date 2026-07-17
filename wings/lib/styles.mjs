@@ -1,4 +1,5 @@
-/* narenana Wings — shares the umbrella site's tokens so /wings/ feels native. */
+// Generated from wings/wings.css — edit that file, then run: npm run wings:css
+export const CSS = `/* narenana Wings — shares the umbrella site's tokens so /wings/ feels native. */
 :root {
   --bg: #0e1117;
   --fg: #e6edf3;
@@ -408,3 +409,4 @@ h1 .accent { color: var(--accent-bright); }
 .foot p { margin: 0 0 8px; }
 .foot a { color: var(--muted); }
 .foot a:hover { color: var(--accent-bright); }
+`

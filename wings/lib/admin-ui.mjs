@@ -1,0 +1,65 @@
+// The admin panel, served by the Worker at /wings/admin (behind a token). This
+// is the human approval gate: discovery proposes candidates, you approve here,
+// and an approve writes straight to the live KV catalogue — no rebuild, no push.
+export const ADMIN_HTML = `<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wings admin</title>
+<style>
+:root{--bg:#0e1117;--fg:#e6edf3;--muted:#8b949e;--accent:#1f9bd9;--accent-bright:#3eb5e8;--card:#161b22;--border:#30363d;--ok:#3fb950;--bad:#f85149;--warn:#d29922}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);line-height:1.5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+header{position:sticky;top:0;z-index:5;background:rgba(14,17,23,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+h1{font-size:1rem;margin:0}.stats{display:flex;gap:14px;font-size:.82rem;color:var(--muted)}.stats b{color:var(--fg)}.grow{flex:1}
+button{font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--muted);padding:7px 12px}
+button:hover{color:var(--fg);border-color:var(--accent)}button.on{background:var(--accent);border-color:var(--accent);color:#06222e}button.go{background:var(--accent-bright);border-color:var(--accent-bright);color:#06222e}
+.wrap{max-width:940px;margin:0 auto;padding:18px 20px 80px}
+.row{display:grid;grid-template-columns:132px 1fr auto;gap:16px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;align-items:start}
+.row.likely{border-color:rgba(31,155,217,.4)}.row.gone{opacity:.35}
+.thumb{width:132px;height:100px;background:#fff;border-radius:8px;object-fit:contain}
+.noimg{width:132px;height:100px;background:#f2f2f2;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#999;font-size:.7rem}
+.title{font-weight:600;font-size:.92rem;margin:0 0 4px}.meta{font-size:.74rem;color:var(--muted);margin:0 0 8px}.meta a{color:var(--accent-bright)}
+.price{color:var(--ok);font-weight:700}.oos{color:var(--bad)}
+.fields{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.fields input{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.78rem;width:100%}
+.fields input:focus{outline:none;border-color:var(--accent)}.fields .wide{grid-column:1/-1}
+.acts{display:flex;flex-direction:column;gap:6px}.acts button{width:104px}.ok{background:var(--ok);border-color:var(--ok);color:#04260c}.no{border-color:rgba(248,81,73,.4);color:var(--bad)}
+.tag{font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:4px;border:1px solid var(--border);color:var(--muted)}.tag.w{color:var(--accent-bright);border-color:rgba(62,181,232,.4)}
+#log{font-family:ui-monospace,monospace;font-size:.72rem;color:var(--muted);white-space:pre-wrap;padding:10px 20px;max-height:120px;overflow:auto}
+.empty{text-align:center;color:var(--muted);padding:50px 0}
+.gate{max-width:340px;margin:80px auto;text-align:center}.gate input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:1rem;margin:12px 0}
+</style></head><body>
+<div id="app"></div>
+<script>
+const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],mode='likely',limit=12;
+const $=(s)=>document.querySelector(s);
+const esc=(s)=>(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const api=(p,o={})=>fetch('/wings/api/'+p,{...o,headers:{'content-type':'application/json',authorization:'Bearer '+token,...(o.headers||{})}});
+function gate(msg){$('#app').innerHTML='<div class="gate"><h1>Wings admin</h1>'+(msg?'<p style="color:var(--bad)">'+msg+'</p>':'')+'<input id="tk" type="password" placeholder="Admin token" /><button class="go" onclick="setTok()">Enter</button></div>';}
+window.setTok=()=>{token=$('#tk').value.trim();localStorage.setItem(TK,token);load();};
+async function load(){
+  const r=await api('candidates');
+  if(r.status===401||r.status===403)return gate(token?'Wrong token.':'');
+  if(r.status===503)return $('#app').innerHTML='<div class="gate"><h1>Admin not configured</h1><p style="color:var(--muted)">Set the WINGS_ADMIN_TOKEN secret on the Worker to enable approvals.</p></div>';
+  const d=await r.json();all=d.pending;shell(d.counts);render();
+}
+function shell(c){
+  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.pending+'</b> pending</span><span><b>'+c.likely+'</b> likely wings</span><span><b>'+c.rejected+'</b> rejected</span></div><span class="grow"></span><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><button id="disc" class="go">Run discovery</button></header><div id="log"></div><div class="wrap"><div id="list"></div></div>';
+  $('#fL').onclick=()=>{mode='likely';limit=12;$('#fL').classList.add('on');$('#fA').classList.remove('on');render()};
+  $('#fA').onclick=()=>{mode='all';limit=12;$('#fA').classList.add('on');$('#fL').classList.remove('on');render()};
+  $('#disc').onclick=async()=>{$('#log').textContent='crawling root links…';const d=await(await api('discover',{method:'POST'})).json();$('#log').textContent=(d.stats||[]).map((s)=>s.source+': '+s.total+' products, '+s.fresh+' new'+(s.errors&&s.errors.length?'  ✗ '+s.errors.join('; '):'')).join('\\n')+'\\n\\n'+(d.foundCount||0)+' new candidates.';load()};
+}
+function render(){
+  const pool=mode==='likely'?all.filter((c)=>c.score>0):all,rows=pool.slice(0,limit);
+  if(!rows.length){$('#list').innerHTML='<p class="empty">Nothing to review. Hit <b>Run discovery</b>.</p>';return}
+  $('#list').innerHTML=rows.map((c)=>'<div class="row '+(c.score>0?'likely':'')+'" data-url="'+esc(c.url)+'"><img class="thumb" src="/wings/api/img?u='+encodeURIComponent(c.url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'" /><div><p class="title">'+esc(c.title)+' '+(c.score>0?'<span class="tag w">likely wing</span>':'<span class="tag">unsure</span>')+'</p><p class="meta"><span class="tag">'+esc(c.source)+'</span> '+(c.priceINR?'<span class="price">₹'+c.priceINR.toLocaleString('en-IN')+'</span>':'<span>no price</span>')+(c.inStock===false?' <span class="oos">out of stock</span>':'')+' · <a href="'+esc(c.url)+'" target="_blank" rel="noopener">open seller page ↗</a></p><div class="fields"><input data-f="brand" value="'+esc(c.guess.brand)+'" placeholder="Brand" /><input data-f="name" value="'+esc(c.guess.name)+'" placeholder="Name" /><input data-f="spanMM" value="'+esc(String(c.guess.spanMM))+'" placeholder="Span mm" /><input data-f="slug" value="'+esc(c.guess.slug)+'" placeholder="slug" /><input data-f="blurb" class="wide" placeholder="One line: what it is (e.g. 1000mm EPP flying-wing kit, PNP)" /></div></div><div class="acts"><button class="ok" data-a="approve">Approve</button><button class="no" data-a="reject">Reject</button></div></div>').join('')+(pool.length>rows.length?'<p class="empty"><button id="more">Show more ('+(pool.length-rows.length)+' left)</button></p>':'');
+  const m=$('#more');if(m)m.onclick=()=>{limit+=12;render()};
+}
+document.addEventListener('click',async(e)=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  const row=b.closest('.row'),body={url:row.dataset.url,decision:b.dataset.a};
+  if(body.decision==='approve'){row.querySelectorAll('input').forEach((i)=>body[i.dataset.f]=i.value.trim());if(!body.brand||!body.name||!body.slug)return alert('Brand, name and slug are required.');if(!body.spanMM)return alert('Wingspan is required — check the seller page.')}
+  b.disabled=true;const r=await api('decide',{method:'POST',body:JSON.stringify(body)});const d=await r.json();
+  if(!r.ok){alert(d.error||'failed');b.disabled=false;return}
+  row.classList.add('gone');setTimeout(()=>{row.remove();load()},220);
+});
+token?load():gate();
+</script></body></html>`
