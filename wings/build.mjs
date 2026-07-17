@@ -15,6 +15,8 @@ const OUT = fileURLToPath(new URL('site/wings/', ROOT))
 const kits = JSON.parse(await readFile(fileURLToPath(new URL('wings/data/kits.json', ROOT)), 'utf8')).kits
 const sources = JSON.parse(await readFile(fileURLToPath(new URL('wings/data/sources.json', ROOT)), 'utf8')).sources
 const sourceById = Object.fromEntries(sources.map((s) => [s.id, s]))
+const rec = JSON.parse(await readFile(fileURLToPath(new URL('wings/data/recipes.json', ROOT)), 'utf8'))
+const COMP = rec.components
 
 const SITE = 'https://www.narenana.com'
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -87,6 +89,91 @@ function kitCard(kit) {
         ${alt ? `<p class="card-alt">Buy instead → <strong>${esc(alt.brand)} ${esc(alt.name)}</strong></p>` : ''}
       </a>
     </li>`
+}
+
+// --- recipes --------------------------------------------------------------
+const STOCK = {
+  'in-stock': { label: 'In stock', cls: 'ok' },
+  'out-of-stock': { label: 'Out of stock', cls: 'bad' },
+  'pre-order': { label: 'Pre-order', cls: 'warn' },
+  listed: { label: 'Listed', cls: '' },
+}
+
+const recipesForKit = (kit) =>
+  rec.recipes.filter(
+    (r) => r.appliesTo.airframe === kit.airframe && kit.spanMM >= r.appliesTo.spanMM[0] && kit.spanMM <= r.appliesTo.spanMM[1],
+  )
+
+function recipePanel(r, kit, active) {
+  const picks = r.picks.map((p) => ({ ...p, c: COMP[p.id] })).filter((p) => p.c)
+  const parts = picks.reduce((n, p) => n + p.c.priceINR, 0)
+  const kitPrice = priceState(kit)
+  const base = kitPrice.kind === 'from' ? kitPrice.amount : null
+  const gaps = picks.filter((p) => p.c.stock === 'out-of-stock' || p.c.stock === 'pre-order')
+
+  return `
+  <div class="rp" data-panel="${r.id}" ${active ? '' : 'hidden'}>
+    <p class="rp-sum">${esc(r.summary)}</p>
+    <table class="vars rp-table">
+      <thead><tr><th>Part</th><th>Pick</th><th>Price</th></tr></thead>
+      <tbody>
+        ${picks
+          .map((p) => {
+            const s = STOCK[p.c.stock] ?? STOCK.listed
+            return `<tr>
+              <td class="rp-role">${esc(p.role)}</td>
+              <td>
+                <a href="${esc(p.c.url)}" target="_blank" rel="noopener nofollow">${esc(p.c.name)}</a>
+                ${s.cls ? `<span class="badge ${s.cls} badge-sm">${s.label}</span>` : ''}
+                ${p.note || p.c.note ? `<span class="rp-note">${esc(p.note ?? p.c.note)}</span>` : ''}
+                <span class="rp-vendor">${esc(p.c.vendor)}</span>
+              </td>
+              <td>${inr(p.c.priceINR)}</td>
+            </tr>`
+          })
+          .join('')}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="2">Electronics</td><td>${inr(parts)}</td></tr>
+        ${base ? `<tr><td colspan="2">Airframe (cheapest orderable)</td><td>${inr(base)}</td></tr>` : ''}
+        ${base ? `<tr class="rp-total"><td colspan="2">Complete build ≈</td><td>${inr(parts + base)}</td></tr>` : ''}
+      </tfoot>
+    </table>
+    <p class="rp-foot">
+      ${gaps.length ? `<strong class="is-warn">${gaps.length} part${gaps.length > 1 ? 's are' : ' is'} out of stock or pre-order right now</strong> — the total is what it costs when everything's available, not what you can check out with today. ` : ''}
+      Source: ${esc(r.source)}. Prices checked 2026-07-17.
+    </p>
+  </div>`
+}
+
+function recipesFor(kit) {
+  const rs = recipesForKit(kit)
+  if (!rs.length) {
+    return `
+    <section class="recipes">
+      <h2 class="sec">Build recipes</h2>
+      <p class="sec-sub">No recipe for this airframe yet${kit.availability !== 'domestic' ? " — and since you can't really buy it in India, we'd rather point you at one you can." : '.'}</p>
+    </section>`
+  }
+  const note = rec.marketNote
+  return `
+  <section class="recipes">
+    <h2 class="sec">What to put in it</h2>
+    <p class="sec-sub">Community-proven parts for this size of wing, priced at Indian sellers.</p>
+    <div class="tabs" role="tablist">
+      ${rs.map((r, i) => `<button class="tab ${i === 0 ? 'is-on' : ''}" role="tab" data-tab="${r.id}">${esc(r.label)}</button>`).join('')}
+    </div>
+    ${rs.map((r, i) => recipePanel(r, kit, i === 0)).join('')}
+    ${note ? `<p class="flag flag-warn"><strong>${esc(note.title)}</strong> ${esc(note.text)}</p>` : ''}
+  </section>
+  <script>
+    document.querySelectorAll('.tab').forEach((t) => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('is-on', x === t));
+        document.querySelectorAll('.rp').forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.tab; });
+      });
+    });
+  </script>`
 }
 
 function page({ title, desc, slug, body, jsonld }) {
@@ -216,10 +303,7 @@ function kitPage(kit) {
       <p><a href="/wings/${alt.slug}/"><strong>${esc(alt.brand)} ${esc(alt.name)}</strong></a> — ${esc(alt.blurb)}</p>
     </section>` : ''}
 
-    <section class="recipes">
-      <h2 class="sec">Build recipes</h2>
-      <p class="sec-sub">Good / fast / endurance component picks for this airframe, with Indian buy links — coming next.</p>
-    </section>
+    ${recipesFor(kit)}
   </main>`
 
   return page({

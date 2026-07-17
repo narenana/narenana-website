@@ -66,10 +66,78 @@
 
     
 
-    <section class="recipes">
-      <h2 class="sec">Build recipes</h2>
-      <p class="sec-sub">Good / fast / endurance component picks for this airframe, with Indian buy links — coming next.</p>
-    </section>
+    
+  <section class="recipes">
+    <h2 class="sec">What to put in it</h2>
+    <p class="sec-sub">Community-proven parts for this size of wing, priced at Indian sellers.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab is-on" role="tab" data-tab="wing-micro-simple">Simplest thing that flies</button>
+    </div>
+    
+  <div class="rp" data-panel="wing-micro-simple" >
+    <p class="rp-sum">A micro wing doesn't need a flight controller. An ELRS PWM receiver drives the servos directly — fewer parts, less to go wrong, and far less to lose when you bin it.</p>
+    <table class="vars rp-table">
+      <thead><tr><th>Part</th><th>Pick</th><th>Price</th></tr></thead>
+      <tbody>
+        <tr>
+              <td class="rp-role">Motor</td>
+              <td>
+                <a href="https://robu.in/product/a2212-10t-13t-2200kv-brushless-motor-with-soldered-connector/" target="_blank" rel="noopener nofollow">A2212 2200KV (budget)</a>
+                <span class="badge ok badge-sm">In stock</span>
+                <span class="rp-note">or the kit's own power pack</span>
+                <span class="rp-vendor">Robu.in</span>
+              </td>
+              <td>₹394</td>
+            </tr><tr>
+              <td class="rp-role">ESC</td>
+              <td>
+                <a href="https://robu.in/product/readytosky-40a-2-4s-esc-for-drone/" target="_blank" rel="noopener nofollow">ReadytoSky 40A 2–4S</a>
+                <span class="badge ok badge-sm">In stock</span>
+                
+                <span class="rp-vendor">Robu.in</span>
+              </td>
+              <td>₹1,023</td>
+            </tr><tr>
+              <td class="rp-role">Receiver</td>
+              <td>
+                <a href="https://robu.in/product/radiomaster-er6-2-4ghz-elrs-pwm-receiver/" target="_blank" rel="noopener nofollow">Radiomaster ER6 ELRS PWM receiver</a>
+                <span class="badge ok badge-sm">In stock</span>
+                <span class="rp-note">PWM straight to servos — no FC</span>
+                <span class="rp-vendor">Robu.in</span>
+              </td>
+              <td>₹3,500</td>
+            </tr><tr>
+              <td class="rp-role">Servos</td>
+              <td>
+                <a href="https://robu.in/product/towerpro-sg90-9g-mini-servo-9-gram/" target="_blank" rel="noopener nofollow">TowerPro SG90 9g (×2, budget)</a>
+                <span class="badge ok badge-sm">In stock</span>
+                <span class="rp-note">fine at micro-wing speeds</span>
+                <span class="rp-vendor">Robu.in</span>
+              </td>
+              <td>₹180</td>
+            </tr>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="2">Electronics</td><td>₹5,097</td></tr>
+        <tr><td colspan="2">Airframe (cheapest orderable)</td><td>₹6,999</td></tr>
+        <tr class="rp-total"><td colspan="2">Complete build ≈</td><td>₹12,096</td></tr>
+      </tfoot>
+    </table>
+    <p class="rp-foot">
+      
+      Source: Common micro-wing practice. Prices checked 2026-07-17.
+    </p>
+  </div>
+    <p class="flag flag-warn"><strong>The flight controller is the bottleneck in India</strong> Matek's F405-WING is discontinued globally, and on 17 Jul 2026 every SpeedyBee F405 Wing listing we checked (Robu, Quadkart, IndianRoboStore, FpvGuru) was out of stock or pre-order at ₹3,773–5,445. They do cycle back in — buy the FC when you see it, and plan the rest of the build around it.</p>
+  </section>
+  <script>
+    document.querySelectorAll('.tab').forEach((t) => {
+      t.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('is-on', x === t));
+        document.querySelectorAll('.rp').forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.tab; });
+      });
+    });
+  </script>
   </main>
     <footer class="foot">
       <p>Prices are checked against each seller's live listing and stamped with the date we saw them — always confirm on the seller's page before paying. Some links may be affiliate links.</p>
