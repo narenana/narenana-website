@@ -3,7 +3,11 @@
 // touches storage here; callers persist the returned data (KV in prod, files in
 // dev). Discovery only ever PROPOSES candidates; it never writes the catalogue.
 
-import { fetchCatalog, fetchOfferForUrl, norm } from './catalog.mjs'
+import { fetchCatalog, fetchOfferForUrl, enrichCandidate, norm } from './catalog.mjs'
+
+// Per-run cap on candidate page fetches: keeps a discovery invocation within
+// Workers subrequest limits. Un-enriched candidates get picked up next run.
+const ENRICH_CAP = 25
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -32,7 +36,8 @@ export async function discover(sources, kits, priorCandidates = []) {
         // Already queued — freshen its metadata (a re-crawl may now have a title
         // where the first pass didn't, or a moved price). Leave a decided one be.
         if (ex.status === 'new') {
-          if (p.title) ex.title = p.title
+          // Don't let a slug-derived listing title clobber a page-enriched one.
+          if (p.title && !ex.enriched) ex.title = p.title
           if (p.priceINR != null) ex.priceINR = p.priceINR
           if (p.inStock != null) ex.inStock = p.inStock
           if (p.img) ex.img = p.img
@@ -46,7 +51,26 @@ export async function discover(sources, kits, priorCandidates = []) {
     }
     stats.push({ source: source.id, total: hits.size, fresh: freshCount, errors })
   }
-  return { candidates: [...byUrl.values()], found, stats }
+
+  // Enrich candidates whose listing gave us no price (HTML/Zoho sources): fetch
+  // the product page for real price + availability. Without this, unknown-stock
+  // items would masquerade as buyable — and "Request Quote" pages are not.
+  // Batched 5-wide: Workers cap concurrent connections at 6, and sequential
+  // fetches against slow hosts blow past request time limits.
+  const todo = [...byUrl.values()]
+    .filter((c) => c.status === 'new' && c.priceINR == null && !c.quoteOnly && !c.enriched)
+    .slice(0, ENRICH_CAP)
+  let enriched = 0
+  for (let i = 0; i < todo.length; i += 5) {
+    const batch = todo.slice(i, i + 5)
+    const results = await Promise.all(batch.map((c) => enrichCandidate(c.url).catch(() => ({}))))
+    batch.forEach((c, j) => {
+      enriched++
+      if (Object.keys(results[j]).length) Object.assign(c, results[j], { enriched: today() })
+    })
+  }
+
+  return { candidates: [...byUrl.values()], found, stats, enriched }
 }
 
 // Re-check price/stock for live kits. Returns a NEW kits array (unchanged where

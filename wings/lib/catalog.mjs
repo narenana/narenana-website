@@ -204,6 +204,32 @@ export async function fetchOfferForUrl(url, source) {
   return { variants }
 }
 
+// Enrich a candidate from its own product page (used for HTML sources like
+// Zoho, whose listings give us a URL and nothing else). Pulls title, price,
+// availability and image from JSON-LD / og meta.
+//   - fetch failed            -> {} (leave unknown; retry next run)
+//   - page ok but NO price    -> { quoteOnly: true, inStock: false } — a
+//     listing you can't actually buy online ("Request Quote") must never
+//     count as in stock.
+export async function enrichCandidate(url) {
+  const html = await getHtml(url)
+  if (!html) return {}
+  const out = {}
+  const t = html.match(/<title[^>]*>([^<]+)<\/title>/i)
+  if (t) out.title = t[1].replace(/\s*\|\s*[^|]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 110)
+  const img = ogImageFrom(html, url)
+  if (img) out.img = img
+  const offers = parseJsonLd(html)
+  if (offers?.length) {
+    out.priceINR = offers[0].priceINR
+    out.inStock = offers[0].inStock
+  } else {
+    out.quoteOnly = true
+    out.inStock = false
+  }
+  return out
+}
+
 export function ogImageFrom(html, base) {
   const m =
     html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||

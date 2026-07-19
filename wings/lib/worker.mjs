@@ -181,10 +181,10 @@ export async function handleWings(request, url, env, ctx) {
     }
 
     if (ep === 'discover' && request.method === 'POST') {
-      const { candidates, found, stats } = await discover(SOURCES, await getCatalog(env), await getCandidates(env))
+      const { candidates, found, stats, enriched } = await discover(SOURCES, await getCatalog(env), await getCandidates(env))
       await putCandidates(env, candidates)
       if (env.WINGS_KV) await env.WINGS_KV.put('wings:lastDiscover', new Date().toISOString())
-      return json({ stats, foundCount: found.length })
+      return json({ stats, foundCount: found.length, enriched })
     }
 
     if (ep === 'refresh' && request.method === 'POST') {
