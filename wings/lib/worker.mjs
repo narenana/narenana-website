@@ -16,7 +16,7 @@ import { CSS } from './styles.mjs'
 import { renderIndex, renderKit } from './render.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { discover, refresh, candidateToKit } from './pipeline.mjs'
-import { getHtml, ogImageFrom } from './catalog.mjs'
+import { getHtml, ogImageFrom, norm as wnorm } from './catalog.mjs'
 import kitsSeed from '../data/kits.json'
 import sourcesSeed from '../data/sources.json'
 import recipes from '../data/recipes.json'
@@ -144,9 +144,13 @@ export async function handleWings(request, url, env, ctx) {
 
     if (ep === 'candidates') {
       const [cands, kits] = [await getCandidates(env), await getCatalog(env)]
-      const scored = cands
-        .filter((c) => c.status === 'new')
-        .map((c) => ({ ...c, score: score(c.title), guess: { brand: guessBrand(c.title), name: cleanName(c.title), spanMM: guessSpan(c.title), slug: slugify(c.title) } }))
+      // ALL statuses go to the client — the admin filters New / Accepted /
+      // Rejected itself, so acted-on items stay reviewable (and reversible).
+      const scored = cands.map((c) => ({
+        ...c,
+        score: score(c.title),
+        guess: { brand: guessBrand(c.title), name: cleanName(c.title), spanMM: guessSpan(c.title), slug: slugify(c.title) },
+      }))
 
       // Interleave by source (round-robin) so page 1 shows every seller instead
       // of one flooding it — the reason anubis "disappeared" behind aeromodellingtutor.
@@ -154,11 +158,16 @@ export async function handleWings(request, url, env, ctx) {
       for (const c of scored) (groups[c.source] ??= []).push(c)
       for (const g of Object.values(groups)) g.sort((a, b) => b.score - a.score)
       const order = Object.keys(groups).sort()
-      const pending = []
-      for (let i = 0; pending.length < scored.length; i++) for (const s of order) if (groups[s][i]) pending.push(groups[s][i])
+      const candidates = []
+      for (let i = 0; candidates.length < scored.length; i++) for (const s of order) if (groups[s][i]) candidates.push(groups[s][i])
 
       const perSource = order.map((id) => ({ id, total: groups[id].length, likely: groups[id].filter((c) => c.score > 0).length }))
-      return json({ pending, perSource, counts: { pending: scored.length, likely: scored.filter((c) => c.score > 0).length, live: kits.length, rejected: cands.filter((c) => c.status === 'rejected').length } })
+      const by = (st) => scored.filter((c) => c.status === st).length
+      return json({
+        candidates,
+        perSource,
+        counts: { new: by('new'), accepted: by('accepted'), rejected: by('rejected'), likely: scored.filter((c) => c.status === 'new' && c.score > 0).length, live: kits.length },
+      })
     }
 
     if (ep === 'decide' && request.method === 'POST') {
@@ -166,16 +175,42 @@ export async function handleWings(request, url, env, ctx) {
       const cands = await getCandidates(env)
       const c = cands.find((x) => x.url === b.url)
       if (!c) return json({ error: 'unknown candidate' }, 404)
+      const stamp = new Date().toISOString().slice(0, 10)
+
       if (b.decision === 'reject') {
         c.status = 'rejected'
+        c.decidedAt = stamp
         await putCandidates(env, cands)
         return json({ ok: true })
       }
+      if (b.decision === 'restore') {
+        // Rejected -> back into the New queue.
+        c.status = 'new'
+        delete c.decidedAt
+        await putCandidates(env, cands)
+        return json({ ok: true })
+      }
+      if (b.decision === 'unapprove') {
+        // Mirror of instant-approve: pull the kit off the live site, candidate
+        // returns to the New queue.
+        const kits = await getCatalog(env)
+        const next = kits.filter((k) => wnorm(k.url) !== wnorm(c.url))
+        if (next.length === kits.length) return json({ error: 'no live kit matches this candidate' }, 404)
+        await putCatalog(env, next)
+        c.status = 'new'
+        delete c.decidedAt
+        delete c.liveSlug
+        await putCandidates(env, cands)
+        return json({ ok: true, live: next.length })
+      }
+
       const kits = await getCatalog(env)
       if (kits.some((k) => k.slug === b.slug)) return json({ error: `slug "${b.slug}" already exists` }, 409)
       kits.push(candidateToKit(c, b, sourceById[c.source]))
       await putCatalog(env, kits) // <-- live to real users right here
       c.status = 'accepted'
+      c.decidedAt = stamp
+      c.liveSlug = b.slug
       await putCandidates(env, cands)
       return json({ ok: true, live: kits.length })
     }

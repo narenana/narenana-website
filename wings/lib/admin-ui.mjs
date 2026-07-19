@@ -12,6 +12,8 @@ header{position:sticky;top:0;z-index:5;background:rgba(14,17,23,.92);backdrop-fi
 h1{font-size:1rem;margin:0}.stats{display:flex;gap:14px;font-size:.82rem;color:var(--muted)}.stats b{color:var(--fg)}.grow{flex:1}
 button{font-family:inherit;font-size:.82rem;font-weight:600;cursor:pointer;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--muted);padding:7px 12px}
 button:hover{color:var(--fg);border-color:var(--accent)}button.on{background:var(--accent);border-color:var(--accent);color:#06222e}button.go{background:var(--accent-bright);border-color:var(--accent-bright);color:#06222e}
+header button span{opacity:.55;margin-left:4px;font-weight:500}
+#newonly{display:inline-flex;gap:8px;align-items:center;transition:opacity 150ms}
 .wrap{max-width:940px;margin:0 auto;padding:18px 20px 80px}
 .row{display:grid;grid-template-columns:132px 1fr auto;gap:16px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;align-items:start}
 .row.likely{border-color:rgba(31,155,217,.4)}.row.gone{opacity:.35}
@@ -33,11 +35,14 @@ button:hover{color:var(--fg);border-color:var(--accent)}button.on{background:var
 </style></head><body>
 <div id="app"></div>
 <script>
-const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],perSource=[],mode='likely',srcFilter='',stockF='in',limit=12;
-const scoreOk=(c)=>mode==='all'||c.score>0;
+const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],perSource=[],mode='likely',srcFilter='',stockF='in',statusF='new',limit=12;
+// Likely/stock filters shape the NEW review queue only; the Accepted/Rejected
+// history views always show everything you acted on.
+const scoreOk=(c)=>statusF!=='new'||mode==='all'||c.score>0;
 // STRICT: "In stock" = verified purchasable only. Unknown stock and
 // quote-only listings ("Request Quote") are NOT in stock.
-const stockOk=(c)=>stockF==='all'||(stockF==='in'?c.inStock===true:c.inStock!==true);
+const stockOk=(c)=>statusF!=='new'||stockF==='all'||(stockF==='in'?c.inStock===true:c.inStock!==true);
+const statusOk=(c)=>(c.status||'new')===statusF;
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api=(p,o={})=>fetch('/wings/api/'+p,{...o,headers:{'content-type':'application/json',authorization:'Bearer '+token,...(o.headers||{})}});
@@ -47,18 +52,22 @@ async function load(){
   const r=await api('candidates');
   if(r.status===401||r.status===403)return gate(token?'Wrong token.':'');
   if(r.status===503)return $('#app').innerHTML='<div class="gate"><h1>Admin not configured</h1><p style="color:var(--muted)">Set the WINGS_ADMIN_TOKEN secret on the Worker to enable approvals.</p></div>';
-  const d=await r.json();all=d.pending;perSource=d.perSource||[];shell(d.counts);render();
+  const d=await r.json();all=d.candidates||d.pending||[];perSource=d.perSource||[];shell(d.counts);render();
 }
 function srcbar(){
   const el=$('#srcbar');if(!el)return;
-  const base=all.filter((c)=>scoreOk(c)&&stockOk(c)); // counts reflect the active mode + stock filter
+  const base=all.filter((c)=>statusOk(c)&&scoreOk(c)&&stockOk(c)); // counts mirror the visible rows
   const cnt=(id)=>base.filter((c)=>c.source===id).length;
   el.innerHTML='<button class="schip'+(srcFilter===''?' on':'')+'" data-s="">All sellers <span>'+base.length+'</span></button>'+perSource.map((s)=>'<button class="schip'+(srcFilter===s.id?' on':'')+'" data-s="'+s.id+'">'+s.id+' <span>'+cnt(s.id)+'</span></button>').join('');
   el.querySelectorAll('.schip').forEach((b)=>b.onclick=()=>{srcFilter=b.dataset.s;limit=12;srcbar();render()});
 }
 function shell(c){
-  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.pending+'</b> pending</span><span><b>'+c.likely+'</b> likely wings</span><span><b>'+c.rejected+'</b> rejected</span></div><span class="grow"></span><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><span class="vdiv"></span><button id="sIn" class="on">In stock</button><button id="sOut">Not in stock</button><button id="sAll">Any</button><span class="grow"></span><button id="disc" class="go">Run discovery</button></header><div class="srcbar" id="srcbar"></div><div id="log"></div><div class="wrap"><div id="list"></div></div>';
+  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.likely+'</b> likely wings</span></div><span class="grow"></span><button id="stN" class="on">New <span>'+c.new+'</span></button><button id="stA">Accepted <span>'+c.accepted+'</span></button><button id="stR">Rejected <span>'+c.rejected+'</span></button><span class="vdiv"></span><span id="newonly"><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><span class="vdiv"></span><button id="sIn" class="on">In stock</button><button id="sOut">Not in stock</button><button id="sAll">Any</button></span><span class="grow"></span><button id="disc" class="go">Run discovery</button></header><div class="srcbar" id="srcbar"></div><div id="log"></div><div class="wrap"><div id="list"></div></div>';
   const on=(id,grp)=>grp.forEach((x)=>$('#'+x).classList.toggle('on',x===id));
+  const setStatus=(s,id)=>{statusF=s;limit=12;on(id,['stN','stA','stR']);$('#newonly').style.opacity=s==='new'?'':'0.35';$('#newonly').style.pointerEvents=s==='new'?'':'none';srcbar();render()};
+  $('#stN').onclick=()=>setStatus('new','stN');
+  $('#stA').onclick=()=>setStatus('accepted','stA');
+  $('#stR').onclick=()=>setStatus('rejected','stR');
   $('#fL').onclick=()=>{mode='likely';limit=12;on('fL',['fL','fA']);srcbar();render()};
   $('#fA').onclick=()=>{mode='all';limit=12;on('fA',['fL','fA']);srcbar();render()};
   $('#sIn').onclick=()=>{stockF='in';limit=12;on('sIn',['sIn','sOut','sAll']);srcbar();render()};
@@ -68,9 +77,17 @@ function shell(c){
   srcbar();
 }
 function render(){
-  const pool=all.filter((c)=>scoreOk(c)&&stockOk(c)&&(!srcFilter||c.source===srcFilter));const rows=pool.slice(0,limit);
-  if(!rows.length){$('#list').innerHTML='<p class="empty">Nothing to review. Hit <b>Run discovery</b>.</p>';return}
-  $('#list').innerHTML=rows.map((c)=>'<div class="row '+(c.score>0?'likely':'')+'" data-url="'+esc(c.url)+'"><img class="thumb" loading="lazy" src="'+(c.img?esc(c.img):'/wings/api/img?u='+encodeURIComponent(c.url))+'" data-proxy="'+(c.img?'/wings/api/img?img='+encodeURIComponent(c.img)+'&u='+encodeURIComponent(c.url):'')+'" /><div><p class="title">'+esc(c.title)+' '+(c.score>0?'<span class="tag w">likely wing</span>':'<span class="tag">unsure</span>')+'</p><p class="meta"><span class="tag">'+esc(c.source)+'</span> '+(c.priceINR?'<span class="price">₹'+c.priceINR.toLocaleString('en-IN')+'</span>':'<span>no price</span>')+(c.quoteOnly?' <span class="unk">quote only — not buyable online</span>':c.inStock===false?' <span class="oos">out of stock</span>':c.inStock==null?' <span class="unk">stock unverified</span>':'')+' · <a href="'+esc(c.url)+'" target="_blank" rel="noopener">open seller page ↗</a></p><div class="fields"><input data-f="brand" value="'+esc(c.guess.brand)+'" placeholder="Brand" /><input data-f="name" value="'+esc(c.guess.name)+'" placeholder="Name" /><input data-f="spanMM" value="'+esc(String(c.guess.spanMM))+'" placeholder="Span mm" /><input data-f="slug" value="'+esc(c.guess.slug)+'" placeholder="slug" /><input data-f="blurb" class="wide" placeholder="One line: what it is (e.g. 1000mm EPP flying-wing kit, PNP)" /></div></div><div class="acts"><button class="ok" data-a="approve">Approve</button><button class="no" data-a="reject">Reject</button></div></div>').join('')+(pool.length>rows.length?'<p class="empty"><button id="more">Show more ('+(pool.length-rows.length)+' left)</button></p>':'');
+  const pool=all.filter((c)=>statusOk(c)&&scoreOk(c)&&stockOk(c)&&(!srcFilter||c.source===srcFilter));const rows=pool.slice(0,limit);
+  if(!rows.length){$('#list').innerHTML='<p class="empty">'+(statusF==='new'?'Nothing to review. Hit <b>Run discovery</b>.':'Nothing '+statusF+' yet.')+'</p>';return}
+  const stockBadge=(c)=>c.quoteOnly?' <span class="unk">quote only — not buyable online</span>':c.inStock===false?' <span class="oos">out of stock</span>':c.inStock==null?' <span class="unk">stock unverified</span>':'';
+  const rowBody=(c)=>{
+    const head='<p class="title">'+esc(c.title)+' '+(c.status==='accepted'?'<span class="tag w">live</span>':c.status==='rejected'?'<span class="tag">rejected</span>':(c.score>0?'<span class="tag w">likely wing</span>':'<span class="tag">unsure</span>'))+'</p>';
+    const meta='<p class="meta"><span class="tag">'+esc(c.source)+'</span> '+(c.priceINR?'<span class="price">₹'+c.priceINR.toLocaleString('en-IN')+'</span>':'<span>no price</span>')+stockBadge(c)+(c.decidedAt?' · <span>'+(c.status==='accepted'?'approved':'rejected')+' '+esc(c.decidedAt)+'</span>':'')+' · <a href="'+esc(c.url)+'" target="_blank" rel="noopener">open seller page ↗</a>'+(c.status==='accepted'&&c.liveSlug?' · <a href="/wings/'+esc(c.liveSlug)+'/" target="_blank">view live page ↗</a>':'')+'</p>';
+    const fields=c.status==='new'?'<div class="fields"><input data-f="brand" value="'+esc(c.guess.brand)+'" placeholder="Brand" /><input data-f="name" value="'+esc(c.guess.name)+'" placeholder="Name" /><input data-f="spanMM" value="'+esc(String(c.guess.spanMM))+'" placeholder="Span mm" /><input data-f="slug" value="'+esc(c.guess.slug)+'" placeholder="slug" /><input data-f="blurb" class="wide" placeholder="One line: what it is (e.g. 1000mm EPP flying-wing kit, PNP)" /></div>':'';
+    return head+meta+fields;
+  };
+  const acts=(c)=>c.status==='accepted'?'<button class="no" data-a="unapprove">Un-approve</button>':c.status==='rejected'?'<button data-a="restore">Restore</button>':'<button class="ok" data-a="approve">Approve</button><button class="no" data-a="reject">Reject</button>';
+  $('#list').innerHTML=rows.map((c)=>'<div class="row '+(c.score>0&&c.status==='new'?'likely':'')+'" data-url="'+esc(c.url)+'"><img class="thumb" loading="lazy" src="'+(c.img?esc(c.img):'/wings/api/img?u='+encodeURIComponent(c.url))+'" data-proxy="'+(c.img?'/wings/api/img?img='+encodeURIComponent(c.img)+'&u='+encodeURIComponent(c.url):'')+'" /><div>'+rowBody(c)+'</div><div class="acts">'+acts(c)+'</div></div>').join('')+(pool.length>rows.length?'<p class="empty"><button id="more">Show more ('+(pool.length-rows.length)+' left)</button></p>':'');
   const m=$('#more');if(m)m.onclick=()=>{limit+=12;render()};
 }
 // Thumbnail fallback: seller feed image -> og:image proxy -> "no image".
@@ -84,6 +101,7 @@ document.addEventListener('click',async(e)=>{
   const b=e.target.closest('button[data-a]');if(!b)return;
   const row=b.closest('.row'),body={url:row.dataset.url,decision:b.dataset.a};
   if(body.decision==='approve'){row.querySelectorAll('input').forEach((i)=>body[i.dataset.f]=i.value.trim());if(!body.brand||!body.name||!body.slug)return alert('Brand, name and slug are required.');if(!body.spanMM)return alert('Wingspan is required — check the seller page.')}
+  if(body.decision==='unapprove'&&!confirm('Remove this product from the LIVE site and return it to the New queue?'))return;
   b.disabled=true;const r=await api('decide',{method:'POST',body:JSON.stringify(body)});const d=await r.json();
   if(!r.ok){alert(d.error||'failed');b.disabled=false;return}
   row.classList.add('gone');setTimeout(()=>{row.remove();load()},220);
