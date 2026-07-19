@@ -61,6 +61,17 @@ function authState(request, env) {
 }
 
 // --- image proxy ----------------------------------------------------------
+// Some shops (anubisrc) hotlink-protect images: they 403 unless the Referer is
+// their own domain. The Worker fetches server-side, so it can send a matching
+// Referer + browser UA — then re-serves from our origin, where it just works.
+const imgHeaders = (pageUrl) => {
+  const h = { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36' }
+  try {
+    h.referer = new URL(pageUrl).origin + '/'
+  } catch {}
+  return h
+}
+
 async function proxyImage(env, kit) {
   const cacheKey = `wings:img:${kit.slug}`
   let src = kit.imgUrl || (env.WINGS_KV && (await env.WINGS_KV.get(cacheKey)))
@@ -70,7 +81,7 @@ async function proxyImage(env, kit) {
     if (src && env.WINGS_KV) await env.WINGS_KV.put(cacheKey, src, { expirationTtl: 604800 })
   }
   if (!src) return new Response('no image', { status: 404 })
-  const img = await fetch(src, { headers: { 'user-agent': 'narenana-wings' } })
+  const img = await fetch(src, { headers: imgHeaders(kit.url || src) })
   if (!img.ok) return new Response('image fetch failed', { status: 502 })
   return new Response(img.body, {
     status: 200,
@@ -96,22 +107,40 @@ export async function handleWings(request, url, env, ctx) {
     return proxyImage(env, kit)
   }
 
+  // ---- candidate-image proxy ----
+  // NOT behind the token: <img> tags can't send an Authorization header, so a
+  // gated proxy 401s every thumbnail (which is exactly what happened). Safe to
+  // open because it refuses any host that isn't a registered seller — it can't
+  // be used as a general-purpose proxy.
+  if (path === '/wings/api/img') {
+    const sellerHost = (u) => {
+      try {
+        const h = new URL(u).hostname.replace(/^www\./, '')
+        return SOURCES.some((s) => s.home && new URL(s.home).hostname.replace(/^www\./, '') === h) ||
+          /(^|\.)((cdn\.)?shopify\.com|zohocommercecdn\.com|zohostatic\.com)$/.test(h)
+      } catch {
+        return false
+      }
+    }
+    const direct = url.searchParams.get('img')
+    const u = url.searchParams.get('u')
+    if ((direct && !sellerHost(direct)) || (u && !sellerHost(u))) return new Response('host not allowed', { status: 403 })
+    let src = direct
+    if (!src && u) {
+      const html = await getHtml(u)
+      src = html && ogImageFrom(html, u)
+    }
+    if (!src || !sellerHost(src)) return new Response('no image', { status: 404 })
+    const img = await fetch(src, { headers: imgHeaders(u || src) })
+    return new Response(img.body, { status: img.status, headers: { 'content-type': img.headers.get('content-type') ?? 'image/jpeg', 'cache-control': 'public, max-age=86400' } })
+  }
+
   // ---- admin API (token-gated) ----
   if (path.startsWith('/wings/api/')) {
     const auth = authState(request, env)
     if (auth === 'unconfigured') return json({ error: 'admin not configured' }, 503)
     if (auth === 'denied') return json({ error: 'unauthorized' }, 401)
     const ep = path.slice('/wings/api/'.length)
-
-    if (ep === 'img') {
-      const u = url.searchParams.get('u')
-      if (!u) return new Response('missing u', { status: 400 })
-      const html = await getHtml(u)
-      const src = html && ogImageFrom(html, u)
-      if (!src) return new Response('no image', { status: 404 })
-      const img = await fetch(src, { headers: { 'user-agent': 'narenana-wings' } })
-      return new Response(img.body, { status: img.status, headers: { 'content-type': img.headers.get('content-type') ?? 'image/jpeg', 'cache-control': 'public, max-age=86400' } })
-    }
 
     if (ep === 'candidates') {
       const [cands, kits] = [await getCandidates(env), await getCatalog(env)]
