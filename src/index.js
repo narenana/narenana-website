@@ -24,7 +24,11 @@ export default {
     const isLocal =
       url.hostname === 'localhost' ||
       url.hostname === '127.0.0.1' ||
-      url.hostname.endsWith('.localhost')
+      url.hostname.endsWith('.localhost') ||
+      // Private-range IPs = wrangler dev exposed on the LAN (e.g. testing from
+      // another device). Never a canonical production host, so don't force
+      // https onto them — there's no cert there to serve it.
+      /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url.hostname)
     const isApex = url.hostname === 'narenana.com'
     if (!isLocal && (url.protocol === 'http:' || isApex)) {
       url.protocol = 'https:'

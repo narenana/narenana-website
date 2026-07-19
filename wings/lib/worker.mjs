@@ -204,6 +204,12 @@ export async function handleWings(request, url, env, ctx) {
         return json({ ok: true, live: next.length })
       }
 
+      // Server-side validation — the admin UI validates too, but the API must
+      // not trust the client: a kit with no slug would 404 forever.
+      if (b.decision !== 'approve') return json({ error: `unknown decision "${b.decision}"` }, 400)
+      if (!b.slug || !/^[a-z0-9-]{3,60}$/.test(b.slug)) return json({ error: 'slug required: 3-60 chars, a-z 0-9 hyphen' }, 400)
+      if (!b.brand || !b.name) return json({ error: 'brand and name are required' }, 400)
+      if (!(+b.spanMM > 100 && +b.spanMM < 4000)) return json({ error: 'spanMM must be 100-4000' }, 400)
       const kits = await getCatalog(env)
       if (kits.some((k) => k.slug === b.slug)) return json({ error: `slug "${b.slug}" already exists` }, 409)
       kits.push(candidateToKit(c, b, sourceById[c.source]))
