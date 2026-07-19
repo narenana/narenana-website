@@ -1,6 +1,11 @@
 # Catalog platform — architecture
 
-*Status: PROPOSAL v2 · 2026-07-19 · adversarially reviewed (3-lens, 33 findings folded in) · owner-review pending*
+*Status: v2 ACCEPTED + IMPLEMENTED · 2026-07-19 · adversarially reviewed (33 findings folded in)*
+
+**Owner decisions:** D1 ✓ · master-model public pages ✓ · jobs-in-one-Worker ✓ ·
+**Workers Free** (budget-sliced jobs, 2 cron triggers) · **HTTP Basic auth** ·
+**clean start** (no KV migration) · approval-maps-to-master ✓ · recipes phase 2 ·
+wings-only day one. Implementation lives in `catalog/`.
 
 The India-deliverable product catalog behind `narenana.com/wings/` — designed
 so the same machinery later powers motors, ESCs, cameras and any other

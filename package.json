@@ -7,9 +7,11 @@
     "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
     "assets": "node scripts/gen-assets.mjs",
-    "wings:css": "node wings/lib/gen-styles.mjs",
     "deploy": "wrangler deploy",
-    "wings:test": "node --test wings/test/suite.mjs"
+    "catalog:css": "node catalog/lib/gen-styles.mjs",
+    "catalog:migrate": "wrangler d1 migrations apply CATALOG_DB --local",
+    "catalog:migrate:remote": "wrangler d1 migrations apply CATALOG_DB --remote",
+    "catalog:test": "node --test catalog/test/suite.mjs"
   },
   "devDependencies": {
     "png-to-ico": "^3.0.2",

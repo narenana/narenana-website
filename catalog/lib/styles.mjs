@@ -1,4 +1,4 @@
-// Generated from wings/wings.css — edit that file, then run: npm run wings:css
+// Generated from catalog/catalog.css — edit that, then: npm run catalog:css
 export const CSS = `/* narenana Wings — shares the umbrella site's tokens so /wings/ feels native. */
 :root {
   --bg: #0e1117;

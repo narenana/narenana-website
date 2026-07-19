@@ -10,7 +10,7 @@
 // KV under key "feed". Page reloads naturally pick up the new payload. Also
 // runs the Wings pipeline (availability refresh + discovery), gated internally.
 
-import { handleWings, wingsScheduled } from '../wings/lib/worker.mjs'
+import { handleCatalog, catalogScheduled } from '../catalog/lib/worker.mjs'
 
 export default {
   async fetch(request, env, ctx) {
@@ -54,11 +54,11 @@ export default {
       return harden(await videosResponse(env), url, isLocal)
     }
 
-    // Wings — the India flying-wing directory. The Worker renders it live from
-    // KV (catalogue + candidates), serves the admin approval panel, and exposes
-    // the pipeline APIs. See wings/lib/worker.mjs.
-    if (url.pathname === '/wings' || url.pathname.startsWith('/wings/')) {
-      return harden(await handleWings(request, url, env, ctx), url, isLocal)
+    // Catalog platform — public category pages (D1-backed), /admin, /api/*,
+    // /img/* and /catalog.css. Returns null for paths it doesn't own.
+    {
+      const r = await handleCatalog(request, url, env, ctx)
+      if (r) return harden(r, url, isLocal)
     }
 
     // The home page's "Latest from YouTube" grid hydrates client-side, so
@@ -73,8 +73,10 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(refreshFeed(env))
-    ctx.waitUntil(wingsScheduled(env, ctx))
+    // Dispatch on the cron expression — each schedule owns ONE job. Without
+    // this branch the hourly RSS refresh would re-fire on every */15 tick.
+    if (event.cron === '0 * * * *') ctx.waitUntil(refreshFeed(env))
+    else catalogScheduled(event, env, ctx)
   },
 }
 
