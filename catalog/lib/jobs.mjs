@@ -26,8 +26,15 @@ export async function runSlice(env, trigger = 'cron') {
   const t = now()
   if (!(await claimLease(env, 'lease:jobs', 4 * 60e3, t))) return { skipped: 'lease held' }
   try {
-    const scanState = JSON.parse((await getSetting(env, 'scan_cursor')) ?? '{}')
+    let scanState = JSON.parse((await getSetting(env, 'scan_cursor')) ?? '{}')
     const dayStart = t - (t % DAY)
+    // A source URL added AFTER today's sweep finished would otherwise wait for
+    // tomorrow — restart the sweep whenever an active URL has never been
+    // scanned. (Owner adds a source, hits Run — it must scan NOW.)
+    if (scanState.done) {
+      const unscanned = await one(env, `SELECT COUNT(*) n FROM source_url WHERE status='active' AND last_scan_at IS NULL`)
+      if ((unscanned?.n ?? 0) > 0) scanState = {}
+    }
     if ((scanState.day ?? 0) < dayStart) {
       // new day → fresh sweep
       const paused = (await getSetting(env, 'scan_paused')) === '1'

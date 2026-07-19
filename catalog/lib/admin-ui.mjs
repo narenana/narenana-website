@@ -61,7 +61,7 @@ $('#run').onclick=async()=>{$('#log').hidden=false;$('#log').textContent='runnin
 async function load(){
   $('#filters').style.display=tab==='review'?'flex':'none';
   try{
-    if(tab==='review'){data=await api('review');renderFilters();renderReview()}
+    if(tab==='review'){data=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src));renderFilters();renderReview()}
     if(tab==='sources'){data=await api('sources');renderSources()}
     if(tab==='catalog'){data=await api('catalog');renderCatalog()}
     if(tab==='system'){data=await api('system');renderSystem()}
