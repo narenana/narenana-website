@@ -153,15 +153,27 @@ async function api(request, url, env, ep, actor) {
       return s
     }
     const KNOWN = ['Vortex-RC', 'ATOMRC', 'HEEWING', 'HEE WING', 'Skywalker', 'ZOHD', 'TBS', 'LDARC', 'MAPBIRD', 'X-UAV', 'SonicModell', 'Durafly', 'XFly', 'FMS', 'H-King']
+    const madeBySource = new Set(['vortex-rc']) // house-brand shops: their products carry their brand
     for (const k of skus) {
       k.score = score(k.title)
       const t = k.title ?? ''
-      const brand = KNOWN.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(t)) ?? (t.split(/[\s–—|-]+/)[0] || '')
+      // Brand: known brand in the title → that; house-brand shop → the shop;
+      // otherwise leave EMPTY for the owner rather than guessing the first
+      // word (which produced brands like "Batman" and "1000mm").
+      const brand =
+        KNOWN.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(t)) ??
+        (madeBySource.has(k.source_id) ? 'Vortex-RC' : '')
+      // Name: the title minus any leading brand token — never "Batman Batman".
+      let name = t.replace(/\s*[|–—-]\s*[^|]*$/i, '').trim()
+      if (brand) {
+        const rx = new RegExp('^' + brand.replace(/[-\s]/g, '[-\\s]?') + '[\\s:–—-]*', 'i')
+        name = name.replace(rx, '').trim() || name
+      }
       const span = t.match(/(\d{3,4})\s*mm/i)?.[1] ?? ''
       k.guess = {
         brand,
-        name: t.replace(/\s*[|–—-]\s*[^|]*$/i, '').trim().slice(0, 60),
-        slug: slugify(t),
+        name: name.slice(0, 60),
+        slug: slugify((brand ? brand + ' ' : '') + name),
         specs: { spanMM: span },
       }
       const tn = normName(t)
