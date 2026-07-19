@@ -25,11 +25,13 @@ button:hover{color:var(--fg);border-color:var(--accent)}button.on{background:var
 .tag{font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;padding:1px 6px;border-radius:4px;border:1px solid var(--border);color:var(--muted)}.tag.w{color:var(--accent-bright);border-color:rgba(62,181,232,.4)}
 #log{font-family:ui-monospace,monospace;font-size:.72rem;color:var(--muted);white-space:pre-wrap;padding:10px 20px;max-height:120px;overflow:auto}
 .empty{text-align:center;color:var(--muted);padding:50px 0}
+.srcbar{display:flex;gap:6px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--border);background:rgba(22,27,34,.5)}
+.schip{font-size:.74rem;padding:5px 10px}.schip span{opacity:.55;margin-left:3px}.schip.on{background:var(--accent);border-color:var(--accent);color:#06222e}
 .gate{max-width:340px;margin:80px auto;text-align:center}.gate input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:1rem;margin:12px 0}
 </style></head><body>
 <div id="app"></div>
 <script>
-const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],mode='likely',limit=12;
+const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],perSource=[],mode='likely',srcFilter='',limit=12;
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api=(p,o={})=>fetch('/wings/api/'+p,{...o,headers:{'content-type':'application/json',authorization:'Bearer '+token,...(o.headers||{})}});
@@ -39,16 +41,23 @@ async function load(){
   const r=await api('candidates');
   if(r.status===401||r.status===403)return gate(token?'Wrong token.':'');
   if(r.status===503)return $('#app').innerHTML='<div class="gate"><h1>Admin not configured</h1><p style="color:var(--muted)">Set the WINGS_ADMIN_TOKEN secret on the Worker to enable approvals.</p></div>';
-  const d=await r.json();all=d.pending;shell(d.counts);render();
+  const d=await r.json();all=d.pending;perSource=d.perSource||[];shell(d.counts);render();
+}
+function srcbar(){
+  const el=$('#srcbar');if(!el)return;const key=mode==='likely'?'likely':'total';
+  const tot=perSource.reduce((n,s)=>n+s[key],0);
+  el.innerHTML='<button class="schip'+(srcFilter===''?' on':'')+'" data-s="">All sellers <span>'+tot+'</span></button>'+perSource.map((s)=>'<button class="schip'+(srcFilter===s.id?' on':'')+(s[key]===0?' ':'')+'" data-s="'+s.id+'">'+s.id+' <span>'+s[key]+'</span></button>').join('');
+  el.querySelectorAll('.schip').forEach((b)=>b.onclick=()=>{srcFilter=b.dataset.s;limit=12;srcbar();render()});
 }
 function shell(c){
-  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.pending+'</b> pending</span><span><b>'+c.likely+'</b> likely wings</span><span><b>'+c.rejected+'</b> rejected</span></div><span class="grow"></span><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><button id="disc" class="go">Run discovery</button></header><div id="log"></div><div class="wrap"><div id="list"></div></div>';
-  $('#fL').onclick=()=>{mode='likely';limit=12;$('#fL').classList.add('on');$('#fA').classList.remove('on');render()};
-  $('#fA').onclick=()=>{mode='all';limit=12;$('#fA').classList.add('on');$('#fL').classList.remove('on');render()};
+  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.pending+'</b> pending</span><span><b>'+c.likely+'</b> likely wings</span><span><b>'+c.rejected+'</b> rejected</span></div><span class="grow"></span><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><button id="disc" class="go">Run discovery</button></header><div class="srcbar" id="srcbar"></div><div id="log"></div><div class="wrap"><div id="list"></div></div>';
+  $('#fL').onclick=()=>{mode='likely';limit=12;$('#fL').classList.add('on');$('#fA').classList.remove('on');srcbar();render()};
+  $('#fA').onclick=()=>{mode='all';limit=12;$('#fA').classList.add('on');$('#fL').classList.remove('on');srcbar();render()};
   $('#disc').onclick=async()=>{$('#log').textContent='crawling root links…';const d=await(await api('discover',{method:'POST'})).json();$('#log').textContent=(d.stats||[]).map((s)=>s.source+': '+s.total+' products, '+s.fresh+' new'+(s.errors&&s.errors.length?'  ✗ '+s.errors.join('; '):'')).join('\\n')+'\\n\\n'+(d.foundCount||0)+' new candidates.';load()};
+  srcbar();
 }
 function render(){
-  const pool=mode==='likely'?all.filter((c)=>c.score>0):all,rows=pool.slice(0,limit);
+  let pool=mode==='likely'?all.filter((c)=>c.score>0):all;if(srcFilter)pool=pool.filter((c)=>c.source===srcFilter);const rows=pool.slice(0,limit);
   if(!rows.length){$('#list').innerHTML='<p class="empty">Nothing to review. Hit <b>Run discovery</b>.</p>';return}
   $('#list').innerHTML=rows.map((c)=>'<div class="row '+(c.score>0?'likely':'')+'" data-url="'+esc(c.url)+'"><img class="thumb" src="/wings/api/img?u='+encodeURIComponent(c.url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'" /><div><p class="title">'+esc(c.title)+' '+(c.score>0?'<span class="tag w">likely wing</span>':'<span class="tag">unsure</span>')+'</p><p class="meta"><span class="tag">'+esc(c.source)+'</span> '+(c.priceINR?'<span class="price">₹'+c.priceINR.toLocaleString('en-IN')+'</span>':'<span>no price</span>')+(c.inStock===false?' <span class="oos">out of stock</span>':'')+' · <a href="'+esc(c.url)+'" target="_blank" rel="noopener">open seller page ↗</a></p><div class="fields"><input data-f="brand" value="'+esc(c.guess.brand)+'" placeholder="Brand" /><input data-f="name" value="'+esc(c.guess.name)+'" placeholder="Name" /><input data-f="spanMM" value="'+esc(String(c.guess.spanMM))+'" placeholder="Span mm" /><input data-f="slug" value="'+esc(c.guess.slug)+'" placeholder="slug" /><input data-f="blurb" class="wide" placeholder="One line: what it is (e.g. 1000mm EPP flying-wing kit, PNP)" /></div></div><div class="acts"><button class="ok" data-a="approve">Approve</button><button class="no" data-a="reject">Reject</button></div></div>').join('')+(pool.length>rows.length?'<p class="empty"><button id="more">Show more ('+(pool.length-rows.length)+' left)</button></p>':'');
   const m=$('#more');if(m)m.onclick=()=>{limit+=12;render()};

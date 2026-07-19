@@ -61,10 +61,14 @@ async function wooProducts(source, listUrl) {
   // Refuse rather than fall back to the whole shop: a root that doesn't resolve
   // to a real category is a broken root, and silently returning 400 unrelated
   // products (as a fabricated vortex-rc URL once did) is worse than nothing.
-  if (!id) return { products: [], error: `no category matches slug "${slug}" — is the root link right?` }
+  // EXCEPT when the source opts in (unscopedOk): some shops file wings under a
+  // page that isn't a real WC category (drkstore's "rtf-pnp-quads"), so we pull
+  // the whole shop and let title-scoring / your review find the wings.
+  if (!id && !source.unscopedOk) return { products: [], error: `no category matches slug "${slug}" — is the root link right?` }
   const out = []
   for (let page = 1; page <= 10; page++) {
-    const rows = await getJson(`${origin}/wp-json/wc/store/v1/products?category=${id}&per_page=100&page=${page}`)
+    const cat = id ? `category=${id}&` : ''
+    const rows = await getJson(`${origin}/wp-json/wc/store/v1/products?${cat}per_page=100&page=${page}`)
     if (!Array.isArray(rows) || !rows.length) break
     for (const p of rows) {
       const div = 10 ** (p.prices?.currency_minor_unit ?? 2)
@@ -122,6 +126,16 @@ function productLinks(html, source, pageUrl) {
   return [...out]
 }
 
+// Zoho (and similar HTML shops) give us no product feed, so we don't get a name
+// from the listing — but their URLs are human-readable, e.g.
+// /products/heewing-hunter-p51-mustang-pnp-kit/895789… . Derive a title from the
+// slug so candidates are at least scoreable and reviewable.
+function titleFromUrl(u) {
+  const segs = new URL(u).pathname.split('/').filter(Boolean).reverse()
+  const name = segs.find((s) => /[a-z]/i.test(s) && s !== 'products')
+  return name ? decodeURIComponent(name).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
+}
+
 async function htmlProducts(source, listUrl) {
   const out = new Map()
   let url = listUrl
@@ -130,7 +144,7 @@ async function htmlProducts(source, listUrl) {
     seen.add(norm(url))
     const html = await getHtml(url)
     if (!html) break
-    for (const u of productLinks(html, source, url)) if (!out.has(u)) out.set(u, { url: u, title: '', priceINR: null, inStock: null, img: null })
+    for (const u of productLinks(html, source, url)) if (!out.has(u)) out.set(u, { url: u, title: titleFromUrl(u), priceINR: null, inStock: null, img: null })
     const m = html.match(/<a[^>]+class="[^"]*next[^"]*"[^>]+href="([^"]+)"/i) || html.match(/rel=["']next["'][^>]+href=["']([^"']+)["']/i)
     url = m && !seen.has(norm(new URL(m[1], url).toString())) ? new URL(m[1], url).toString() : null
   }

@@ -115,11 +115,21 @@ export async function handleWings(request, url, env, ctx) {
 
     if (ep === 'candidates') {
       const [cands, kits] = [await getCandidates(env), await getCatalog(env)]
-      const pending = cands
+      const scored = cands
         .filter((c) => c.status === 'new')
         .map((c) => ({ ...c, score: score(c.title), guess: { brand: guessBrand(c.title), name: cleanName(c.title), spanMM: guessSpan(c.title), slug: slugify(c.title) } }))
-        .sort((a, b) => b.score - a.score || (a.source > b.source ? 1 : -1))
-      return json({ pending, counts: { pending: pending.length, likely: pending.filter((c) => c.score > 0).length, live: kits.length, rejected: cands.filter((c) => c.status === 'rejected').length } })
+
+      // Interleave by source (round-robin) so page 1 shows every seller instead
+      // of one flooding it — the reason anubis "disappeared" behind aeromodellingtutor.
+      const groups = {}
+      for (const c of scored) (groups[c.source] ??= []).push(c)
+      for (const g of Object.values(groups)) g.sort((a, b) => b.score - a.score)
+      const order = Object.keys(groups).sort()
+      const pending = []
+      for (let i = 0; pending.length < scored.length; i++) for (const s of order) if (groups[s][i]) pending.push(groups[s][i])
+
+      const perSource = order.map((id) => ({ id, total: groups[id].length, likely: groups[id].filter((c) => c.score > 0).length }))
+      return json({ pending, perSource, counts: { pending: scored.length, likely: scored.filter((c) => c.score > 0).length, live: kits.length, rejected: cands.filter((c) => c.status === 'rejected').length } })
     }
 
     if (ep === 'decide' && request.method === 'POST') {

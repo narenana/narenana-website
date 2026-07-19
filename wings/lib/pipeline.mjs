@@ -24,13 +24,27 @@ export async function discover(sources, kits, priorCandidates = []) {
       if (error) errors.push(`${listUrl}: ${error}`)
       for (const p of products) if (!hits.has(p.url)) hits.set(p.url, p)
     }
-    const fresh = [...hits.values()].filter((p) => !known.has(p.url) && !dismissed.has(p.url) && !byUrl.has(p.url))
-    for (const p of fresh) {
+    let freshCount = 0
+    for (const p of hits.values()) {
+      if (known.has(p.url) || dismissed.has(p.url)) continue
+      const ex = byUrl.get(p.url)
+      if (ex) {
+        // Already queued — freshen its metadata (a re-crawl may now have a title
+        // where the first pass didn't, or a moved price). Leave a decided one be.
+        if (ex.status === 'new') {
+          if (p.title) ex.title = p.title
+          if (p.priceINR != null) ex.priceINR = p.priceINR
+          if (p.inStock != null) ex.inStock = p.inStock
+          if (p.img) ex.img = p.img
+        }
+        continue
+      }
       const c = { ...p, source: source.id, status: 'new', seenAt: today() }
       byUrl.set(p.url, c)
       found.push(c)
+      freshCount++
     }
-    stats.push({ source: source.id, total: hits.size, fresh: fresh.length, errors })
+    stats.push({ source: source.id, total: hits.size, fresh: freshCount, errors })
   }
   return { candidates: [...byUrl.values()], found, stats }
 }
