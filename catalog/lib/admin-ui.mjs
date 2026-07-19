@@ -143,15 +143,26 @@ function renderSources(){
 
 // ------- Catalog -------
 function renderCatalog(){
-  $('#view').innerHTML='<table class="t"><thead><tr><th>Model</th><th>Status</th><th>Offers</th><th>Blurb</th><th></th></tr></thead><tbody>'
-    +data.masters.map((m)=>'<tr><td><b>'+esc(m.brand)+' '+esc(m.name)+'</b><br/><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span></td>'
+  $('#view').innerHTML='<table class="t"><thead><tr><th>Model</th><th>Status</th><th>Offers</th><th>Specs · Blurb</th><th></th></tr></thead><tbody>'
+    +data.masters.map((m)=>{
+      let sp={};try{sp=JSON.parse(m.specs||'{}')}catch(e){}
+      const specIn='<div style="display:flex;gap:4px;margin-bottom:4px">'
+        +'<input class="inline" style="width:70px" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'" placeholder="Brand"/>'
+        +'<input class="inline" style="flex:1" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'" placeholder="Name"/>'
+        +'<input class="inline" style="width:78px" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'" placeholder="span mm"/></div>';
+      return '<tr><td style="min-width:120px"><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span></td>'
       +'<td>'+esc(m.status)+'</td><td>'+m.offers+' ('+m.live_offers+' live)</td>'
-      +'<td><input class="inline" style="width:100%" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="one-line blurb"/></td>'
+      +'<td style="min-width:280px">'+specIn+'<input class="inline" style="width:100%" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="one-line blurb"/></td>'
       +'<td style="white-space:nowrap"><button data-mm="'+m.id+'" data-st="'+(m.status==='ready'?'draft':'ready')+'">'+(m.status==='ready'?'Unpublish':'Publish')+'</button> '
-      +'<a class="tag" href="'+esc(m.path)+'" target="_blank">view ↗</a></td></tr>').join('')
-    +'</tbody></table><p class="meta">Publish requires required specs to be filled — the API refuses otherwise.</p>';
+      +'<a class="tag" href="'+esc(m.path)+'" target="_blank">view ↗</a></td></tr>'}).join('')
+    +'</tbody></table><p class="meta">Edit brand / name / wingspan / blurb inline — saves on blur. Publish requires the required specs (the API refuses otherwise).</p>';
   document.querySelectorAll('button[data-mm]').forEach((b)=>b.onclick=async()=>{try{await api('master',{id:+b.dataset.mm,status:b.dataset.st});load()}catch(e){alert(e.message)}});
-  document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{await api('master',{id:+i.dataset.m,blurb:i.value})});
+  document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{
+    const id=+i.dataset.m,f=i.dataset.f,body={id};
+    if(f.startsWith('spec:')){const row=data.masters.find((x)=>x.id===id);let sp={};try{sp=JSON.parse(row.specs||'{}')}catch(e){}sp[f.slice(5)]=i.value.trim();row.specs=JSON.stringify(sp);body.specs=row.specs}
+    else body[f]=i.value;
+    await api('master',body);
+  });
 }
 
 // ------- System -------

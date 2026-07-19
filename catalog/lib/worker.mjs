@@ -322,7 +322,11 @@ async function api(request, url, env, ep, actor) {
       if (missing.length) return json({ error: `cannot publish: missing required spec(s): ${missing.join(', ')}` }, 400)
     }
     await batch(env, [
-      q(env, `UPDATE master_model SET blurb=COALESCE(?, blurb), specs=COALESCE(?, specs), status=COALESCE(?, status), updated_at=? WHERE id=?`,
+      q(env, `UPDATE master_model SET brand=COALESCE(?, brand), name=COALESCE(?, name),
+              brand_norm=COALESCE(?, brand_norm), name_norm=COALESCE(?, name_norm),
+              blurb=COALESCE(?, blurb), specs=COALESCE(?, specs), status=COALESCE(?, status), updated_at=? WHERE id=?`,
+        body.brand ?? null, body.name ?? null,
+        body.brand ? normName(body.brand) : null, body.name ? normName(body.name) : null,
         body.blurb ?? null, body.specs ?? null, body.status ?? null, now(), body.id),
       audit(env, actor, 'master-update', 'master_model', body.id, body),
     ])
