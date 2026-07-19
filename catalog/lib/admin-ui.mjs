@@ -37,7 +37,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v3</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v4</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
@@ -52,7 +52,10 @@ input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg)
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>(s??'').toString().replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const inr=(n)=>'₹'+Number(n).toLocaleString('en-IN');
-const api=async(p,body)=>{const r=await fetch('/api/'+p,body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
+// Resolve against location.origin, NOT the document URL: if the page was
+// opened as http://user:pass@host/admin the document base carries credentials
+// and fetch() refuses to construct the request — the panel dies looking empty.
+const api=async(p,body)=>{const r=await fetch(new URL('/api/'+p,location.origin),body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
 let tab='review',F={status:'new',stock:'in',src:''},data=null;
 
 document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('header button[data-tab]').forEach((x)=>x.classList.toggle('on',x===b));load()});
