@@ -27,11 +27,15 @@ button:hover{color:var(--fg);border-color:var(--accent)}button.on{background:var
 .empty{text-align:center;color:var(--muted);padding:50px 0}
 .srcbar{display:flex;gap:6px;flex-wrap:wrap;padding:10px 20px;border-bottom:1px solid var(--border);background:rgba(22,27,34,.5)}
 .schip{font-size:.74rem;padding:5px 10px}.schip span{opacity:.55;margin-left:3px}.schip.on{background:var(--accent);border-color:var(--accent);color:#06222e}
+.vdiv{width:1px;background:var(--border);align-self:stretch;margin:0 4px}
+.unk{font-size:.6rem;color:var(--warn);border:1px solid rgba(210,153,34,.4);border-radius:4px;padding:1px 5px;margin-left:6px}
 .gate{max-width:340px;margin:80px auto;text-align:center}.gate input{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--fg);font-size:1rem;margin:12px 0}
 </style></head><body>
 <div id="app"></div>
 <script>
-const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],perSource=[],mode='likely',srcFilter='',limit=12;
+const TK='wingsAdminToken';let token=localStorage.getItem(TK)||'';let all=[],perSource=[],mode='likely',srcFilter='',stockF='in',limit=12;
+const scoreOk=(c)=>mode==='all'||c.score>0;
+const stockOk=(c)=>stockF==='all'||(stockF==='in'?c.inStock!==false:c.inStock===false); // 'in' keeps unknown-stock (Zoho) visible
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const api=(p,o={})=>fetch('/wings/api/'+p,{...o,headers:{'content-type':'application/json',authorization:'Bearer '+token,...(o.headers||{})}});
@@ -44,22 +48,27 @@ async function load(){
   const d=await r.json();all=d.pending;perSource=d.perSource||[];shell(d.counts);render();
 }
 function srcbar(){
-  const el=$('#srcbar');if(!el)return;const key=mode==='likely'?'likely':'total';
-  const tot=perSource.reduce((n,s)=>n+s[key],0);
-  el.innerHTML='<button class="schip'+(srcFilter===''?' on':'')+'" data-s="">All sellers <span>'+tot+'</span></button>'+perSource.map((s)=>'<button class="schip'+(srcFilter===s.id?' on':'')+(s[key]===0?' ':'')+'" data-s="'+s.id+'">'+s.id+' <span>'+s[key]+'</span></button>').join('');
+  const el=$('#srcbar');if(!el)return;
+  const base=all.filter((c)=>scoreOk(c)&&stockOk(c)); // counts reflect the active mode + stock filter
+  const cnt=(id)=>base.filter((c)=>c.source===id).length;
+  el.innerHTML='<button class="schip'+(srcFilter===''?' on':'')+'" data-s="">All sellers <span>'+base.length+'</span></button>'+perSource.map((s)=>'<button class="schip'+(srcFilter===s.id?' on':'')+'" data-s="'+s.id+'">'+s.id+' <span>'+cnt(s.id)+'</span></button>').join('');
   el.querySelectorAll('.schip').forEach((b)=>b.onclick=()=>{srcFilter=b.dataset.s;limit=12;srcbar();render()});
 }
 function shell(c){
-  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.pending+'</b> pending</span><span><b>'+c.likely+'</b> likely wings</span><span><b>'+c.rejected+'</b> rejected</span></div><span class="grow"></span><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><button id="disc" class="go">Run discovery</button></header><div class="srcbar" id="srcbar"></div><div id="log"></div><div class="wrap"><div id="list"></div></div>';
-  $('#fL').onclick=()=>{mode='likely';limit=12;$('#fL').classList.add('on');$('#fA').classList.remove('on');srcbar();render()};
-  $('#fA').onclick=()=>{mode='all';limit=12;$('#fA').classList.add('on');$('#fL').classList.remove('on');srcbar();render()};
+  $('#app').innerHTML='<header><h1>Wings admin</h1><div class="stats"><span><b>'+c.live+'</b> live</span><span><b>'+c.pending+'</b> pending</span><span><b>'+c.likely+'</b> likely wings</span><span><b>'+c.rejected+'</b> rejected</span></div><span class="grow"></span><button id="fL" class="on">Likely wings</button><button id="fA">Everything</button><span class="vdiv"></span><button id="sIn" class="on">In stock</button><button id="sOut">Out of stock</button><button id="sAll">Any</button><span class="grow"></span><button id="disc" class="go">Run discovery</button></header><div class="srcbar" id="srcbar"></div><div id="log"></div><div class="wrap"><div id="list"></div></div>';
+  const on=(id,grp)=>grp.forEach((x)=>$('#'+x).classList.toggle('on',x===id));
+  $('#fL').onclick=()=>{mode='likely';limit=12;on('fL',['fL','fA']);srcbar();render()};
+  $('#fA').onclick=()=>{mode='all';limit=12;on('fA',['fL','fA']);srcbar();render()};
+  $('#sIn').onclick=()=>{stockF='in';limit=12;on('sIn',['sIn','sOut','sAll']);srcbar();render()};
+  $('#sOut').onclick=()=>{stockF='out';limit=12;on('sOut',['sIn','sOut','sAll']);srcbar();render()};
+  $('#sAll').onclick=()=>{stockF='all';limit=12;on('sAll',['sIn','sOut','sAll']);srcbar();render()};
   $('#disc').onclick=async()=>{$('#log').textContent='crawling root links…';const d=await(await api('discover',{method:'POST'})).json();$('#log').textContent=(d.stats||[]).map((s)=>s.source+': '+s.total+' products, '+s.fresh+' new'+(s.errors&&s.errors.length?'  ✗ '+s.errors.join('; '):'')).join('\\n')+'\\n\\n'+(d.foundCount||0)+' new candidates.';load()};
   srcbar();
 }
 function render(){
-  let pool=mode==='likely'?all.filter((c)=>c.score>0):all;if(srcFilter)pool=pool.filter((c)=>c.source===srcFilter);const rows=pool.slice(0,limit);
+  const pool=all.filter((c)=>scoreOk(c)&&stockOk(c)&&(!srcFilter||c.source===srcFilter));const rows=pool.slice(0,limit);
   if(!rows.length){$('#list').innerHTML='<p class="empty">Nothing to review. Hit <b>Run discovery</b>.</p>';return}
-  $('#list').innerHTML=rows.map((c)=>'<div class="row '+(c.score>0?'likely':'')+'" data-url="'+esc(c.url)+'"><img class="thumb" src="/wings/api/img?u='+encodeURIComponent(c.url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'" /><div><p class="title">'+esc(c.title)+' '+(c.score>0?'<span class="tag w">likely wing</span>':'<span class="tag">unsure</span>')+'</p><p class="meta"><span class="tag">'+esc(c.source)+'</span> '+(c.priceINR?'<span class="price">₹'+c.priceINR.toLocaleString('en-IN')+'</span>':'<span>no price</span>')+(c.inStock===false?' <span class="oos">out of stock</span>':'')+' · <a href="'+esc(c.url)+'" target="_blank" rel="noopener">open seller page ↗</a></p><div class="fields"><input data-f="brand" value="'+esc(c.guess.brand)+'" placeholder="Brand" /><input data-f="name" value="'+esc(c.guess.name)+'" placeholder="Name" /><input data-f="spanMM" value="'+esc(String(c.guess.spanMM))+'" placeholder="Span mm" /><input data-f="slug" value="'+esc(c.guess.slug)+'" placeholder="slug" /><input data-f="blurb" class="wide" placeholder="One line: what it is (e.g. 1000mm EPP flying-wing kit, PNP)" /></div></div><div class="acts"><button class="ok" data-a="approve">Approve</button><button class="no" data-a="reject">Reject</button></div></div>').join('')+(pool.length>rows.length?'<p class="empty"><button id="more">Show more ('+(pool.length-rows.length)+' left)</button></p>':'');
+  $('#list').innerHTML=rows.map((c)=>'<div class="row '+(c.score>0?'likely':'')+'" data-url="'+esc(c.url)+'"><img class="thumb" src="/wings/api/img?u='+encodeURIComponent(c.url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'" /><div><p class="title">'+esc(c.title)+' '+(c.score>0?'<span class="tag w">likely wing</span>':'<span class="tag">unsure</span>')+'</p><p class="meta"><span class="tag">'+esc(c.source)+'</span> '+(c.priceINR?'<span class="price">₹'+c.priceINR.toLocaleString('en-IN')+'</span>':'<span>no price</span>')+(c.inStock===false?' <span class="oos">out of stock</span>':c.inStock==null?' <span class="unk">stock ?</span>':'')+' · <a href="'+esc(c.url)+'" target="_blank" rel="noopener">open seller page ↗</a></p><div class="fields"><input data-f="brand" value="'+esc(c.guess.brand)+'" placeholder="Brand" /><input data-f="name" value="'+esc(c.guess.name)+'" placeholder="Name" /><input data-f="spanMM" value="'+esc(String(c.guess.spanMM))+'" placeholder="Span mm" /><input data-f="slug" value="'+esc(c.guess.slug)+'" placeholder="slug" /><input data-f="blurb" class="wide" placeholder="One line: what it is (e.g. 1000mm EPP flying-wing kit, PNP)" /></div></div><div class="acts"><button class="ok" data-a="approve">Approve</button><button class="no" data-a="reject">Reject</button></div></div>').join('')+(pool.length>rows.length?'<p class="empty"><button id="more">Show more ('+(pool.length-rows.length)+' left)</button></p>':'');
   const m=$('#more');if(m)m.onclick=()=>{limit+=12;render()};
 }
 document.addEventListener('click',async(e)=>{
