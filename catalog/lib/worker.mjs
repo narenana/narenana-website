@@ -33,7 +33,12 @@ export async function handleCatalog(request, url, env, ctx) {
   if (path === '/admin' || path.startsWith('/api/')) {
     const auth = await basicAuth(request, env)
     if (!auth.ok) return challenge(auth.reason)
-    if (path === '/admin') return html(ADMIN_HTML)
+    if (path === '/admin')
+      return new Response(ADMIN_HTML, {
+        // no-store: the admin is a long-lived SPA and a stale cached shell
+        // silently runs old JS against a newer API — "can't see my approvals"
+        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+      })
     try {
       return await api(request, url, env, path.slice(5), auth.actor)
     } catch (e) {

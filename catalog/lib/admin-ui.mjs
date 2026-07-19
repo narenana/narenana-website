@@ -71,7 +71,7 @@ async function load(){
 // ------- Review -------
 function renderFilters(){
   const c=data.counts;
-  const btn=(grp,val,label,count)=>'<button class="chip '+(F[grp]===val?'on':'')+'" data-g="'+grp+'" data-v="'+val+'">'+label+(count!=null?' <span>'+count+'</span>':'')+'</button>';
+  const btn=(grp,val,label,count)=>'<button class="chip '+(F[grp]===val?'on':'')+'" data-g="'+grp+'" data-v="'+val+'">'+label+(count!=null?' <span>'+(count??0)+'</span>':'')+'</button>';
   $('#filters').innerHTML=
     btn('status','new','New',c.new)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)
     +'<span style="width:10px"></span>'+btn('stock','in','In stock')+btn('stock','out','Not in stock')+btn('stock','all','Any')
