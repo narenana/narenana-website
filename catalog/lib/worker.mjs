@@ -7,6 +7,7 @@ import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster } from './public.mjs'
 import { runSlice, upsertProducts } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
+import * as ADAPTERS from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge } from './util.mjs'
 
@@ -437,6 +438,32 @@ async function api(request, url, env, ep, actor) {
         await browser?.close()
       } catch {}
     }
+  }
+
+  // Debug (temporary): what does the Worker's PLAIN fetch see, and does the
+  // magento adapter parse it? Marker: has magentoPage.
+  if (ep === 'probe-debug') {
+    const u = canonicalUrl(url.searchParams.get('url'))
+    if (!u) return json({ error: 'bad url' }, 400)
+    const home = `https://${new URL(u).hostname}`
+    let status = null, title = '', bytes = 0
+    try {
+      const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36', accept: 'text/html,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(9000) })
+      status = r.status
+      const html = await r.text()
+      bytes = html.length
+      title = (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? '').trim().slice(0, 80)
+    } catch (e) {
+      title = 'THREW: ' + String(e.message || e).slice(0, 80)
+    }
+    let parsed = null
+    try {
+      const r = await ADAPTERS.magentoPage({ home_url: home, platform: 'magento' }, u, null)
+      parsed = { count: r.products.length, sample: r.products.slice(0, 3).map((p) => ({ pid: p.pid, price: p.priceINR, inStock: p.inStock, title: p.title.slice(0, 30) })) }
+    } catch (e) {
+      parsed = 'THREW: ' + String(e.message || e).slice(0, 100)
+    }
+    return json({ hasMagento: typeof ADAPTERS.magentoPage === 'function', plainFetch: { status, title, bytes }, magentoParse: parsed })
   }
 
   if (ep === 'system' && request.method === 'GET') {
