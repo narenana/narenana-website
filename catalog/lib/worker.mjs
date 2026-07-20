@@ -6,7 +6,7 @@ import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster } from './public.mjs'
 import { runSlice, upsertProducts } from './jobs.mjs'
-import { getHtml, ogImageFrom, feedPage, checkPage, isChallenge } from './adapters.mjs'
+import { getHtml, ogImageFrom, feedPage, checkPage, checkWooProduct, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge } from './util.mjs'
 
@@ -451,7 +451,10 @@ async function api(request, url, env, ep, actor) {
       snippet = 'THREW: ' + String(e.message || e).slice(0, 80)
     }
     const decision = await checkPage(u, {})
-    return json({ build: 'be10192', status, title: snippet, isChallenge: challenge, checkPage: decision })
+    const pid = url.searchParams.get('pid')
+    const home = url.searchParams.get('home')
+    const woo = pid && home ? await checkWooProduct(home, pid) : null
+    return json({ build: 'woo-verify', status, title: snippet, isChallenge: challenge, checkPage: decision, woo })
   }
 
   if (ep === 'system' && request.method === 'GET') {

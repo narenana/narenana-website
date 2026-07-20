@@ -305,6 +305,40 @@ export function cartSignals(html = '') {
   return { inStock: true, priceINR: v && v > 0 ? v : null }
 }
 
+// Verify a WooCommerce SKU via the Store API (same source the scan trusts),
+// NOT by scraping product HTML — a simple Woo product often carries no price
+// JSON-LD, so HTML scraping wrongly reads it as quote-only. Returns the same
+// shape as checkPage: { blocked } | { gone } | { priceINR, inStock, ... }.
+export async function checkWooProduct(homeUrl, pid) {
+  const origin = new URL(homeUrl).origin
+  let res
+  try {
+    res = await fetch(`${origin}/wp-json/wc/store/v1/products?include=${pid}`, { headers: { 'user-agent': UA, accept: 'application/json' }, signal: AbortSignal.timeout(9000) })
+  } catch {
+    return { blocked: true }
+  }
+  if (!res.ok) return { blocked: true } // 403/429/5xx → preserve, never wipe
+  let arr
+  try {
+    arr = await res.json()
+  } catch {
+    return { blocked: true }
+  }
+  if (!Array.isArray(arr)) return { blocked: true }
+  const p = arr.find((x) => String(x.id) === String(pid))
+  if (!p) return { gone: true } // API reachable and product absent → really gone
+  const div = 10 ** (p.prices?.currency_minor_unit ?? 2)
+  const paise = Math.round(Number(p.prices?.price ?? 0) / div)
+  return {
+    title: (p.name || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&#8211;/g, '–'),
+    img: p.images?.[0]?.src ?? null,
+    priceINR: paise > 0 ? paise : null,
+    inStock: p.is_in_stock !== false,
+    quoteOnly: false,
+    variants: [],
+  }
+}
+
 // A bot-challenge / interstitial page (Cloudflare "Just a moment…", etc.) is
 // NOT the product page. Verify must treat it as "couldn't check", never as a
 // real listing — otherwise a seller enabling bot protection silently wipes

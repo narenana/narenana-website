@@ -15,7 +15,7 @@
 //   * URL hit with mismatched pid ⇒ old row dead+flagged, new row inserted
 //   * a scan never rewrites identity fields of a reviewed row
 
-import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
+import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { now } from './util.mjs'
 
@@ -314,7 +314,11 @@ async function verifySlice(env, trigger) {
   const log = []
   const stmts = []
   for (const sku of rows) {
-    const res = await checkPage(sku.url_canonical, sku)
+    // WooCommerce: trust the Store API (reliable price/stock) over HTML scraping.
+    const res =
+      sku.platform === 'woocommerce' && sku.platform_pid
+        ? await checkWooProduct(sku.home_url, sku.platform_pid)
+        : await checkPage(sku.url_canonical, sku)
     if (res.blocked) {
       // Seller put up a bot wall — we could NOT read the listing. Preserve the
       // last-known price/stock; only advance last_checked so verify rotates on
