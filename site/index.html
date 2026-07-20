@@ -307,11 +307,38 @@
         <a href="#tools" class="nav-link">Tools</a>
         <a href="#videos" class="nav-link">Flights</a>
         <a href="#shop" class="nav-link">Wings</a>
+        <div class="shr" style="position:relative">
+          <button id="shr-btn" aria-haspopup="true" aria-expanded="false" style="display:inline-flex;align-items:center;gap:7px;background:transparent;border:1.5px solid #0F2C39;color:#0F2C39;border-radius:999px;padding:6px 14px;font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:13px;font-weight:700;cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>Share</button>
+          <div id="shr-menu" role="menu" style="display:none;position:absolute;right:0;top:calc(100% + 8px);background:#FCF9F1;border:2px solid #0F2C39;border-radius:10px;min-width:168px;box-shadow:0 12px 28px rgba(15,44,57,.18);overflow:hidden;z-index:60">
+            <a id="shr-wa" target="_blank" rel="noopener" role="menuitem" style="display:block;padding:11px 16px;font-size:14px;font-weight:600;color:#0F2C39;text-decoration:none;border-bottom:1px solid rgba(15,44,57,.16)">WhatsApp</a>
+            <a id="shr-x" target="_blank" rel="noopener" role="menuitem" style="display:block;padding:11px 16px;font-size:14px;font-weight:600;color:#0F2C39;text-decoration:none;border-bottom:1px solid rgba(15,44,57,.16)">X / Twitter</a>
+            <button id="shr-cp" role="menuitem" style="display:block;width:100%;padding:11px 16px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0F2C39;text-align:left;cursor:pointer;border-bottom:1px solid rgba(15,44,57,.16)">Copy link</button>
+            <button id="shr-nt" role="menuitem" style="display:block;width:100%;padding:11px 16px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0F2C39;text-align:left;cursor:pointer">More…</button>
+          </div>
+        </div>
         <a href="https://sim.narenana.com" target="_blank" rel="noopener" class="btn btn-orange btn-sm">Fly now
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
         </a>
       </div>
     </nav>
+    <script>
+      // Share widget — each channel gets its own utm_source so GA4 splits the
+      // incoming traffic (utm_medium=share, utm_campaign=home).
+      (function () {
+        var b = document.getElementById('shr-btn'), m = document.getElementById('shr-menu');
+        if (!b) return;
+        function u(s) { var x = new URL(location.origin + '/'); x.searchParams.set('utm_source', s); x.searchParams.set('utm_medium', 'share'); x.searchParams.set('utm_campaign', 'home'); return x.toString(); }
+        var t = 'narenana — free RC tools: log viewer, FPV wing sim, and every fixed wing you can buy in India';
+        b.onclick = function (e) { e.stopPropagation(); var on = m.style.display !== 'block'; m.style.display = on ? 'block' : 'none'; b.setAttribute('aria-expanded', on); };
+        document.addEventListener('click', function () { m.style.display = 'none'; b.setAttribute('aria-expanded', 'false'); });
+        m.addEventListener('click', function (e) { e.stopPropagation(); });
+        document.getElementById('shr-wa').href = 'https://wa.me/?text=' + encodeURIComponent(t + ' — ' + u('whatsapp'));
+        document.getElementById('shr-x').href = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(t) + '&url=' + encodeURIComponent(u('x'));
+        document.getElementById('shr-cp').onclick = function () { var el = this; navigator.clipboard.writeText(u('copy')).then(function () { el.textContent = 'Copied ✓'; setTimeout(function () { el.textContent = 'Copy link'; }, 1400); }); };
+        var n = document.getElementById('shr-nt');
+        if (navigator.share) { n.onclick = function () { navigator.share({ title: t, url: u('native') }).catch(function () {}); }; } else { n.style.display = 'none'; }
+      })();
+    </script>
 
     <span id="top"></span>
 

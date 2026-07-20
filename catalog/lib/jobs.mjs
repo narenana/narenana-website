@@ -15,7 +15,7 @@
 //   * URL hit with mismatched pid ⇒ old row dead+flagged, new row inserted
 //   * a scan never rewrites identity fields of a reviewed row
 
-import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd } from './adapters.mjs'
+import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { now } from './util.mjs'
 
@@ -258,7 +258,7 @@ async function buildGuess(env, k) {
     try {
       _img = ogImageFrom(html, k.url_canonical)
     } catch {}
-    const chk = parseJsonLd(html)
+    const chk = parseJsonLd(html) ?? cartSignals(html)
     _price = chk?.priceINR ?? null
     _stock = chk?.inStock == null ? null : chk.inStock ? 1 : 0
   }

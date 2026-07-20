@@ -31,10 +31,30 @@ export function page({ title, desc, path, body, jsonld, noindex, image }) {
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css" />
 </head><body>
-<header class="nav"><a class="nav-back" href="/">narenana</a><span class="nav-sep">/</span><a class="nav-here" href="${esc(path.split('/').slice(0, 2).join('/'))}/">${esc(path.split('/')[1])}</a></header>
+<header class="nav"><a class="nav-back" href="/">narenana</a><span class="nav-sep">/</span><a class="nav-here" href="${esc(path.split('/').slice(0, 2).join('/'))}/">${esc(path.split('/')[1])}</a>
+<span class="nav-grow"></span>
+<div class="shr"><button id="shr-btn" class="shr-btn" aria-haspopup="true" aria-expanded="false"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>Share</button>
+<div id="shr-menu" class="shr-menu" role="menu">
+<a id="shr-wa" target="_blank" rel="noopener" role="menuitem">WhatsApp</a>
+<a id="shr-x" target="_blank" rel="noopener" role="menuitem">X / Twitter</a>
+<button id="shr-cp" role="menuitem">Copy link</button>
+<button id="shr-nt" role="menuitem">More…</button>
+</div></div></header>
 ${body}
 <footer class="foot"><p>Prices come from each seller's live listing and carry the date we last confirmed them — always check the seller's page before paying.</p>
 <p><a class="wordmark" href="/">narenana</a> &nbsp;·&nbsp; <a href="/log-viewer/">RC Log Viewer</a> · <a href="https://sim.narenana.com">Nanawing simulator</a> · <a href="https://www.youtube.com/@narenana" rel="noopener">YouTube</a></p></footer>
+<script>(function(){var b=document.getElementById('shr-btn'),m=document.getElementById('shr-menu');if(!b)return;
+function u(s){var x=new URL(location.origin+location.pathname);x.searchParams.set('utm_source',s);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign','wings');return x.toString()}
+var t=document.title.replace(/\\s*\\|[^|]*$/,'').trim();
+b.onclick=function(e){e.stopPropagation();var on=m.classList.toggle('on');b.setAttribute('aria-expanded',on)};
+document.addEventListener('click',function(){m.classList.remove('on');b.setAttribute('aria-expanded','false')});
+m.addEventListener('click',function(e){e.stopPropagation()});
+document.getElementById('shr-wa').href='https://wa.me/?text='+encodeURIComponent(t+' — '+u('whatsapp'));
+document.getElementById('shr-x').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(t)+'&url='+encodeURIComponent(u('x'));
+document.getElementById('shr-cp').onclick=function(){var el=this;navigator.clipboard.writeText(u('copy')).then(function(){el.textContent='Copied ✓';setTimeout(function(){el.textContent='Copy link'},1400)})};
+var n=document.getElementById('shr-nt');
+if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native')}).catch(function(){})}}else{n.style.display='none'}
+})()</script>
 </body></html>`
 }
 

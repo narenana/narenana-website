@@ -327,6 +327,11 @@ async function forward(request, origin, prefix) {
   const target = origin.replace(/\/$/, '') + path + url.search
   const upstream = new Request(target, request)
   upstream.headers.delete('host')
+  // Don't pass the client's accept-encoding through: with it, workerd keeps
+  // the upstream body COMPRESSED end-to-end and HTMLRewriter (share-widget
+  // injection below) silently parses nothing. Without it, the runtime hands
+  // us a decoded body and re-compresses toward the client on its own.
+  upstream.headers.delete('accept-encoding')
 
   // redirect: 'manual' so we can rewrite Location ourselves before passing on.
   const response = await fetch(upstream, { redirect: 'manual' })
@@ -351,15 +356,57 @@ async function forward(request, origin, prefix) {
   // duplicate *.pages.dev hosts out of the index — but this Worker fetches
   // that same origin, and forwarding the header verbatim would noindex the
   // canonical www.narenana.com/log-viewer/ (and latest.narenana.com) too.
+  let out = response
   if (response.headers.has('x-robots-tag')) {
     const headers = new Headers(response.headers)
     headers.delete('x-robots-tag')
-    return new Response(response.body, {
+    out = new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
       headers,
     })
   }
 
-  return response
+  // Inject the site share widget into proxied HTML (the log-viewer app ships
+  // from its own repo; injecting at the edge keeps it on-brand without a
+  // cross-repo release). Floating pill, self-contained, utm-tagged.
+  if (prefix === '/log-viewer' && (out.headers.get('content-type') || '').includes('text/html') && out.status === 200) {
+    out = new HTMLRewriter()
+      .on('body', {
+        element(el) {
+          el.append(shareWidgetHtml('log-viewer', 'RC Log Viewer — replay EdgeTX / iNAV / Betaflight logs in 3D, free in your browser'), { html: true })
+        },
+      })
+      .transform(out)
+  }
+
+  return out
+}
+
+// Floating share pill injected into proxied apps. Every channel carries its
+// own utm_source (utm_medium=share, utm_campaign=<surface>) so GA4 and CF
+// analytics can attribute incoming traffic to these buttons.
+function shareWidgetHtml(campaign, title) {
+  return `
+<div id="nn-shr" style="position:fixed;right:16px;bottom:16px;z-index:2147483000;font-family:system-ui,sans-serif">
+  <div id="nn-shr-menu" style="display:none;position:absolute;right:0;bottom:calc(100% + 8px);background:#FCF9F1;border:2px solid #0F2C39;border-radius:10px;min-width:168px;box-shadow:0 12px 28px rgba(15,44,57,.25);overflow:hidden">
+    <a id="nn-shr-wa" target="_blank" rel="noopener" style="display:block;padding:11px 16px;font-size:14px;font-weight:600;color:#0F2C39;text-decoration:none;border-bottom:1px solid rgba(15,44,57,.16)">WhatsApp</a>
+    <a id="nn-shr-x" target="_blank" rel="noopener" style="display:block;padding:11px 16px;font-size:14px;font-weight:600;color:#0F2C39;text-decoration:none;border-bottom:1px solid rgba(15,44,57,.16)">X / Twitter</a>
+    <button id="nn-shr-cp" style="display:block;width:100%;padding:11px 16px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0F2C39;text-align:left;cursor:pointer;border-bottom:1px solid rgba(15,44,57,.16)">Copy link</button>
+    <button id="nn-shr-nt" style="display:block;width:100%;padding:11px 16px;background:none;border:none;font-family:inherit;font-size:14px;font-weight:600;color:#0F2C39;text-align:left;cursor:pointer">More…</button>
+  </div>
+  <button id="nn-shr-btn" aria-haspopup="true" style="display:inline-flex;align-items:center;gap:7px;background:#EF7A25;border:1.5px solid #EF7A25;color:#12303D;border-radius:999px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(15,44,57,.25)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>Share</button>
+</div>
+<script>(function(){var b=document.getElementById('nn-shr-btn'),m=document.getElementById('nn-shr-menu');if(!b)return;
+function u(s){var x=new URL(location.origin+location.pathname);x.searchParams.set('utm_source',s);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign',${JSON.stringify(campaign)});return x.toString()}
+var t=${JSON.stringify(title)};
+b.onclick=function(e){e.stopPropagation();m.style.display=m.style.display==='block'?'none':'block'};
+document.addEventListener('click',function(){m.style.display='none'});
+m.addEventListener('click',function(e){e.stopPropagation()});
+document.getElementById('nn-shr-wa').href='https://wa.me/?text='+encodeURIComponent(t+' — '+u('whatsapp'));
+document.getElementById('nn-shr-x').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(t)+'&url='+encodeURIComponent(u('x'));
+document.getElementById('nn-shr-cp').onclick=function(){var el=this;navigator.clipboard.writeText(u('copy')).then(function(){el.textContent='Copied ✓';setTimeout(function(){el.textContent='Copy link'},1400)})};
+var n=document.getElementById('nn-shr-nt');
+if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native')}).catch(function(){})}}else{n.style.display='none'}
+})()</script>`
 }

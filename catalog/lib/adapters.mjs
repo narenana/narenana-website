@@ -290,6 +290,21 @@ export function detectConfig(text = '') {
   return 'kit'
 }
 
+// Server-rendered add-to-cart detection for storefronts without Product
+// JSON-LD (Zoho: uavmarketplace). Owner rule: a REAL add-to-cart control on
+// the page means the item is purchasable/in stock — quote-only pages never
+// render one. Detection is at the ELEMENT level (data-zs-add-to-cart /
+// theme-cart-button): the literal strings "Add to Cart" / "Out of Stock"
+// appear in dormant JS templates on EVERY Zoho page and must not match.
+export function cartSignals(html = '') {
+  const h = String(html)
+  const hasCart = /<[a-z][^>]*\sdata-zs-add-to-cart[\s>]/i.test(h) || /<[a-z][^>]*class="[^"]*theme-cart-button[^"]*"/i.test(h)
+  if (!hasCart) return null
+  const p = h.match(/class="[^"]*theme-product-price[^"]*"[^>]*>\s*(?:₹|Rs\.?)\s*([\d,]+)/i)
+  const v = p ? Math.round(Number(p[1].replace(/,/g, ''))) : null
+  return { inStock: true, priceINR: v && v > 0 ? v : null }
+}
+
 // Direct product-page check. { gone } | { priceINR, inStock, quoteOnly, variants?, img?, title? }
 export async function checkPage(url, source) {
   const html = await getHtml(url)
@@ -308,5 +323,7 @@ export async function checkPage(url, source) {
   }
   const ld = parseJsonLd(html)
   if (ld) return { title, img, variants: [], quoteOnly: false, ...ld }
+  const cart = cartSignals(html)
+  if (cart) return { title, img, variants: [], quoteOnly: false, ...cart }
   return { title, img, variants: [], quoteOnly: true, priceINR: null, inStock: false }
 }

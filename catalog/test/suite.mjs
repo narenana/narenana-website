@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSpanMM, detectConfig } from '../lib/adapters.mjs'
+import { extractSpanMM, detectConfig, cartSignals } from '../lib/adapters.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -41,6 +41,13 @@ test('detectConfig: rtf > pnp > combo > kit', () => {
   assert.equal(detectConfig('Wing combo with motor and ESC'), 'combo')
   assert.equal(detectConfig('Balsa kit — laser cut'), 'kit')
   assert.equal(detectConfig('Plug and play version'), 'pnp')
+})
+
+test('cartSignals: element-level add-to-cart detection (Zoho)', () => {
+  const real = '<div class="theme-cart-button zpbutton" data-zs-add-to-cart data-zs-product-variant-id="1"></div><span class="theme-product-price">₹4,999.00</span>'
+  assert.deepEqual(cartSignals(real), { inStock: true, priceINR: 4999 })
+  assert.equal(cartSignals('<script>document.querySelectorAll("[data-zs-add-to-cart]")</script><p>Add to Cart</p>'), null, 'JS template strings must not count')
+  assert.equal(cartSignals('<h2>Request Quote</h2>'), null)
 })
 
 // ---------------------------------------------------------------- public

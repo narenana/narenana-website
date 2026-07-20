@@ -70,6 +70,46 @@ h1, h2, h3 { font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif; f
   font-weight: 700;
 }
 .nav-here:hover { color: var(--orange-deep); }
+.nav-grow { flex: 1; }
+
+/* --- share widget -------------------------------------------------------- */
+.shr { position: relative; align-self: center; }
+.shr-btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 0.82rem; font-weight: 700;
+  cursor: pointer;
+}
+.shr-btn:hover { background: var(--orange); border-color: var(--orange); color: var(--ink-2); }
+.shr-menu {
+  display: none;
+  position: absolute; right: 0; top: calc(100% + 8px);
+  background: var(--card);
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  min-width: 168px;
+  box-shadow: 0 12px 28px rgba(15, 44, 57, 0.18);
+  overflow: hidden;
+  z-index: 30;
+}
+.shr-menu.on { display: block; }
+.shr-menu a, .shr-menu button {
+  display: block; width: 100%;
+  padding: 11px 16px;
+  background: none; border: none;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 0.88rem; font-weight: 600;
+  color: var(--ink); text-align: left; text-decoration: none;
+  cursor: pointer;
+  border-bottom: 1px solid var(--faint);
+}
+.shr-menu > :last-child { border-bottom: none; }
+.shr-menu a:hover, .shr-menu button:hover { background: var(--soft); color: var(--ink); }
 
 .wrap { max-width: 880px; margin: 0 auto; padding: 36px 24px 64px; }
 
