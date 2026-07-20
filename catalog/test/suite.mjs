@@ -7,6 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
+import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -110,6 +111,41 @@ test('cartSignals: element-level add-to-cart detection (Zoho)', () => {
   assert.deepEqual(cartSignals(real), { inStock: true, priceINR: 4999 })
   assert.equal(cartSignals('<script>document.querySelectorAll("[data-zs-add-to-cart]")</script><p>Add to Cart</p>'), null, 'JS template strings must not count')
   assert.equal(cartSignals('<h2>Request Quote</h2>'), null)
+})
+
+test('dedup.compare: obvious / doubtful / distinct', () => {
+  const m = (id, brand, name, span) => ({ id, brand, brand_norm: brand.toLowerCase(), name, name_norm: name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(), specs: span ? JSON.stringify({ spanMM: span }) : '{}', status: 'ready', offers: 1 })
+  // same model, one raw title — OBVIOUS (shared size 1220)
+  assert.equal(compare(m(1, 'FMS', 'Ranger 1220'), m(2, 'FMS', 'Ranger 1220mm Premium RC Airplane')).obvious, true)
+  // colourway variants of one model — OBVIOUS (size 600 + core 'ranger')
+  assert.equal(compare(m(3, 'Volantex', 'RC Ranger 600'), m(4, 'Volantex', 'RC Airplane Volantex Ranger 600 White Stunt RTF')).obvious, true)
+  // different sizes — NOT a duplicate
+  assert.equal(compare(m(5, 'Volantex', 'Ranger 600', 600), m(6, 'Volantex', 'Ranger 2400', 2400)).score, 0)
+  // different brand — NOT a duplicate
+  assert.equal(compare(m(7, 'HEEWING', 'T1 Ranger'), m(8, 'FMS', 'Ranger 1220')).score, 0)
+  // same brand, name overlap but no size/span pin, extra distinguishing word — DOUBTFUL (flag, not auto)
+  const doubtful = compare(m(9, 'Volantex', 'Ranger EP V2'), m(10, 'Volantex', 'Ranger'))
+  assert.equal(doubtful.obvious, false)
+  assert.ok(doubtful.score > 0)
+})
+
+test('dedup.findDuplicates: obvious cluster picks ready survivor; 3-way collapses', () => {
+  const M = (id, brand, name, span, status = 'ready', offers = 1) => ({ id, brand, brand_norm: brand.toLowerCase(), name, name_norm: name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(), specs: span ? JSON.stringify({ spanMM: span }) : '{}', status, offers })
+  const masters = [
+    M(29, 'FMS', 'Ranger 1220', null, 'ready', 2),
+    M(144, 'FMS', 'Ranger 1220mm Premium RC Airplane', null, 'draft', 1),
+    M(15, 'HEEWING', 'T1 Ranger', null),
+    // 3-way colourway dup — must land in ONE cluster, not 3 pairs
+    M(122, 'Volantex', 'Ranger 600 White', 600, 'draft'),
+    M(125, 'Volantex', 'Ranger 600 Black', 600, 'draft'),
+    M(129, 'Volantex', 'RC Ranger 600', 600, 'draft'),
+  ]
+  const { obviousClusters, candidatePairs } = findDuplicates(masters)
+  const fms = obviousClusters.find((c) => c.some((m) => m.id === 29))
+  assert.ok(fms && fms.length === 2, 'FMS Ranger pair is one obvious cluster')
+  assert.equal(bestSurvivor(fms).id, 29, 'ready master with more offers survives')
+  const volantex = obviousClusters.find((c) => c.some((m) => m.id === 122))
+  assert.equal(volantex.length, 3, 'the three Ranger 600 colourways form ONE cluster')
 })
 
 // ---------------------------------------------------------------- public

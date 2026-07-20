@@ -17,6 +17,7 @@
 
 import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
+import { findDuplicates, bestSurvivor } from './dedup.mjs'
 import { now } from './util.mjs'
 
 // Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
@@ -51,6 +52,10 @@ export async function runSlice(env, trigger = 'cron') {
     if ((await getSetting(env, 'enrich_paused')) !== '1') {
       const e = await enrichSlice(env, trigger)
       if (e) return e
+    }
+    if ((await getSetting(env, 'dedup_paused')) !== '1') {
+      const dd = await dedupSlice(env, trigger)
+      if (dd) return dd
     }
     if ((await getSetting(env, 'verify_paused')) !== '1') return await verifySlice(env, trigger)
     return { idle: true }
@@ -298,6 +303,76 @@ async function aiGuess(env, title, snippet) {
   } catch {
     return null
   }
+}
+
+// -------------------------------------------------------------- dedup slice
+// Continuously hunts duplicate masters (same brand + model). Obvious dupes
+// auto-merge; doubtful pairs go to merge_candidate for the owner to confirm.
+// Time-gated (every 6h) — the whole comparison is cheap and in-memory.
+const DEDUP_EVERY = 6 * 3600e3
+
+export async function dedupSlice(env, trigger, force = false) {
+  const last = Number((await getSetting(env, 'dedup_last')) ?? 0)
+  const t = now()
+  if (!force && t - last < DEDUP_EVERY) return null // not due — let verify have the slice
+  await setSetting(env, 'dedup_last', String(t))
+
+  const masters = await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status,
+      (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=m.id) AS offers
+     FROM master_model m WHERE m.status IN ('ready','draft')`)
+  const { obviousClusters, candidatePairs } = findDuplicates(masters)
+
+  // Rejected pairs must never be re-proposed (auto-merge or candidate).
+  const rejected = new Set((await all(env, `SELECT a_id, b_id FROM merge_candidate WHERE status='rejected'`)).map((r) => `${r.a_id}:${r.b_id}`))
+  const isRejected = (a, b) => rejected.has(`${a}:${b}`) || rejected.has(`${b}:${a}`)
+
+  let merged = 0
+  let flagged = 0
+  const log = []
+  // Obvious dupes: merge each cluster's members into its single survivor.
+  for (const cluster of obviousClusters) {
+    const survivor = bestSurvivor(cluster)
+    for (const m of cluster) {
+      if (m.id === survivor.id || isRejected(survivor.id, m.id)) continue
+      await mergeMasters(env, survivor.id, m.id, 'auto', 'obvious duplicate')
+      merged++
+      log.push(`merged #${m.id} '${m.name?.slice(0, 24)}' → #${survivor.id} '${survivor.name?.slice(0, 24)}'`)
+    }
+  }
+  // Doubtful pairs → owner's review list.
+  for (const p of candidatePairs) {
+    if (isRejected(p.a.id, p.b.id)) continue
+    const r = await run(env,
+      `INSERT OR IGNORE INTO merge_candidate (a_id, b_id, score, reason, status, created_at) VALUES (?,?,?,?, 'pending', ?)`,
+      Math.min(p.a.id, p.b.id), Math.max(p.a.id, p.b.id), p.score, p.reason, t)
+    flagged++
+  }
+  return { job: 'dedup', trigger, merged, flagged, log }
+}
+
+// Merge master B into A: move B's offers to A (dropping any that would collide
+// on a sku already offered on A), fill A's blank specs from B, drop B. Reused
+// by the owner's admin "Merge" action. Returns nothing; throws on hard error.
+export async function mergeMasters(env, aId, bId, actor, reason) {
+  if (aId === bId) return
+  const a = await one(env, `SELECT * FROM master_model WHERE id=?`, aId)
+  const b = await one(env, `SELECT * FROM master_model WHERE id=?`, bId)
+  if (!a || !b) return
+  // fill A's missing specs from B (never overwrite an owner-entered value)
+  let specs = {}
+  try {
+    specs = { ...JSON.parse(b.specs || '{}'), ...JSON.parse(a.specs || '{}') }
+  } catch {}
+  const stmts = [
+    // free B's offers from any sku already carried by A, then re-home the rest
+    q(env, `DELETE FROM offer WHERE master_model_id=? AND sku_id IN (SELECT sku_id FROM offer WHERE master_model_id=?)`, bId, aId),
+    q(env, `UPDATE offer SET master_model_id=? WHERE master_model_id=?`, aId, bId),
+    q(env, `UPDATE master_model SET specs=?, hero_image=COALESCE(hero_image, ?), updated_at=? WHERE id=?`, JSON.stringify(specs), b.hero_image, now(), aId),
+    q(env, `UPDATE merge_candidate SET status='merged', decided_at=? WHERE (a_id=? AND b_id=?) OR (a_id=? AND b_id=?)`, now(), aId, bId, bId, aId),
+    q(env, `DELETE FROM master_model WHERE id=?`, bId),
+    audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason }),
+  ]
+  await batch(env, stmts)
 }
 
 // -------------------------------------------------------------- verify slice

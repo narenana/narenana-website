@@ -5,7 +5,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster } from './public.mjs'
-import { runSlice, upsertProducts } from './jobs.mjs'
+import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge } from './util.mjs'
@@ -464,6 +464,46 @@ async function api(request, url, env, ep, actor) {
     }
   }
 
+  if (ep === 'duplicates' && request.method === 'GET') {
+    const cats = await categories(env)
+    const rows = await all(env, `SELECT mc.*,
+        a.slug a_slug, a.brand a_brand, a.name a_name, a.status a_status, a.category_id a_cat, a.specs a_specs,
+        b.slug b_slug, b.brand b_brand, b.name b_name, b.status b_status, b.specs b_specs,
+        (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=mc.a_id) a_offers,
+        (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=mc.b_id) b_offers
+      FROM merge_candidate mc
+      JOIN master_model a ON a.id=mc.a_id JOIN master_model b ON b.id=mc.b_id
+      WHERE mc.status='pending' ORDER BY mc.score DESC, mc.id`)
+    for (const r of rows) r.prefix = cats.find((c) => c.id === r.a_cat)?.path_prefix ?? ''
+    return json({ candidates: rows })
+  }
+
+  if (ep === 'merge' && request.method === 'POST') {
+    const a = await one(env, 'SELECT id FROM master_model WHERE id=?', body.aId)
+    const b = await one(env, 'SELECT id FROM master_model WHERE id=?', body.bId)
+    if (!a || !b) return json({ error: 'unknown master' }, 404)
+    await mergeMasters(env, body.aId, body.bId, actor, body.reason ?? 'owner-confirmed')
+    catCache.at = 0
+    return json({ ok: true })
+  }
+
+  if (ep === 'reject-merge' && request.method === 'POST') {
+    await batch(env, [
+      q(env, `INSERT INTO merge_candidate (a_id, b_id, score, reason, status, created_at, decided_at)
+              VALUES (?,?,0,'owner: not duplicates','rejected',?,?)
+              ON CONFLICT(a_id,b_id) DO UPDATE SET status='rejected', decided_at=excluded.decided_at`,
+        Math.min(body.aId, body.bId), Math.max(body.aId, body.bId), now(), now()),
+      audit(env, actor, 'reject-merge', 'master_model', body.bId, { with: body.aId }),
+    ])
+    return json({ ok: true })
+  }
+
+  if (ep === 'dedup-run' && request.method === 'POST') {
+    const res = await dedupSlice(env, 'manual', true)
+    await audit(env, actor, 'dedup-run', 'jobs', '', res ?? {}).run?.()
+    return json(res ?? { note: 'no masters to compare' })
+  }
+
   if (ep === 'system' && request.method === 'GET') {
     const settings = {}
     for (const r of await all(env, 'SELECT k, v FROM setting')) settings[r.k] = r.v
@@ -483,7 +523,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich|dedup)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })

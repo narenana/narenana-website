@@ -37,10 +37,11 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v9</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v10</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
+  <button data-tab="dupes">Duplicates</button>
   <button data-tab="system">System</button>
   <span class="grow"></span>
   <button id="run" class="go">Run job slice</button>
@@ -67,6 +68,7 @@ async function load(){
     if(tab==='review'){data=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src));renderFilters();renderReview()}
     if(tab==='sources'){data=await api('sources');renderSources()}
     if(tab==='catalog'){data=await api('catalog');renderCatalog()}
+    if(tab==='dupes'){data=await api('duplicates');renderDupes()}
     if(tab==='system'){data=await api('system');renderSystem()}
   }catch(e){$('#view').innerHTML='<p class="empty">'+esc(e.message)+'</p>'}
 }
@@ -172,6 +174,30 @@ function renderCatalog(){
   });
 }
 
+// ------- Duplicates -------
+function renderDupes(){
+  const rows=data.candidates||[];
+  const span=(sp)=>{try{const v=JSON.parse(sp||'{}').spanMM;return v?v+'mm':''}catch(e){return ''}};
+  const side=(r,pre)=>'<div style="flex:1"><span class="tag">'+esc(r[pre+'brand'])+'</span> <b>'+esc(r[pre+'name'])+'</b>'
+    +'<div class="meta"><span class="tag">'+esc(r[pre+'status'])+'</span> '+r[pre+'offers']+' offer(s) '+esc(span(r[pre+'specs']))
+    +' · <a href="'+esc(r.prefix)+'/'+esc(r[pre+'slug'])+'/" target="_blank" rel="noopener">'+esc(r[pre+'slug'])+' ↗</a></div></div>';
+  $('#view').innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><button id="ddrun" class="go">Scan for duplicates now</button>'
+    +'<span class="meta">'+rows.length+' possible duplicate pair(s) awaiting your call · obvious ones are merged automatically</span></div>'
+    +(rows.length?rows.map((r)=>'<div class="row" style="grid-template-columns:1fr auto;align-items:center" data-a-id="'+r.a_id+'" data-b-id="'+r.b_id+'">'
+      +'<div><div style="display:flex;gap:14px;align-items:center">'+side(r,'a_')+'<span style="color:var(--muted)">⇐ keep · merge ⇒</span>'+side(r,'b_')+'</div>'
+      +'<p class="meta" style="margin-top:8px">why flagged: '+esc(r.reason)+' · score '+Math.round(r.score*100)+'%</p></div>'
+      +'<div class="acts"><button class="ok" data-dd="merge" data-a-id="'+r.a_id+'" data-b-id="'+r.b_id+'">Merge into ←</button>'
+      +'<button class="no" data-dd="reject" data-a-id="'+r.a_id+'" data-b-id="'+r.b_id+'">Not duplicates</button></div></div>').join('')
+      :'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>');
+  $('#ddrun').onclick=async()=>{$('#ddrun').disabled=true;$('#ddrun').textContent='scanning…';try{const d=await api('dedup-run',{});alert('Auto-merged '+(d.merged||0)+', flagged '+(d.flagged||0)+' for review')}catch(e){alert(e.message)}load()};
+  document.querySelectorAll('button[data-dd]').forEach((b)=>b.onclick=async()=>{
+    const aId=+b.dataset.aId,bId=+b.dataset.bId;
+    if(b.dataset.dd==='merge'&&!confirm('Merge these into one product page? The right one is absorbed into the left; its offers move over. (recorded in audit)'))return;
+    b.disabled=true;
+    try{await api(b.dataset.dd==='merge'?'merge':'reject-merge',{aId,bId});load()}catch(e){alert(e.message);b.disabled=false}
+  });
+}
+
 // ------- System -------
 function renderSystem(){
   const s=data.settings;
@@ -181,7 +207,7 @@ function renderSystem(){
   const healthTable='<h3>Source health</h3><table class="t"><thead><tr><th>Source</th><th>Last scan</th><th>Oldest verify</th><th>Live</th><th>Flagged</th><th>Removed</th></tr></thead><tbody>'
     +health.map((r)=>{const stale=r.last_scan&&(Date.now()-r.last_scan)>36*3.6e6;return '<tr><td>'+esc(r.source_id)+'</td><td'+(stale?' style="color:var(--bad)"':'')+'>'+ago(r.last_scan)+'</td><td>'+ago(r.oldest_verify)+'</td><td>'+(r.live||0)+'</td><td'+(r.flagged>0?' style="color:var(--warn)"':'')+'>'+(r.flagged||0)+'</td><td>'+(r.removed||0)+'</td></tr>'}).join('')
     +'</tbody></table>';
-  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('verify_paused','Verify')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
+  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('dedup_paused','Dedup')+' '+tog('verify_paused','Verify')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
     +'<p class="meta">scan cursor: <pre>'+esc(s.scan_cursor||'—')+'</pre></p>'
     +healthTable
     +'<h3>Recent audit</h3><table class="t"><tbody>'
