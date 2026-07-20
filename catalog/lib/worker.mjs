@@ -86,6 +86,9 @@ export async function handleCatalog(request, url, env, ctx) {
 }
 
 async function gridMasters(env, cat) {
+  // Grid policy (owner): in-stock only, cheapest first. Out-of-stock masters
+  // keep their PAGES (direct links / search stay alive with "last seen"
+  // pricing) — they just don't take up grid space.
   return all(
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
@@ -96,7 +99,9 @@ async function gridMasters(env, cat) {
      JOIN offer o ON o.master_model_id = m.id
      JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready'
-     GROUP BY m.id ORDER BY any_stock DESC, min_price ASC`,
+     GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
+     ORDER BY (min_price IS NULL) ASC, min_price ASC`,
     cat.id,
   )
 }
