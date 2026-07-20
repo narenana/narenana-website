@@ -190,10 +190,13 @@ export async function upsertProducts(env, su, products, spent) {
        VALUES ${placeholders}`, ...params))
     stats.inserted += chunk.length
   }
-  if (obs.length) {
+  // Chunk at 15 rows (×5 cols = 75 params) — D1 caps bound params at ~100 per
+  // statement, and a slice can change up to BUDGET.products (40) rows at once.
+  for (let i = 0; i < obs.length; i += 15) {
+    const chunk = obs.slice(i, i + 15)
     stmts.push(q(env,
-      `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES ${obs.map(() => '(?,?,?,?,?)').join(',')}`,
-      ...obs.flat()))
+      `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES ${chunk.map(() => '(?,?,?,?,?)').join(',')}`,
+      ...chunk.flat()))
   }
   if (stmts.length) {
     await batch(env, stmts)
