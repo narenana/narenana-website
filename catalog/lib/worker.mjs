@@ -51,22 +51,7 @@ export async function handleCatalog(request, url, env, ctx) {
   const cat = cats.find((c) => path === c.path_prefix || path.startsWith(c.path_prefix + '/'))
   if (!cat || !cat.live) return null
 
-  if (path === cat.path_prefix) {
-    const masters = await all(
-      env,
-      `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
-              COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-              MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
-              MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
-       FROM master_model m
-       JOIN offer o ON o.master_model_id = m.id
-       JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
-       WHERE m.category_id=? AND m.status='ready'
-       GROUP BY m.id ORDER BY any_stock DESC, min_price ASC`,
-      cat.id,
-    )
-    return html(renderGrid(cat, masters))
-  }
+  if (path === cat.path_prefix) return html(renderGrid(cat, await gridMasters(env, cat)))
 
   const slug = path.slice(cat.path_prefix.length + 1)
   if (slug && !slug.includes('/')) {
@@ -95,9 +80,25 @@ export async function handleCatalog(request, url, env, ctx) {
       return html(renderMaster(cat, m, offers, recipes, components))
     }
   }
-  // unknown slug → category grid with 404
-  const masters = await all(env, `SELECT m.*, 1 AS sellers, NULL AS min_price, 0 AS any_stock FROM master_model m WHERE category_id=? AND status='ready'`, cat.id)
-  return html(renderGrid(cat, masters), 404)
+  // unknown slug → the REAL category grid with 404 status (a stub query here
+  // once veiled every card "Out of stock" on typo URLs)
+  return html(renderGrid(cat, await gridMasters(env, cat)), 404)
+}
+
+async function gridMasters(env, cat) {
+  return all(
+    env,
+    `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
+            COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
+            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+     FROM master_model m
+     JOIN offer o ON o.master_model_id = m.id
+     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     WHERE m.category_id=? AND m.status='ready'
+     GROUP BY m.id ORDER BY any_stock DESC, min_price ASC`,
+    cat.id,
+  )
 }
 
 // ---------------------------------------------------------------- img proxy
@@ -119,9 +120,16 @@ async function imgProxy(env, path) {
   const okHost = h && (hosts.includes(h) || /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com)$/.test(h))
   if (!okHost) return new Response('host not allowed', { status: 403 })
   const img = await fetch(src, { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${h}/` } })
+  // Re-check after redirects — a seller 30x'ing to an arbitrary host must not
+  // turn this into an open proxy. And only ever relay actual images.
+  const finalHost = hostOf(img.url)
+  const okFinal = finalHost && (hosts.includes(finalHost) || /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com)$/.test(finalHost))
+  if (!okFinal) return new Response('redirect off-allowlist', { status: 403 })
+  const ct = img.headers.get('content-type') ?? 'image/jpeg'
+  if (img.ok && !/^image\//i.test(ct)) return new Response('not an image', { status: 502 })
   return new Response(img.body, {
     status: img.status,
-    headers: { 'content-type': img.headers.get('content-type') ?? 'image/jpeg', 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800' },
+    headers: { 'content-type': ct, 'x-content-type-options': 'nosniff', 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800' },
   })
 }
 
@@ -322,12 +330,14 @@ async function api(request, url, env, ep, actor) {
       q(env, `INSERT INTO source (id, name, home_url, platform, created_at, updated_at) VALUES (?,?,?,?,?,?)
               ON CONFLICT(id) DO UPDATE SET platform=excluded.platform, updated_at=excluded.updated_at`, sourceId, host, home, platform, t, t),
       q(env, `INSERT OR IGNORE INTO source_url (source_id, url_canonical, url_raw, status, added_by, created_at) VALUES (?,?,?,?,?,?)`, sourceId, canon, raw, 'active', actor, t),
+      // category mappings ride the same atomic batch (subselect on the natural
+      // key) — no window where a source_url exists without its categories
+      ...catIds.map((c) =>
+        q(env, `INSERT OR IGNORE INTO source_url_category (source_url_id, category_id) SELECT id, ? FROM source_url WHERE url_canonical=?`, c, canon)),
       audit(env, actor, 'add-source-url', 'source_url', canon, { platform, found: dry.products.length, subtree: dry.subtree ?? 1 }),
     ]
     await batch(env, stmts)
     const su = await one(env, 'SELECT * FROM source_url WHERE url_canonical=?', canon)
-    for (const c of catIds)
-      await run(env, 'INSERT OR IGNORE INTO source_url_category (source_url_id, category_id) VALUES (?,?)', su.id, c)
     // Seed the dry-run's first page straight into the review queue — adding a
     // source is scanning it. The REST of the subtree (more pages, child
     // categories) arrives via the job slices; last_scan_at stays NULL so the

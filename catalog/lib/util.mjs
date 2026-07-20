@@ -70,7 +70,10 @@ export async function basicAuth(request, env) {
   if (h.startsWith('Basic ')) {
     let dec = ''
     try {
-      dec = atob(h.slice(6))
+      // atob yields Latin-1; decode the bytes as UTF-8 so non-ASCII passwords
+      // match the UTF-8 secret (realm advertises charset="UTF-8").
+      const bin = atob(h.slice(6))
+      dec = new TextDecoder().decode(Uint8Array.from(bin, (c) => c.charCodeAt(0)))
     } catch {}
     const idx = dec.indexOf(':')
     const user = dec.slice(0, idx)

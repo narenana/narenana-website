@@ -19,7 +19,9 @@ import { feedPage, checkPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { now } from './util.mjs'
 
-const BUDGET = { fetches: 12, statements: 30, products: 40 } // per slice, Free-safe
+// Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
+// fetch attempts + ~3 D1 calls) under the ~50-subrequest invocation cap.
+const BUDGET = { fetches: 8, statements: 30, products: 40 }
 const DAY = 86400e3
 
 export async function runSlice(env, trigger = 'cron') {
@@ -66,7 +68,14 @@ async function scanSlice(env, cur, trigger) {
 
   while (cur.suIdx < sus.length && spent.fetches < BUDGET.fetches && spent.statements < BUDGET.statements) {
     const su = sus[cur.suIdx]
-    const res = await feedPage(su, su.url_canonical, cur.sub)
+    // A THROW here (adapter bug, malformed URL) must not wedge the cursor on
+    // this source_url forever — that starves verify and every later source.
+    let res
+    try {
+      res = await feedPage(su, su.url_canonical, cur.sub)
+    } catch (e) {
+      res = { error: `feed threw: ${String(e.message || e).slice(0, 120)}` }
+    }
     spent.fetches += res.fetches ?? 2
     if (res.error) {
       await run(env, 'UPDATE source_url SET last_scan_at=?, last_scan_note=? WHERE id=?', now(), JSON.stringify({ error: res.error }), su.id)

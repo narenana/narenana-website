@@ -14,19 +14,18 @@ import { esc, inr } from './util.mjs'
 const SITE = 'https://www.narenana.com'
 const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 
-export function page({ title, desc, path, body, jsonld }) {
+export function page({ title, desc, path, body, jsonld, noindex }) {
   const url = `${SITE}${path}`
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#0e1117" />
-<title>${esc(title)}</title><meta name="description" content="${esc(desc)}" /><link rel="canonical" href="${url}" />
+<title>${esc(title)}</title><meta name="description" content="${esc(desc)}" /><link rel="canonical" href="${url}" />${noindex ? '<meta name="robots" content="noindex" />' : ''}
 <link rel="icon" href="/favicon.ico" sizes="any" /><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
 <meta property="og:type" content="website" /><meta property="og:site_name" content="narenana" /><meta property="og:url" content="${url}" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" /><meta property="og:image" content="${SITE}/assets/og.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH"></script>
-<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")</script>
-${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld)}</script>` : ''}
+<script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
+${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css" />
 </head><body>
 <header class="nav"><a class="nav-back" href="/">← narenana</a><span class="nav-sep">/</span><a class="nav-here" href="${esc(path.split('/').slice(0, 2).join('/'))}/">${esc(path.split('/')[1])}</a></header>
@@ -85,6 +84,7 @@ export function renderGrid(cat, masters) {
     desc: `Every ${cat.name.toLowerCase()} you can buy in India, with live prices compared across sellers.`,
     path: `${cat.path_prefix}/`,
     body,
+    noindex: live.length === 0, // an empty category must not get indexed
   })
 }
 
@@ -126,6 +126,14 @@ export function renderMaster(cat, m, offers, recipes = [], components = {}) {
 
   const liveOffers = offers.filter((o) => !o.dead && o.in_stock)
   const configs = [...new Set(offers.map((o) => o.config))]
+  // Min over PRESENT prices only — data-poor offers (price NULL until a scan
+  // or verify fills it) must render as "—", never as ₹∞ from Math.min().
+  const minOf = (arr) => {
+    const v = arr.map((o) => o.price_inr).filter(Boolean)
+    return v.length ? Math.min(...v) : null
+  }
+  const liveMin = minOf(liveOffers)
+  const seenMin = minOf(offers)
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${esc(o.source_name)}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}</td>
@@ -135,13 +143,13 @@ export function renderMaster(cat, m, offers, recipes = [], components = {}) {
       <td>${o.dead ? '' : `<a class="cta" style="padding:7px 14px;font-size:.82rem" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy →</a>`}</td>
     </tr>`
 
-  const jsonld = liveOffers.length ? {
+  const jsonld = liveOffers.length && liveMin ? {
     '@context': 'https://schema.org', '@type': 'Product',
     name: `${m.brand} ${m.name}`, brand: { '@type': 'Brand', name: m.brand }, description: m.blurb ?? undefined,
     image: m.hero_image ? `${SITE}/img/master/${m.id}` : undefined,
     offers: {
       '@type': 'AggregateOffer', priceCurrency: 'INR',
-      lowPrice: Math.min(...liveOffers.map((o) => o.price_inr).filter(Boolean)),
+      lowPrice: liveMin,
       highPrice: Math.max(...liveOffers.map((o) => o.price_inr).filter(Boolean)),
       offerCount: liveOffers.length, availability: 'https://schema.org/InStock',
     },
@@ -153,10 +161,10 @@ export function renderMaster(cat, m, offers, recipes = [], components = {}) {
     <h1 class="kit-h">${esc(m.brand)} ${esc(m.name)}</h1>
     ${m.blurb ? `<p class="lede">${esc(m.blurb)}</p>` : ''}
     <div class="kit-key">
-      ${liveOffers.length
-        ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(Math.min(...liveOffers.map((o) => o.price_inr).filter(Boolean)))}</div>`
-        : offers.length
-          ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(Math.min(...offers.map((o) => o.price_inr).filter(Boolean)))}</div>`
+      ${liveMin
+        ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
+        : seenMin
+          ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
           : ''}
       <dl class="spec">
         ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}

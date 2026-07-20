@@ -6,6 +6,12 @@
 --                               schema here, DATA imported out-of-band
 -- Category-config seeds (0001's wings row, the configs update below) are the
 -- one sanctioned repo-side seed class: bootstrap CONFIG, never product data.
+--
+-- NOT replay-safe (SQLite ALTER has no IF NOT EXISTS): wrangler's
+-- d1_migrations bookkeeping runs each file once — apply ONLY via
+-- `wrangler d1 migrations apply`. If an interrupted apply left the columns
+-- present but the file unrecorded, recover with:
+--   INSERT INTO d1_migrations (name) VALUES ('0002_content_out_of_code.sql');
 
 ALTER TABLE source ADD COLUMN unscoped_ok INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE category ADD COLUMN configs TEXT NOT NULL DEFAULT '["standard"]';

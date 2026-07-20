@@ -22,6 +22,9 @@ for (const [id, c] of Object.entries(d.components ?? {})) {
       `${esc(id)}, ${esc(c.category)}, ${esc(c.name)}, ${esc(c.vendor)}, ${esc(c.url)}, ${c.priceINR ?? 'NULL'}, ${esc(c.stock)}, ${esc(c.note)});`,
   )
 }
+// Idempotent re-apply: replace the category's recipe set wholesale (components
+// are INSERT OR REPLACE above; nothing references recipe.id).
+if ((d.recipes ?? []).length) lines.push(`DELETE FROM recipe WHERE category_id='wings';`)
 for (const r of d.recipes ?? []) {
   const picks = (r.picks ?? []).map((p) => ({ role: p.role, component_id: p.id, note: p.note ?? null }))
   lines.push(

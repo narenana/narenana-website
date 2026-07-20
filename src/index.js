@@ -56,8 +56,15 @@ export default {
 
     // Catalog platform — public category pages (D1-backed), /admin, /api/*,
     // /img/* and /catalog.css. Returns null for paths it doesn't own.
+    // FAIL OPEN: a D1 outage (or missing tables) must degrade to the catalog
+    // paths 404-ing via assets — never take the homepage down with it.
     {
-      const r = await handleCatalog(request, url, env, ctx)
+      let r = null
+      try {
+        r = await handleCatalog(request, url, env, ctx)
+      } catch (e) {
+        console.error('catalog unavailable, falling through to assets:', e)
+      }
       if (r) return harden(r, url, isLocal)
     }
 
