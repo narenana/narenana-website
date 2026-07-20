@@ -92,10 +92,22 @@ async function scanSlice(env, cur, trigger) {
       log.push(`${su.source_id}: ✗ ${res.error}`)
       cur.suIdx++
       cur.sub = null
+      cur.pOff = 0
       continue
     }
-    const stats = await upsertProducts(env, su, res.products ?? [], spent)
-    log.push(`${su.source_id}: ${res.products?.length ?? 0} seen, ${stats.inserted} new, ${stats.changed} changed${res.subtree > 1 ? ` (subtree ${res.subtree})` : ''}`)
+    // Resume within a page: a single feed page can hold more products than one
+    // slice's budget. Skip the ones already done (cur.pOff) and, if the budget
+    // truncates this page, hold position (don't advance the feed cursor) so the
+    // rest are picked up next slice — instead of being silently dropped.
+    const pageProducts = (res.products ?? []).slice(cur.pOff ?? 0)
+    const stats = await upsertProducts(env, su, pageProducts, spent)
+    log.push(`${su.source_id}: ${res.products?.length ?? 0} seen, ${stats.inserted} new, ${stats.changed} changed${(cur.pOff ?? 0) ? ` (from ${cur.pOff})` : ''}${res.subtree > 1 ? ` (subtree ${res.subtree})` : ''}`)
+    if (stats.taken < pageProducts.length) {
+      // budget hit mid-page — resume from the next unconsumed product next slice
+      cur.pOff = (cur.pOff ?? 0) + stats.taken
+      break
+    }
+    cur.pOff = 0
     cur.sub = res.nextCursor
     if (!cur.sub) {
       await run(env, 'UPDATE source_url SET last_scan_at=?, last_scan_note=? WHERE id=?', now(), JSON.stringify({ ok: true, subtree: res.subtree ?? 1 }), su.id)
@@ -112,8 +124,9 @@ async function scanSlice(env, cur, trigger) {
 
 export async function upsertProducts(env, su, products, spent) {
   const t = now()
-  const stats = { inserted: 0, changed: 0 }
+  const stats = { inserted: 0, changed: 0, taken: 0 }
   const take = products.slice(0, BUDGET.products - spent.products)
+  stats.taken = take.length
   spent.products += take.length
   if (!take.length) return stats
 
