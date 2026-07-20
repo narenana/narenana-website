@@ -88,27 +88,37 @@ h1, h2, h3 { font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif; f
 .shr-btn:hover { background: var(--orange); border-color: var(--orange); color: var(--ink-2); }
 .shr-menu {
   display: none;
-  position: absolute; right: 0; top: calc(100% + 8px);
+  position: absolute; right: -8px; top: calc(100% + 14px);
   background: var(--card);
   border: 2px solid var(--ink);
-  border-radius: 10px;
-  min-width: 168px;
-  box-shadow: 0 12px 28px rgba(15, 44, 57, 0.18);
-  overflow: hidden;
+  border-radius: 12px;
+  min-width: 208px;
+  padding: 6px;
+  box-shadow: 0 18px 44px rgba(15, 44, 57, 0.22);
   z-index: 30;
 }
 .shr-menu.on { display: block; }
+.shr-menu::before {
+  content: ""; position: absolute; top: -7px; right: 22px;
+  width: 10px; height: 10px; background: var(--card);
+  border-left: 2px solid var(--ink); border-top: 2px solid var(--ink);
+  transform: rotate(45deg);
+}
+.shr-k {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); font-weight: 700;
+  margin: 6px 10px 5px;
+}
 .shr-menu a, .shr-menu button {
-  display: block; width: 100%;
-  padding: 11px 16px;
-  background: none; border: none;
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 9px 10px;
+  background: none; border: none; border-radius: 8px;
   font-family: 'Hanken Grotesk', system-ui, sans-serif;
   font-size: 0.88rem; font-weight: 600;
   color: var(--ink); text-align: left; text-decoration: none;
   cursor: pointer;
-  border-bottom: 1px solid var(--faint);
 }
-.shr-menu > :last-child { border-bottom: none; }
 .shr-menu a:hover, .shr-menu button:hover { background: var(--soft); color: var(--ink); }
 
 .wrap { max-width: 880px; margin: 0 auto; padding: 36px 24px 64px; }

@@ -69,6 +69,12 @@ id = "e048dd7b7b0849bcba7b51557c4c6752"
 [ai]
 binding = "AI"
 
+# Browser Rendering — a real headless Chrome for sellers whose WAFs 403 plain
+# Worker fetches (rcdhamaka). Free-plan allocation ≈10 browser-min/day, so it
+# is used ONLY for sources that opt in; all code guards on env.BROWSER.
+[browser]
+binding = "BROWSER"
+
 # The catalog admin at /admin is gated by HTTP Basic auth (user `admin`). The
 # password is NOT set here (secrets never live in the repo):
 #   npx wrangler secret put ADMIN_PASS

@@ -1,6 +1,7 @@
 // Catalog worker: public pages from D1, admin panel + API behind HTTP Basic
 // auth, image proxy, and the */15 job-slice dispatcher.
 
+import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster } from './public.mjs'
@@ -403,6 +404,35 @@ async function api(request, url, env, ep, actor) {
     ])
     catCache.at = 0
     return json({ ok: true })
+  }
+
+  // Spike: can a REAL browser (Browser Rendering) reach a WAF-protected
+  // seller the plain Worker fetch cannot? Admin-gated, read-only.
+  if (ep === 'browser-test' && request.method === 'POST') {
+    if (!env.BROWSER) return json({ error: 'browser binding unavailable on this deployment' }, 501)
+    const target = canonicalUrl(body.url)
+    if (!target) return json({ error: 'bad url' }, 400)
+    let browser
+    try {
+      browser = await puppeteer.launch(env.BROWSER)
+      const pg = await browser.newPage()
+      const resp = await pg.goto(target, { waitUntil: 'domcontentloaded', timeout: 25000 })
+      const html = await pg.content()
+      const title = await pg.title()
+      return json({
+        status: resp?.status() ?? null,
+        title: title.slice(0, 120),
+        bytes: html.length,
+        addToCartHits: (html.match(/add[\s-]*to[\s-]*cart/gi) ?? []).length,
+        productLinks: [...new Set([...html.matchAll(/href="([^"]*\/product\/[^"]+)"/g)].map((m) => m[1]))].length,
+      })
+    } catch (e) {
+      return json({ error: String(e.message || e).slice(0, 200) }, 502)
+    } finally {
+      try {
+        await browser?.close()
+      } catch {}
+    }
   }
 
   if (ep === 'system' && request.method === 'GET') {
