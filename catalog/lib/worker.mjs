@@ -79,7 +79,19 @@ export async function handleCatalog(request, url, env, ctx) {
          ORDER BY k.dead ASC, k.in_stock DESC, k.price_inr ASC`,
         m.id,
       )
-      return html(renderMaster(cat, m, offers))
+      // Build recipes are DATA: matched from D1 by category + spec band.
+      let span = NaN
+      try {
+        span = Number(JSON.parse(m.specs || '{}').spanMM)
+      } catch {}
+      const recipes = Number.isFinite(span) && span > 0
+        ? await all(env, `SELECT * FROM recipe WHERE category_id=? AND (span_min IS NULL OR span_min<=?) AND (span_max IS NULL OR span_max>=?)`, cat.id, span, span)
+        : []
+      const components = {}
+      const compIds = [...new Set(recipes.flatMap((r) => { try { return JSON.parse(r.picks).map((p) => p.component_id) } catch { return [] } }))]
+      if (compIds.length)
+        for (const c of await all(env, `SELECT * FROM component WHERE id IN (${compIds.map(() => '?').join(',')})`, ...compIds)) components[c.id] = c
+      return html(renderMaster(cat, m, offers, recipes, components))
     }
   }
   // unknown slug → category grid with 404
@@ -122,9 +134,11 @@ async function api(request, url, env, ep, actor) {
     for (const r of await all(env, `SELECT review_status s, COUNT(*) n FROM sku WHERE flagged IS NULL GROUP BY review_status`)) counts[r.s] = r.n
     counts.flagged = (await one(env, `SELECT COUNT(*) n FROM sku WHERE flagged IS NOT NULL`))?.n ?? 0
     const sources = await all(env, 'SELECT id FROM source ORDER BY id')
-    const cat = await one(env, `SELECT * FROM category WHERE id='wings'`)
+    const allCats = await categories(env)
+    const cat = allCats.find((c) => c.id === url.searchParams.get('cat')) ?? allCats[0]
     const specFields = JSON.parse(cat?.spec_schema ?? '[]')
     const triage = JSON.parse(cat?.triage ?? '{}')
+    const configs = JSON.parse(cat?.configs ?? '[]')
 
     const status = url.searchParams.get('status') ?? 'new'
     const stock = url.searchParams.get('stock') ?? 'in'
@@ -157,8 +171,11 @@ async function api(request, url, env, ep, actor) {
       if ((triage.exclude ?? []).some((w) => lc.includes(w))) s -= 3
       return s
     }
-    const KNOWN = ['Vortex-RC', 'ATOMRC', 'HEEWING', 'HEE WING', 'Skywalker', 'ZOHD', 'TBS', 'LDARC', 'MAPBIRD', 'X-UAV', 'SonicModell', 'Durafly', 'XFly', 'FMS', 'H-King']
-    const madeBySource = new Set(['vortex-rc']) // house-brand shops: their products carry their brand
+    // Brand knowledge is DATA (category.triage.brands), not code. House-brand
+    // shops are derived, not listed: a brand whose slug equals a source id IS
+    // that seller's own storefront, so its unlabeled products carry its brand.
+    const KNOWN = triage.brands ?? []
+    const houseBrandOf = (srcId) => KNOWN.find((b) => slugify(b) === srcId) ?? ''
     for (const k of skus) {
       k.score = score(k.title)
       const t = k.title ?? ''
@@ -167,7 +184,7 @@ async function api(request, url, env, ep, actor) {
       // word (which produced brands like "Batman" and "1000mm").
       const brand =
         KNOWN.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(t)) ??
-        (madeBySource.has(k.source_id) ? 'Vortex-RC' : '')
+        houseBrandOf(k.source_id)
       // Name: the title minus any leading brand token — never "Batman Batman".
       let name = t.replace(/\s*[|–—-]\s*[^|]*$/i, '').trim()
       if (brand) {
@@ -188,7 +205,7 @@ async function api(request, url, env, ep, actor) {
         .sort((a, b) => b.s - a.s)
         .slice(0, 3)
     }
-    return json({ counts, sources, skus, specFields })
+    return json({ counts, sources, skus, specFields, cat: { id: cat?.id, configs } })
   }
 
   if (ep === 'decide' && request.method === 'POST') {
@@ -237,15 +254,21 @@ async function api(request, url, env, ep, actor) {
       const m = body.master ?? {}
       if (!m.brand || !m.name || !m.slug || !/^[a-z0-9-]{3,60}$/.test(m.slug)) return json({ error: 'brand, name and a valid slug are required' }, 400)
       const specs = JSON.stringify(m.specs ?? {})
+      // Category comes from the sku's source_url mapping (or an explicit
+      // body.categoryId override) — never hardcoded in code.
+      const catId =
+        body.categoryId ??
+        (await one(env, `SELECT category_id AS c FROM source_url_category WHERE source_url_id=?`, k.source_url_id))?.c
+      if (!catId || !(await categories(env)).some((c) => c.id === catId)) return json({ error: 'sku has no category mapping — pass categoryId' }, 400)
       // one atomic batch: create draft master (slug is the natural key), offer
       // via subselect, approve, audit — no orphan states possible.
       try {
         await batch(env, [
           q(env, `INSERT INTO master_model (category_id, slug, brand, name, brand_norm, name_norm, specs, hero_image, status, created_at, updated_at)
-                  VALUES ('wings', ?,?,?,?,?,?,?, 'draft', ?, ?)`,
-            m.slug, m.brand, m.name, normName(m.brand), normName(m.name), specs, k.image_url, t, t),
+                  VALUES (?, ?,?,?,?,?,?,?, 'draft', ?, ?)`,
+            catId, m.slug, m.brand, m.name, normName(m.brand), normName(m.name), specs, k.image_url, t, t),
           q(env, `INSERT INTO offer (sku_id, master_model_id, config, pack_qty, created_at)
-                  SELECT ?, id, ?, ?, ? FROM master_model WHERE category_id='wings' AND slug=?`, k.id, body.config ?? 'kit', body.packQty ?? 1, t, m.slug),
+                  SELECT ?, id, ?, ?, ? FROM master_model WHERE category_id=? AND slug=?`, k.id, body.config ?? 'kit', body.packQty ?? 1, t, catId, m.slug),
           q(env, `UPDATE sku SET review_status='approved', reviewed_at=? WHERE id=?`, t, k.id),
           audit(env, actor, 'approve-new-master', 'sku', k.id, { slug: m.slug }),
         ])
@@ -271,6 +294,10 @@ async function api(request, url, env, ep, actor) {
     const raw = body.url
     const canon = canonicalUrl(raw)
     if (!canon) return json({ error: 'not a valid URL' }, 400)
+    // Categories are caller-supplied and validated — no default category in code.
+    const knownCats = await categories(env)
+    const catIds = (body.categories ?? []).filter((c) => knownCats.some((x) => x.id === c))
+    if (!catIds.length) return json({ error: 'pick at least one category' }, 400)
     const host = hostOf(canon)
     const sourceId = host.split('.')[0].replace(/[^a-z0-9-]/g, '')
     const home = `https://${new URL(canon).hostname}`
@@ -293,7 +320,7 @@ async function api(request, url, env, ep, actor) {
     ]
     await batch(env, stmts)
     const su = await one(env, 'SELECT * FROM source_url WHERE url_canonical=?', canon)
-    for (const c of body.categories ?? ['wings'])
+    for (const c of catIds)
       await run(env, 'INSERT OR IGNORE INTO source_url_category (source_url_id, category_id) VALUES (?,?)', su.id, c)
     // Seed the dry-run's first page straight into the review queue — adding a
     // source is scanning it. The REST of the subtree (more pages, child

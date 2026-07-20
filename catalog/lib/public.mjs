@@ -7,8 +7,10 @@
 // "last seen ₹X on <date>" — pages only vanish when the owner retires them.
 
 import { esc, inr } from './util.mjs'
-import recipesData from '../data/recipes.json'
 
+// Site IDENTITY (domain, analytics id) is code config; all product/market
+// content — masters, offers, recipes, components — arrives as arguments,
+// straight from D1. This module holds zero content.
 const SITE = 'https://www.narenana.com'
 const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 
@@ -85,30 +87,30 @@ export function renderGrid(cat, masters) {
   })
 }
 
-function recipesFor(cat, specs) {
-  if (cat.id !== 'wings') return ''
-  const span = Number(specs.spanMM)
-  const rs = (recipesData.recipes ?? []).filter((r) => span >= r.appliesTo.spanMM[0] && span <= r.appliesTo.spanMM[1])
-  if (!rs.length) return ''
-  const C = recipesData.components
+function recipesFor(recipes, components) {
+  if (!recipes?.length) return ''
   const panel = (r, active) => {
-    const picks = r.picks.map((p) => ({ ...p, c: C[p.id] })).filter((p) => p.c)
-    const parts = picks.reduce((n, p) => n + p.c.priceINR, 0)
+    let picks = []
+    try {
+      picks = JSON.parse(r.picks)
+    } catch {}
+    picks = picks.map((p) => ({ ...p, c: components[p.component_id] })).filter((p) => p.c)
+    const parts = picks.reduce((n, p) => n + (p.c.price_inr ?? 0), 0)
     return `<div class="rp" data-panel="${r.id}" ${active ? '' : 'hidden'}>
-      <p class="rp-sum">${esc(r.summary)}</p>
+      <p class="rp-sum">${esc(r.summary ?? '')}</p>
       <table class="vars rp-table"><tbody>
-        ${picks.map((p) => `<tr><td class="rp-role">${esc(p.role)}</td><td><a href="${esc(p.c.url)}" target="_blank" rel="noopener nofollow">${esc(p.c.name)}</a><span class="rp-vendor">${esc(p.c.vendor)}</span></td><td>${inr(p.c.priceINR)}</td></tr>`).join('')}
+        ${picks.map((p) => `<tr><td class="rp-role">${esc(p.role)}</td><td><a href="${esc(p.c.url)}" target="_blank" rel="noopener nofollow">${esc(p.c.name)}</a><span class="rp-vendor">${esc(p.c.vendor ?? '')}</span></td><td>${p.c.price_inr ? inr(p.c.price_inr) : '—'}</td></tr>`).join('')}
       </tbody><tfoot><tr class="rp-total"><td colspan="2">Electronics ≈</td><td>${inr(parts)}</td></tr></tfoot></table>
     </div>`
   }
   return `<section class="recipes"><h2 class="sec">What to put in it</h2>
-    <div class="tabs">${rs.map((r, i) => `<button class="tab ${i === 0 ? 'is-on' : ''}" data-tab="${r.id}">${esc(r.label)}</button>`).join('')}</div>
-    ${rs.map((r, i) => panel(r, i === 0)).join('')}
+    <div class="tabs">${recipes.map((r, i) => `<button class="tab ${i === 0 ? 'is-on' : ''}" data-tab="${r.id}">${esc(r.label)}</button>`).join('')}</div>
+    ${recipes.map((r, i) => panel(r, i === 0)).join('')}
     <script>document.querySelectorAll('.tab').forEach((t)=>t.addEventListener('click',()=>{document.querySelectorAll('.tab').forEach((x)=>x.classList.toggle('is-on',x===t));document.querySelectorAll('.rp').forEach((p)=>{p.hidden=p.dataset.panel!==t.dataset.tab})}))</script>
   </section>`
 }
 
-export function renderMaster(cat, m, offers) {
+export function renderMaster(cat, m, offers, recipes = [], components = {}) {
   let specs = {}
   try {
     specs = JSON.parse(m.specs || '{}')
@@ -163,7 +165,7 @@ export function renderMaster(cat, m, offers) {
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
       <tbody>${offers.map(offerRow).join('')}</tbody></table>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
-    ${recipesFor(cat, specs)}
+    ${recipesFor(recipes, components)}
   </main>`
   return page({
     title: `${m.brand} ${m.name} — price in India | narenana`,

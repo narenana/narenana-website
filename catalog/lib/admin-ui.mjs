@@ -37,7 +37,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v5</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v6</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
@@ -85,7 +85,7 @@ function skuRow(k){
   const stock=k.flagged?'<span class="unk">⚑ flagged: '+esc(JSON.parse(k.flagged).kind)+'</span>':k.quote_only?'<span class="unk">quote only</span>':k.in_stock===1?'':k.in_stock===0?'<span class="oos">out of stock</span>':'<span class="unk">stock unverified</span>';
   const sugg=(k.suggestions||[]).map((m)=>'<button class="chip" data-a="attach" data-sku="'+k.id+'" data-master="'+m.id+'">→ '+esc(m.brand+' '+m.name)+'</button>').join('');
   const mapUI=F.status==='new'?'<div class="map"><div class="sugg">'+(sugg||'<span class="tag">no master match — create one:</span>')+'</div>'
-    +'<div class="fields"><input data-f="brand" value="'+esc(k.guess.brand)+'" placeholder="Brand"/><input data-f="name" value="'+esc(k.guess.name)+'" placeholder="Model name"/><input data-f="slug" value="'+esc(k.guess.slug)+'" placeholder="slug"/><select data-f="config"><option>kit</option><option>pnp</option><option>rtf</option><option>combo</option></select>'
+    +'<div class="fields"><input data-f="brand" value="'+esc(k.guess.brand)+'" placeholder="Brand"/><input data-f="name" value="'+esc(k.guess.name)+'" placeholder="Model name"/><input data-f="slug" value="'+esc(k.guess.slug)+'" placeholder="slug"/><select data-f="config">'+(((data.cat||{}).configs)||[]).map((c)=>'<option>'+esc(c)+'</option>').join('')+'</select>'
     +(data.specFields||[]).map((f)=>'<input data-f="spec:'+f.key+'" value="'+esc(k.guess.specs[f.key]??'')+'" placeholder="'+esc(f.label)+(f.required?' *':'')+'"/>').join('')
     +'</div></div>':'';
   const acts=F.status==='new'
@@ -125,7 +125,7 @@ document.addEventListener('click',async(e)=>{
 function renderSources(){
   $('#view').innerHTML='<div class="row" style="grid-template-columns:1fr auto"><div><p class="title">Add a scannable URL</p>'
     +'<div class="fields"><input id="newurl" class="wide" placeholder="https://seller.example/category-or-collection-url"/>'
-    +data.categories.map((c)=>'<label style="font-size:.8rem"><input type="checkbox" value="'+c.id+'" '+(c.id==='wings'?'checked':'')+'/> '+esc(c.name)+'</label>').join('')
+    +data.categories.map((c,i)=>'<label style="font-size:.8rem"><input type="checkbox" value="'+c.id+'" '+(i===0?'checked':'')+'/> '+esc(c.name)+'</label>').join('')
     +'</div><p class="meta">The system probes the platform and dry-runs a scan before saving — a broken URL is rejected here, not discovered weeks later.</p></div>'
     +'<div class="acts"><button id="addurl" class="go">Probe & add</button></div></div>'
     +'<table class="t"><thead><tr><th>Seller</th><th>URL</th><th>Status</th><th>Last scan</th><th></th></tr></thead><tbody>'

@@ -57,7 +57,7 @@ export async function runSlice(env, trigger = 'cron') {
 async function scanSlice(env, cur, trigger) {
   const sus = await all(
     env,
-    `SELECT su.*, s.platform, s.home_url, s.notes FROM source_url su
+    `SELECT su.*, s.platform, s.home_url, s.unscoped_ok FROM source_url su
      JOIN source s ON s.id = su.source_id
      WHERE su.status='active' ORDER BY su.id`,
   )

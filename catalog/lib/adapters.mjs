@@ -2,7 +2,8 @@
 // Each returns products as:
 //   { pid, url, title, priceINR, inStock, img, variants:[{vkey,label,priceINR,inStock}] }
 // pid = the platform's own product id — PRIMARY identity (URLs get reused).
-// Learned quirks live in source.notes in the DB; structural ones are comments.
+// Learned quirks live in source table FLAGS (e.g. unscoped_ok); prose notes
+// are for humans only and never drive behavior.
 
 import { canonicalUrl } from './util.mjs'
 
@@ -52,8 +53,8 @@ export async function wooPage(source, listUrl, cursor) {
     const rows = Array.isArray(all) ? all : []
     const root = rows.find((c) => c.slug === slugOf(listUrl))
     if (!root) {
-      // No whole-shop fallback unless the source explicitly opts in (drkstore).
-      if (!/unscoped/i.test(source.notes ?? '')) return { error: `no category matches slug "${slugOf(listUrl)}"` }
+      // No whole-shop fallback unless the source row opts in via unscoped_ok.
+      if (!source.unscoped_ok) return { error: `no category matches slug "${slugOf(listUrl)}"` }
       cats = [null] // unscoped: one pass over the whole shop
     } else {
       const kids = (id) => rows.filter((c) => c.parent === id).map((c) => c.id)

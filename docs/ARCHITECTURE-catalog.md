@@ -378,10 +378,30 @@ rate-limiting rule on the admin path, and stated rotation. **Open question O2.**
 | Platform adapters, canonicalizer (versioned) | SKUs, variants, specs, observations |
 | Renderers, admin UI | masters, offers, mappings |
 | Category seed *templates* (first-run only) | approvals, reject reasons, flags |
-| Recipes/components — **phase 2 → D1** (`recipe` table keyed by category + spec band); acknowledged as product data, sequenced after core | settings, audit, price history |
+| Site identity (domain, GA id, CSS) | recipes + components (`recipe`/`component`, since 0002) |
+| | brand lists (`category.triage.brands`), settings, audit, price history |
 
-Removed by migration: `wings/data/kits.json`, `wings/data/sources.json`
-(their *knowledge* — seller quirks — moves into `source.notes`).
+Removed by migration: `wings/data/kits.json`, `wings/data/sources.json`,
+`catalog/data/recipes.json` (hardening pass, 2026-07-20).
+
+**Content boundary (hardened 2026-07-20, pre-production).** Code carries only
+logic + site identity. Everything the market decides lives in D1:
+- brand knowledge → `category.triage.brands`; house-brand shops are *derived*
+  (brand slug == source id), never listed in code
+- offer configs (kit/pnp/rtf/combo) → `category.configs`; admin renders its
+  `<select>` from the API
+- per-source behavior flags → columns (`source.unscoped_ok`), never regexes
+  over prose notes
+- category ids never hardcoded: review takes `?cat=`, approve derives the
+  category from the sku's `source_url_category` mapping, source-add requires
+  explicit categories
+- recipes/components → D1 tables; imported via `catalog/scripts/import-recipes.mjs`
+  into gitignored `seed-data/*.sql`, applied per-environment with
+  `npx wrangler d1 execute CATALOG_DB [--local|--remote] --file=...`
+
+Sanctioned exceptions, on the record: the 0001 wings category seed (bootstrap
+config until a category-creation admin exists) and site identity constants in
+`public.mjs` (SITE url, GA id).
 
 ## Migration (one-time, offline-first)
 
