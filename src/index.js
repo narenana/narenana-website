@@ -125,9 +125,13 @@ function harden(response, url, isLocal) {
   })
 }
 
-// Server-rendered <noscript> fallback for the client-hydrated YouTube grid,
-// built from the same KV feed. Crawlers and AI answer engines that don't run
-// the page script still get the latest video titles + links as crawlable text.
+// Server-render the "Latest FPV & RC flying" cards into #vid-grid from the
+// same KV feed the /videos.json endpoint serves. Crawlers (and Bing, which is
+// unreliable about executing JS) get the six titles + links as real HTML, the
+// grid paints without waiting for the client fetch, and freshness is visible
+// at crawl time. The client script skips its own fetch when it finds these
+// cards already present (falling back to hydration only if KV was empty).
+// Markup mirrors the client renderer in site/index.html — keep in sync.
 async function renderHome(request, env) {
   const response = await env.ASSETS.fetch(request)
   if (!(response.headers.get('content-type') || '').includes('text/html')) {
@@ -143,15 +147,22 @@ async function renderHome(request, env) {
   }
   if (videos.length === 0) return response
 
-  const items = videos
-    .map((v) => `<li><a href="${esc(v.url)}">${esc(v.title)}</a></li>`)
-    .join('')
-  const noscript = `<noscript><ul>${items}</ul></noscript>`
+  const card = (v) => {
+    const href = v.url || `https://www.youtube.com/watch?v=${v.id}`
+    const thumb = v.thumbnail || `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
+    return (
+      `<a class="vid" href="${esc(href)}" target="_blank" rel="noopener">` +
+      `<div class="vid-thumb"><img src="${esc(thumb)}" alt="${esc(v.title)}" loading="lazy" />` +
+      `<div class="vid-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-left:2px"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></div></div>` +
+      `<div class="vid-body"><div class="vid-title">${esc(v.title)}</div>` +
+      `<div class="vid-meta"><svg width="15" height="15" viewBox="0 0 24 24" fill="#C63B2E" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#FCF9F1"/></svg>YOUTUBE</div></div></a>`
+    )
+  }
 
   return new HTMLRewriter()
-    .on('#videos', {
+    .on('#vid-grid', {
       element(el) {
-        el.after(noscript, { html: true })
+        el.setInnerContent(videos.map(card).join(''), { html: true })
       },
     })
     .transform(response)

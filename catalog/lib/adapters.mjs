@@ -163,9 +163,16 @@ export async function htmlPage(source, listUrl, cursor) {
   for (const m of html.matchAll(/href=["']([^"']+)["']/gi)) {
     try {
       const u = new URL(m[1], url)
-      // sub-categories only — /page/N is pagination's job (the next-link chain),
-      // pushing both visits every page twice
-      if (u.origin === origin && u.pathname.startsWith(rootPath + '/') && !/\/(product|products|page)\//.test(u.pathname)) push(u.toString())
+      // Sub-categories are PATHS: drop query variants (?orderby, ?min_price,
+      // ?add-to-cart…) or one listing multiplies into a junk queue that eats
+      // the whole scan budget. /page/N is pagination's job (next-link chain);
+      // /feed etc. are excluded by the TAIL under root (rootPath itself may
+      // legitimately contain words like "product-category").
+      u.search = ''
+      u.hash = ''
+      const tail = u.pathname.replace(/\/$/, '').slice(rootPath.length)
+      if (u.origin === origin && tail.length > 1 && u.pathname.startsWith(rootPath + '/') && !/\/(product|products|page|feed|tag|category)(\/|$)/.test(tail))
+        push(u.toString())
     } catch {}
   }
   const products = productLinks(html, source, url).map((u) => ({

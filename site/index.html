@@ -391,8 +391,8 @@
         <div class="tool-row">
           <div data-reveal>
             <span class="tagpill orange">FPV Simulator</span>
-            <h3>Nanawing — fly a wing in your browser</h3>
-            <p class="body">A free fixed-wing FPV simulator with no download and no signup. Hand-launch over realistic farmland with your keyboard, a gamepad, or your real RC radio — with an iNAV-style OSD, a simulated LiPo, and a race course to chase.</p>
+            <h3><a class="h3-link" href="https://sim.narenana.com" target="_blank" rel="noopener">Nanawing — fly a wing in your browser</a></h3>
+            <p class="body">A free browser FPV flying-wing simulator — no download, no signup. Hand-launch over realistic farmland with your keyboard, a gamepad, or your real RC radio, with an iNAV-style OSD, a simulated LiPo, and a race course to chase.</p>
             <div class="chips">
               <span class="chip">Keyboard · Gamepad · RC radio</span>
               <span class="chip">iNAV-style OSD</span>
@@ -443,7 +443,7 @@
           </div>
           <div data-reveal>
             <span class="tagpill sky">3D Log Viewer</span>
-            <h3>Replay your flights in 3D</h3>
+            <h3><a class="h3-link" href="/log-viewer/">RC Log Viewer — replay your flights in 3D</a></h3>
             <p class="body">Drop an EdgeTX CSV or an iNAV / Betaflight blackbox log and replay the whole flight on a 3D globe, with a live telemetry bar and charts that scrub in sync. It all runs locally — nothing is uploaded.</p>
             <div class="chips">
               <span class="chip">EdgeTX CSV</span>
@@ -637,7 +637,7 @@
           var href = v.url || ('https://www.youtube.com/watch?v=' + v.id)
           var thumb = v.thumbnail || ('https://img.youtube.com/vi/' + v.id + '/hqdefault.jpg')
           return '<a class="vid" href="' + esc(href) + '" target="_blank" rel="noopener" data-reveal data-reveal-delay="' + (i * 70) + '">' +
-            '<div class="vid-thumb"><img src="' + esc(thumb) + '" alt="" loading="lazy" />' +
+            '<div class="vid-thumb"><img src="' + esc(thumb) + '" alt="' + esc(v.title) + '" loading="lazy" />' +
             '<div class="vid-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-left:2px"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></div></div>' +
             '<div class="vid-body"><div class="vid-title">' + esc(v.title) + '</div>' +
             '<div class="vid-meta"><svg width="15" height="15" viewBox="0 0 24 24" fill="#C63B2E" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#FCF9F1"/></svg>YOUTUBE</div></div></a>'
@@ -666,13 +666,21 @@
             })
           }
         }
-        fetch('/videos.json')
-          .then(function (r) { if (!r.ok) throw new Error('feed ' + r.status); return r.json() })
-          .then(function (d) {
-            var vids = (d && d.videos && d.videos.length) ? d.videos : FALLBACK
-            renderVideos(vids)
-          })
-          .catch(function () { renderVideos(FALLBACK) })
+        // The Worker edge-renders the cards into #vid-grid from KV (see
+        // src/index.js renderHome). Only hydrate client-side if that didn't
+        // happen (KV empty, or the page was served statically).
+        var grid0 = document.getElementById('vid-grid')
+        if (!grid0 || grid0.querySelector('.vid')) {
+          // Server-rendered — nothing to do.
+        } else {
+          fetch('/videos.json')
+            .then(function (r) { if (!r.ok) throw new Error('feed ' + r.status); return r.json() })
+            .then(function (d) {
+              var vids = (d && d.videos && d.videos.length) ? d.videos : FALLBACK
+              renderVideos(vids)
+            })
+            .catch(function () { renderVideos(FALLBACK) })
+        }
       })()
     </script>
   </body>

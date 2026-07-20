@@ -40,11 +40,12 @@ ${body}
 function masterCard(m, prefix) {
   const price = m.min_price
   const oos = !m.any_stock
+  const hero = m.hero_any ?? m.hero_image // hero_any = offer-sku fallback (grid query)
   return `
     <li class="prod" data-price="${price ?? 999999}" data-stock="${oos ? 0 : 1}">
       <a class="prod-link" href="${prefix}/${esc(m.slug)}/">
         <div class="prod-img">
-          ${m.hero_image ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
+          ${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
           ${oos ? '<span class="prod-veil">Out of stock</span>' : ''}
         </div>
         <div class="prod-body">

@@ -213,9 +213,10 @@ async function verifySlice(env, trigger) {
     } else {
       const changed = sku.price_inr !== res.priceINR || !!sku.in_stock !== !!res.inStock
       stmts.push(q(env,
-        `UPDATE sku SET price_inr=?, in_stock=?, quote_only=?, variants=CASE WHEN ? != '[]' THEN ? ELSE variants END,
+        `UPDATE sku SET price_inr=?, in_stock=?, quote_only=?, image_url=COALESCE(image_url, ?),
+           variants=CASE WHEN ? != '[]' THEN ? ELSE variants END,
            misses=0, dead=0, last_checked=? WHERE id=?`,
-        res.priceINR, res.inStock == null ? null : res.inStock ? 1 : 0, res.quoteOnly ? 1 : 0,
+        res.priceINR, res.inStock == null ? null : res.inStock ? 1 : 0, res.quoteOnly ? 1 : 0, res.img ?? null,
         JSON.stringify(res.variants ?? []), JSON.stringify(res.variants ?? []), t, sku.id))
       if (changed) stmts.push(q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`,
         sku.id, t, null, res.priceINR, res.inStock == null ? null : res.inStock ? 1 : 0))

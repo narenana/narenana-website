@@ -55,6 +55,7 @@ export async function handleCatalog(request, url, env, ctx) {
     const masters = await all(
       env,
       `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
+              COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
               MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
               MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
        FROM master_model m
@@ -105,7 +106,12 @@ async function imgProxy(env, path) {
   if (!m) return new Response('bad path', { status: 400 })
   const src =
     m[1] === 'master'
-      ? (await one(env, 'SELECT hero_image AS u FROM master_model WHERE id=?', m[2]))?.u
+      // Self-heal: a master approved from a data-poor sku gains an image the
+      // moment ANY of its offers' skus gets one (scan/verify backfill).
+      ? (await one(env, `SELECT COALESCE(mm.hero_image,
+            (SELECT k.image_url FROM offer o JOIN sku k ON k.id=o.sku_id
+             WHERE o.master_model_id=mm.id AND k.image_url IS NOT NULL ORDER BY k.dead ASC LIMIT 1)) AS u
+          FROM master_model mm WHERE mm.id=?`, m[2]))?.u
       : (await one(env, 'SELECT image_url AS u FROM sku WHERE id=?', m[2]))?.u
   if (!src) return new Response('no image', { status: 404 })
   const hosts = (await all(env, 'SELECT home_url FROM source')).map((s) => hostOf(s.home_url))
