@@ -305,10 +305,22 @@ export function cartSignals(html = '') {
   return { inStock: true, priceINR: v && v > 0 ? v : null }
 }
 
-// Direct product-page check. { gone } | { priceINR, inStock, quoteOnly, variants?, img?, title? }
+// A bot-challenge / interstitial page (Cloudflare "Just a moment…", etc.) is
+// NOT the product page. Verify must treat it as "couldn't check", never as a
+// real listing — otherwise a seller enabling bot protection silently wipes
+// every price we hold for them.
+export function isChallenge(html = '') {
+  return /Just a moment\.\.\.|Checking your browser|Enable JavaScript and cookies|challenges\.cloudflare\.com|cf-browser-verification|Attention Required|Access denied|error code:\s*1020/i.test(html)
+}
+
+// Direct product-page check.
+//   { gone }    — page is 404/unreachable
+//   { blocked } — a bot wall stood in for the page; caller must preserve data
+//   { priceINR, inStock, quoteOnly, variants?, img?, title? } — real listing
 export async function checkPage(url, source) {
   const html = await getHtml(url)
   if (html === null) return { gone: true }
+  if (isChallenge(html)) return { blocked: true }
   const t = html.match(/<title[^>]*>([^<]+)<\/title>/i)
   const title = t ? t[1].replace(/\s*[|–—-]\s*[^|–—-]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 140) : null
   const img = ogImageFrom(html, url)

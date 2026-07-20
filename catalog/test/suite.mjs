@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSpanMM, detectConfig, cartSignals } from '../lib/adapters.mjs'
+import { extractSpanMM, detectConfig, cartSignals, isChallenge } from '../lib/adapters.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -41,6 +41,13 @@ test('detectConfig: rtf > pnp > combo > kit', () => {
   assert.equal(detectConfig('Wing combo with motor and ESC'), 'combo')
   assert.equal(detectConfig('Balsa kit — laser cut'), 'kit')
   assert.equal(detectConfig('Plug and play version'), 'pnp')
+})
+
+test('isChallenge: bot walls are recognised, real pages are not', () => {
+  assert.equal(isChallenge('<title>Just a moment...</title>'), true)
+  assert.equal(isChallenge('<h1>Checking your browser before accessing</h1>'), true)
+  assert.equal(isChallenge('<script src="https://challenges.cloudflare.com/turnstile"></script>'), true)
+  assert.equal(isChallenge('<h1>ATOMRC Penguin</h1><span class="price">₹8,999</span>'), false)
 })
 
 test('cartSignals: element-level add-to-cart detection (Zoho)', () => {

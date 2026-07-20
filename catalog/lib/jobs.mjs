@@ -15,7 +15,7 @@
 //   * URL hit with mismatched pid ⇒ old row dead+flagged, new row inserted
 //   * a scan never rewrites identity fields of a reviewed row
 
-import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals } from './adapters.mjs'
+import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { now } from './util.mjs'
 
@@ -232,7 +232,9 @@ async function buildGuess(env, k) {
   const title = k.title ?? ''
   const triage = (() => { try { return JSON.parse(k.triage ?? '{}') } catch { return {} } })()
   const brands = triage.brands ?? []
-  const html = (await getHtml(k.url_canonical, { tries: 1 })) ?? ''
+  const raw = (await getHtml(k.url_canonical, { tries: 1 })) ?? ''
+  // A bot wall carries no product data — don't let it null out price/stock.
+  const html = isChallenge(raw) ? '' : raw
   // visible-ish text only: strip tags/scripts so regexes see prose, not markup
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 20000)
 
@@ -313,6 +315,14 @@ async function verifySlice(env, trigger) {
   const stmts = []
   for (const sku of rows) {
     const res = await checkPage(sku.url_canonical, sku)
+    if (res.blocked) {
+      // Seller put up a bot wall — we could NOT read the listing. Preserve the
+      // last-known price/stock; only advance last_checked so verify rotates on
+      // to other SKUs instead of spinning on this blocked seller forever.
+      stmts.push(q(env, `UPDATE sku SET last_checked=? WHERE id=?`, t, sku.id))
+      log.push(`${sku.id} ${sku.title?.slice(0, 30)}: blocked (data preserved)`)
+      continue
+    }
     if (res.gone) {
       stmts.push(q(env, `UPDATE sku SET misses=misses+1, last_checked=?, dead=CASE WHEN misses+1>=3 THEN 1 ELSE dead END WHERE id=?`, t, sku.id))
       log.push(`${sku.id} ${sku.title?.slice(0, 30)}: page gone (miss ${sku.misses + 1})`)
