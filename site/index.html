@@ -320,22 +320,16 @@
       <!-- Aircraft cutouts: stylised SVG stand-ins matching the banner motifs
            (swap for transparent-PNG photo cutouts when available). -->
       <div class="hero-quad" data-px data-speed="0.42" data-speed-x="-0.05" aria-hidden="true">
-        <svg viewBox="0 0 260 192" width="100%" height="100%" style="filter:drop-shadow(0 14px 22px rgba(15,44,57,.28))">
-          <g stroke="#9c3126" stroke-width="8" stroke-linecap="round"><path d="M70 82 L190 124"/><path d="M190 82 L70 124"/></g>
-          <g fill="#22333d"><ellipse cx="70" cy="72" rx="32" ry="6"/><ellipse cx="190" cy="72" rx="32" ry="6"/><ellipse cx="70" cy="118" rx="32" ry="6"/><ellipse cx="190" cy="118" rx="32" ry="6"/></g>
-          <g fill="#C63B2E"><circle cx="70" cy="80" r="11"/><circle cx="190" cy="80" r="11"/><circle cx="70" cy="124" r="11"/><circle cx="190" cy="124" r="11"/></g>
-          <path d="M98 90 L162 90 Q172 90 170 102 L164 116 Q160 124 150 124 L110 124 Q100 124 96 116 L90 102 Q88 90 98 90 Z" fill="#C63B2E"/>
-          <path d="M98 90 L162 90 Q172 90 170 100 L90 100 Q88 90 98 90 Z" fill="#DE4E3F"/>
-          <rect x="118" y="98" width="24" height="12" rx="4" fill="#12303D"/>
-        </svg>
+        <picture>
+          <source srcset="/assets/hero-quad.webp" type="image/webp" />
+          <img src="/assets/hero-quad.png" alt="" width="520" height="327" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 16px 24px rgba(15,44,57,.28))" />
+        </picture>
       </div>
       <div class="hero-wing" data-px data-speed="0.62" data-speed-x="0.04" aria-hidden="true">
-        <svg viewBox="0 0 420 175" width="100%" height="100%" style="filter:drop-shadow(0 18px 26px rgba(15,44,57,.3))">
-          <path d="M210 34 L18 138 Q14 144 22 144 L166 122 Q210 150 254 122 L398 144 Q406 144 402 138 Z" fill="#F5F1E4"/>
-          <path d="M210 34 L18 138 Q14 144 22 144 L166 122 Q188 136 210 138 Z" fill="#E4DCC6"/>
-          <path d="M195 120 Q210 132 225 120 L219 144 Q210 150 201 144 Z" fill="#C63B2E"/>
-          <path d="M210 34 L246 118 L210 138 L174 118 Z" fill="#EFE9D6"/>
-        </svg>
+        <picture>
+          <source srcset="/assets/hero-wing.webp" type="image/webp" />
+          <img src="/assets/hero-wing.png" alt="" width="840" height="415" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 20px 30px rgba(15,44,57,.3))" />
+        </picture>
       </div>
       <div class="hero-fade" data-px data-speed="0.04"></div>
       <div class="wrap hero-copy">
