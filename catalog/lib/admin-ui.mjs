@@ -37,7 +37,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v4</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v5</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
@@ -138,7 +138,7 @@ function renderSources(){
     const url=$('#newurl').value.trim();if(!url)return;
     const cats=[...document.querySelectorAll('#view input[type=checkbox]:checked')].map((i)=>i.value);
     $('#addurl').disabled=true;$('#addurl').textContent='probing…';
-    try{const d=await api('sources',{url,categories:cats});alert('Added: '+d.platform+', dry run found '+d.found+' products');load()}
+    try{const d=await api('sources',{url,categories:cats});alert('Added ('+d.platform+'): '+d.found+' products found, '+(d.seeded||0)+' queued now'+(d.subtree>1?', subtree of '+d.subtree+' pages/categories will be scanned':''));load()}
     catch(e){alert(e.message)}finally{$('#addurl').disabled=false;$('#addurl').textContent='Probe & add'}
   };
   document.querySelectorAll('button[data-su]').forEach((b)=>b.onclick=async()=>{await api('source-url',{id:+b.dataset.su,status:b.dataset.st});load()});

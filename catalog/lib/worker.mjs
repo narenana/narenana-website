@@ -4,7 +4,7 @@
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster } from './public.mjs'
-import { runSlice } from './jobs.mjs'
+import { runSlice, upsertProducts } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge } from './util.mjs'
@@ -282,20 +282,26 @@ async function api(request, url, env, ep, actor) {
     const t = now()
     const src = { id: sourceId, platform, home_url: home }
     // dry-run BEFORE saving — a broken root is rejected at add-time
-    const dry = await feedPage(src, canon, 1)
+    const dry = await feedPage(src, canon, null)
     if (dry.error) return json({ error: `dry-run failed: ${dry.error}` }, 400)
     if (!dry.products?.length) return json({ error: 'dry-run found 0 products — wrong URL?' }, 400)
     const stmts = [
       q(env, `INSERT INTO source (id, name, home_url, platform, created_at, updated_at) VALUES (?,?,?,?,?,?)
               ON CONFLICT(id) DO UPDATE SET platform=excluded.platform, updated_at=excluded.updated_at`, sourceId, host, home, platform, t, t),
       q(env, `INSERT OR IGNORE INTO source_url (source_id, url_canonical, url_raw, status, added_by, created_at) VALUES (?,?,?,?,?,?)`, sourceId, canon, raw, 'active', actor, t),
-      audit(env, actor, 'add-source-url', 'source_url', canon, { platform, found: dry.products.length }),
+      audit(env, actor, 'add-source-url', 'source_url', canon, { platform, found: dry.products.length, subtree: dry.subtree ?? 1 }),
     ]
     await batch(env, stmts)
-    const su = await one(env, 'SELECT id FROM source_url WHERE url_canonical=?', canon)
+    const su = await one(env, 'SELECT * FROM source_url WHERE url_canonical=?', canon)
     for (const c of body.categories ?? ['wings'])
       await run(env, 'INSERT OR IGNORE INTO source_url_category (source_url_id, category_id) VALUES (?,?)', su.id, c)
-    return json({ ok: true, platform, found: dry.products.length })
+    // Seed the dry-run's first page straight into the review queue — adding a
+    // source is scanning it. The REST of the subtree (more pages, child
+    // categories) arrives via the job slices; last_scan_at stays NULL so the
+    // next slice restarts the sweep and walks it all.
+    const spent = { fetches: 0, statements: 0, products: 0 }
+    const seeded = await upsertProducts(env, su, dry.products, spent)
+    return json({ ok: true, platform, found: dry.products.length, seeded: seeded.inserted, subtree: dry.subtree ?? 1 })
   }
 
   if (ep === 'source-url' && request.method === 'POST') {

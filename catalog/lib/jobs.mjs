@@ -39,7 +39,7 @@ export async function runSlice(env, trigger = 'cron') {
       // new day → fresh sweep
       const paused = (await getSetting(env, 'scan_paused')) === '1'
       if (!paused) {
-        const next = { day: dayStart, suIdx: 0, page: 1, done: false }
+        const next = { day: dayStart, suIdx: 0, sub: null, done: false }
         await setSetting(env, 'scan_cursor', JSON.stringify(next))
         return await scanSlice(env, next, trigger)
       }
@@ -66,25 +66,23 @@ async function scanSlice(env, cur, trigger) {
 
   while (cur.suIdx < sus.length && spent.fetches < BUDGET.fetches && spent.statements < BUDGET.statements) {
     const su = sus[cur.suIdx]
-    const res = await feedPage({ ...su, home_url: su.home_url }, su.url_canonical, cur.page)
+    const res = await feedPage(su, su.url_canonical, cur.sub)
     spent.fetches += res.fetches ?? 2
     if (res.error) {
       await run(env, 'UPDATE source_url SET last_scan_at=?, last_scan_note=? WHERE id=?', now(), JSON.stringify({ error: res.error }), su.id)
       spent.statements++
       log.push(`${su.source_id}: ✗ ${res.error}`)
       cur.suIdx++
-      cur.page = 1
+      cur.sub = null
       continue
     }
     const stats = await upsertProducts(env, su, res.products ?? [], spent)
-    log.push(`${su.source_id} p${cur.page}: ${res.products?.length ?? 0} seen, ${stats.inserted} new, ${stats.changed} changed`)
-    if (res.done) {
-      await run(env, 'UPDATE source_url SET last_scan_at=?, last_scan_note=? WHERE id=?', now(), JSON.stringify({ ok: true, page: cur.page }), su.id)
+    log.push(`${su.source_id}: ${res.products?.length ?? 0} seen, ${stats.inserted} new, ${stats.changed} changed${res.subtree > 1 ? ` (subtree ${res.subtree})` : ''}`)
+    cur.sub = res.nextCursor
+    if (!cur.sub) {
+      await run(env, 'UPDATE source_url SET last_scan_at=?, last_scan_note=? WHERE id=?', now(), JSON.stringify({ ok: true, subtree: res.subtree ?? 1 }), su.id)
       spent.statements++
       cur.suIdx++
-      cur.page = 1
-    } else {
-      cur.page++
     }
     if (spent.products >= BUDGET.products) break
   }
@@ -94,7 +92,7 @@ async function scanSlice(env, cur, trigger) {
   return { job: 'scan', trigger, progress: `${cur.suIdx}/${sus.length} urls`, done: cur.done, log, spent }
 }
 
-async function upsertProducts(env, su, products, spent) {
+export async function upsertProducts(env, su, products, spent) {
   const t = now()
   const stats = { inserted: 0, changed: 0 }
   const take = products.slice(0, BUDGET.products - spent.products)

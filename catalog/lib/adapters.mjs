@@ -37,17 +37,35 @@ const slugOf = (listUrl) => new URL(listUrl).pathname.split('/').filter(Boolean)
 
 // --- WooCommerce Store API ------------------------------------------------
 // One feed page per call — the caller owns pagination (Free-plan budgets).
-export async function wooPage(source, listUrl, page) {
+// Cursor-based: each call does ONE feed-page fetch and returns nextCursor
+// (JSON-safe) or null when the URL's whole SUBTREE is exhausted. A root
+// category expands into its descendant categories automatically — the owner
+// adds one root URL and the scan walks the tree.
+export async function wooPage(source, listUrl, cursor) {
   const origin = new URL(source.home_url).origin
-  const slug = slugOf(listUrl)
-  const cats = await getJson(`${origin}/wp-json/wc/store/v1/products/categories?per_page=100`)
-  const id = Array.isArray(cats) ? (cats.find((c) => c.slug === slug)?.id ?? null) : null
-  // No whole-shop fallback unless the source explicitly opts in (drkstore).
-  if (!id && !/unscoped/i.test(source.notes ?? '')) return { error: `no category matches slug "${slug}"` }
-  const cat = id ? `category=${id}&` : ''
+  let { cats, catIdx = 0, page = 1 } = cursor ?? {}
+  let fetches = 1
+  if (!cats) {
+    // First call for this URL: resolve the root category and its descendants.
+    const all = await getJson(`${origin}/wp-json/wc/store/v1/products/categories?per_page=100`)
+    fetches++
+    const rows = Array.isArray(all) ? all : []
+    const root = rows.find((c) => c.slug === slugOf(listUrl))
+    if (!root) {
+      // No whole-shop fallback unless the source explicitly opts in (drkstore).
+      if (!/unscoped/i.test(source.notes ?? '')) return { error: `no category matches slug "${slugOf(listUrl)}"` }
+      cats = [null] // unscoped: one pass over the whole shop
+    } else {
+      const kids = (id) => rows.filter((c) => c.parent === id).map((c) => c.id)
+      const tree = [root.id]
+      for (let i = 0; i < tree.length && tree.length < 25; i++) tree.push(...kids(tree[i]))
+      cats = tree
+    }
+  }
+  const cat = cats[catIdx] != null ? `category=${cats[catIdx]}&` : ''
   const rows = await getJson(`${origin}/wp-json/wc/store/v1/products?${cat}per_page=100&page=${page}`)
-  if (!Array.isArray(rows)) return { products: [], done: true }
-  const products = rows.map((p) => {
+  const list = Array.isArray(rows) ? rows : []
+  const products = list.map((p) => {
     const div = 10 ** (p.prices?.currency_minor_unit ?? 2)
     return {
       pid: String(p.id),
@@ -59,14 +77,22 @@ export async function wooPage(source, listUrl, page) {
       variants: [],
     }
   })
-  return { products, done: rows.length < 100, fetches: 2 }
+  const pageDone = list.length < 100
+  const next = pageDone
+    ? catIdx + 1 < cats.length
+      ? { cats, catIdx: catIdx + 1, page: 1 }
+      : null
+    : { cats, catIdx, page: page + 1 }
+  return { products, nextCursor: next, fetches, subtree: cats.length }
 }
 
 // --- Shopify --------------------------------------------------------------
-export async function shopifyPage(source, listUrl, page) {
+// Collections don't nest in Shopify — pagination covers the whole collection.
+export async function shopifyPage(source, listUrl, cursor) {
+  const page = cursor?.page ?? 1
   const d = await getJson(`${listUrl.replace(/\/$/, '')}/products.json?limit=250&page=${page}`)
   const rows = d?.products
-  if (!Array.isArray(rows)) return { products: [], done: true }
+  if (!Array.isArray(rows)) return { products: [], nextCursor: null, fetches: 1 }
   const origin = new URL(source.home_url).origin
   const products = rows.map((p) => ({
     pid: String(p.id),
@@ -82,7 +108,7 @@ export async function shopifyPage(source, listUrl, page) {
       inStock: !!v.available,
     })),
   }))
-  return { products, done: rows.length < 250, fetches: 1 }
+  return { products, nextCursor: rows.length < 250 ? null : { page: page + 1 }, fetches: 1 }
 }
 
 // --- HTML (Zoho etc): listing page → product links; details need enrich ---
@@ -110,17 +136,37 @@ const titleFromUrl = (u) => {
   return name ? decodeURIComponent(name).replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim() : ''
 }
 
-export async function htmlPage(source, listUrl, page) {
-  // page N = follow "next" N times; cheap pages, but each is a subrequest.
-  let url = listUrl
-  for (let i = 1; i < page; i++) {
-    const html = await getHtml(url)
-    const m = html?.match(/rel=["']next["'][^>]+href=["']([^"']+)["']/i) || html?.match(/<a[^>]+class="[^"]*next[^"]*"[^>]+href="([^"]+)"/i)
-    if (!m) return { products: [], done: true }
-    url = new URL(m[1], url).toString()
-  }
+// Cursor = { queue:[listing URLs to visit], idx } — starts at the root and
+// grows with pagination "next" links AND sub-category links found under the
+// root path, so one root URL covers its whole subtree (bounded at 20 pages).
+export async function htmlPage(source, listUrl, cursor) {
+  const cur = cursor?.queue ? cursor : { queue: [listUrl], idx: 0 }
+  const url = cur.queue[cur.idx]
+  if (!url) return { products: [], nextCursor: null, fetches: 0 }
   const html = await getHtml(url)
-  if (!html) return { products: [], done: true }
+  if (!html) {
+    const nextIdx = cur.idx + 1
+    return { products: [], nextCursor: nextIdx < cur.queue.length ? { ...cur, idx: nextIdx } : null, fetches: 1 }
+  }
+  const rootPath = new URL(listUrl).pathname.replace(/\/$/, '')
+  const origin = new URL(source.home_url).origin
+  const push = (u) => {
+    const c = canonicalUrl(u)
+    if (c && !cur.queue.includes(c) && cur.queue.length < 20) cur.queue.push(c)
+  }
+  // pagination
+  const nx = html.match(/rel=["']next["'][^>]+href=["']([^"']+)["']/i) || html.match(/<a[^>]+class="[^"]*next[^"]*"[^>]+href="([^"]+)"/i)
+  if (nx) try { push(new URL(nx[1], url).toString()) } catch {}
+  // sub-category links strictly UNDER the root path (never siblings — that
+  // discipline is what keeps a category root from becoming a whole-shop crawl)
+  for (const m of html.matchAll(/href=["']([^"']+)["']/gi)) {
+    try {
+      const u = new URL(m[1], url)
+      // sub-categories only — /page/N is pagination's job (the next-link chain),
+      // pushing both visits every page twice
+      if (u.origin === origin && u.pathname.startsWith(rootPath + '/') && !/\/(product|products|page)\//.test(u.pathname)) push(u.toString())
+    } catch {}
+  }
   const products = productLinks(html, source, url).map((u) => ({
     pid: null, // HTML sources have no feed id — Zoho URLs do embed one:
     url: u,
@@ -135,14 +181,22 @@ export async function htmlPage(source, listUrl, page) {
     const m = p.url.match(/\/(\d{12,})$/)
     if (m) p.pid = m[1]
   }
-  const hasNext = /rel=["']next["']/.test(html) || /class="[^"]*next[^"]*"/.test(html)
-  return { products, done: !hasNext, fetches: page }
+  const nextIdx = cur.idx + 1
+  return {
+    products,
+    nextCursor: nextIdx < cur.queue.length ? { queue: cur.queue, idx: nextIdx } : null,
+    fetches: 1,
+    subtree: cur.queue.length,
+  }
 }
 
-export function feedPage(source, listUrl, page) {
-  if (source.platform === 'woocommerce') return wooPage(source, listUrl, page)
-  if (source.platform === 'shopify') return shopifyPage(source, listUrl, page)
-  return htmlPage(source, listUrl, page)
+// feedPage(source, listUrl, cursor) → { products, nextCursor|null, fetches,
+// subtree?, error? }. nextCursor===null means the URL's whole subtree
+// (pagination + child categories) is exhausted for this sweep.
+export function feedPage(source, listUrl, cursor) {
+  if (source.platform === 'woocommerce') return wooPage(source, listUrl, cursor)
+  if (source.platform === 'shopify') return shopifyPage(source, listUrl, cursor)
+  return htmlPage(source, listUrl, cursor)
 }
 
 // --- single-page enrichment / verification --------------------------------
