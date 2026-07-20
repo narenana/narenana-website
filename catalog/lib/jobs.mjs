@@ -15,7 +15,7 @@
 //   * URL hit with mismatched pid ⇒ old row dead+flagged, new row inserted
 //   * a scan never rewrites identity fields of a reviewed row
 
-import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd } from './adapters.mjs'
+import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, extractWeightG, detectConfig, parseJsonLd } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { now } from './util.mjs'
 
@@ -51,6 +51,10 @@ export async function runSlice(env, trigger = 'cron') {
     if ((await getSetting(env, 'enrich_paused')) !== '1') {
       const e = await enrichSlice(env, trigger)
       if (e) return e
+    }
+    if ((await getSetting(env, 'mfr_paused')) !== '1') {
+      const mf = await mfrSlice(env, trigger)
+      if (mf) return mf
     }
     if ((await getSetting(env, 'verify_paused')) !== '1') return await verifySlice(env, trigger)
     return { idle: true }
@@ -296,6 +300,105 @@ async function aiGuess(env, title, snippet) {
   } catch {
     return null
   }
+}
+
+// ---------------------------------------------------------------- mfr slice
+// Manufacturer enrichment: for masters whose mfr_url the owner has set, poll
+// the MANUFACTURER's product page (weekly per master) for official data —
+// wingspan, flying weight, length, battery, description. Owner-entered spec
+// values always win; manufacturer data only fills gaps, and the full extract
+// renders as a "Manufacturer specs" section on the public page.
+const MFR_RECHECK = 7 * DAY
+
+async function mfrSlice(env, trigger) {
+  const t = now()
+  const rows = await all(
+    env,
+    `SELECT id, slug, specs, mfr_url FROM master_model
+     WHERE mfr_url IS NOT NULL AND status != 'retired'
+       AND (mfr_checked_at IS NULL OR mfr_checked_at < ?)
+     ORDER BY COALESCE(mfr_checked_at, 0) ASC LIMIT 2`,
+    t - MFR_RECHECK,
+  )
+  if (!rows.length) return null
+  const stmts = []
+  const log = []
+  for (const m of rows) {
+    const got = await pollManufacturer(env, m)
+    if (!got) {
+      stmts.push(q(env, `UPDATE master_model SET mfr_checked_at=? WHERE id=?`, t, m.id))
+      log.push(`${m.slug}: unreachable`)
+      continue
+    }
+    let specs = {}
+    try {
+      specs = JSON.parse(m.specs || '{}')
+    } catch {}
+    let filled = 0
+    for (const [k, v] of Object.entries(got.specs)) {
+      if (specs[k] == null || specs[k] === '') {
+        specs[k] = v
+        filled++
+      }
+    }
+    stmts.push(q(env,
+      `UPDATE master_model SET mfr_specs=?, mfr_checked_at=?, specs=?, updated_at=? WHERE id=?`,
+      JSON.stringify(got), t, JSON.stringify(specs), t, m.id))
+    log.push(`${m.slug}: ${Object.keys(got.specs).join(',') || 'no specs'}${got.desc ? ' +desc' : ''}${filled ? ` (${filled} gap${filled > 1 ? 's' : ''} filled)` : ''}`)
+  }
+  await batch(env, stmts)
+  return { job: 'mfr', trigger, checked: rows.length, log }
+}
+
+async function pollManufacturer(env, m) {
+  const html = await getHtml(m.mfr_url, { tries: 1 })
+  if (!html) return null
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 30000)
+
+  const specs = {}
+  const span = extractSpanMM(text)
+  if (span) specs.spanMM = span
+  const wt = extractWeightG(text)
+  if (wt) specs.auwG = wt
+  const len = text.match(/length[^0-9<>]{0,16}([\d,.]{2,6})\s*mm\b/i)
+  if (len) {
+    const v = Math.round(parseFloat(len[1].replace(/,/g, '')))
+    if (v >= 150 && v <= 3000) specs.lengthMM = v
+  }
+  const batt = text.match(/\b([2-8]S)\b[^.]{0,30}(?:lipo|li-?ion|battery)/i) || text.match(/(?:battery|lipo)[^.]{0,30}\b([2-8]S)\b/i)
+  if (batt) specs.battery = batt[1].toUpperCase()
+
+  const og =
+    html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']{40,500})["']/i) ||
+    html.match(/<meta[^>]+content=["']([^"']{40,500})["'][^>]+property=["']og:description["']/i)
+  let desc = og ? og[1].replace(/&amp;/g, '&').replace(/&#\d+;/g, '').trim() : null
+
+  // Optional Workers AI pass for the fields regexes miss (material, motor
+  // size, and units written in prose). Regex-extracted values always win.
+  if (env.AI) {
+    try {
+      const r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+        max_tokens: 200,
+        messages: [
+          { role: 'system', content: 'Extract RC aircraft specs from manufacturer page text. Reply ONLY a JSON object, all fields optional: {"spanMM":number,"auwG":number(flying weight grams),"lengthMM":number,"battery":string(e.g. "4S"),"material":string,"motor":string}. Omit anything not stated.' },
+          { role: 'user', content: text.slice(0, 2200) },
+        ],
+      })
+      const jm = String(r?.response ?? '').match(/\{[\s\S]*?\}/)
+      if (jm) {
+        const ai = JSON.parse(jm[0])
+        for (const k of ['spanMM', 'auwG', 'lengthMM']) {
+          const v = Math.round(Number(ai[k]))
+          if (!specs[k] && v > 0 && v < 25000) specs[k] = v
+        }
+        for (const k of ['battery', 'material', 'motor']) if (!specs[k] && ai[k]) specs[k] = String(ai[k]).slice(0, 60)
+      }
+    } catch {}
+  }
+  // Physics sanity: more than ~2 g per mm of span is a shipping box, not an
+  // aircraft (600mm wing @3.5kg = nonsense; 2m glider @4kg = plausible).
+  if (specs.auwG && specs.spanMM && specs.auwG > specs.spanMM * 2) delete specs.auwG
+  return { specs, desc, url: m.mfr_url, at: now() }
 }
 
 // -------------------------------------------------------------- verify slice

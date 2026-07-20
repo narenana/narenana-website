@@ -280,6 +280,26 @@ export function extractSpanMM(text = '') {
   return null
 }
 
+// Flying weight in grams from product-page text. Sanity 20g–20kg.
+// ONLY explicit flying-weight phrasings count: WooCommerce's bare
+// "Weight: 3.5 kg" row is the SHIPPING weight and must never match.
+export function extractWeightG(text = '') {
+  const t = String(text).replace(/(?:shipping|package[d]?|packed|boxed|gross)\s*weight[^0-9]{0,20}[\d,.]+\s*(?:kg|g|grams?)/gi, ' ')
+  const Q = /(?:(?:flying|take[\s-]?off|all[\s-]?up)\s*weight|auw)/i.source
+  const pats = [
+    [new RegExp(Q + '[^0-9<>]{0,20}([\\d,.]{1,7})\\s*(?:g|grams?)\\b', 'i'), 1],
+    [new RegExp(Q + '[^0-9<>]{0,20}([\\d.]{1,5})\\s*kg\\b', 'i'), 1000],
+    [/([\d,.]{2,6})\s*(?:g|grams?)\b[^.]{0,20}(?:flying\s*weight|auw)/i, 1],
+  ]
+  for (const [rx, mul] of pats) {
+    const m = t.match(rx)
+    if (!m) continue
+    const v = Math.round(parseFloat(m[1].replace(/,/g, '')) * mul)
+    if (v >= 20 && v <= 20000) return v
+  }
+  return null
+}
+
 // kit / pnp / rtf / combo from listing text. Order matters: RTF claims beat
 // PNP beats combo beats the kit default.
 export function detectConfig(text = '') {

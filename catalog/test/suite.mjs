@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSpanMM, detectConfig } from '../lib/adapters.mjs'
+import { extractSpanMM, extractWeightG, detectConfig } from '../lib/adapters.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -33,6 +33,17 @@ test('extractSpanMM: units, order, sanity bounds', () => {
   assert.equal(extractSpanMM('3.5mm gold connector pack'), null, 'connector size must not become a span')
   assert.equal(extractSpanMM('M3 nylon bolts 20mm x 50'), null, 'hardware sizes rejected by sanity bounds')
   assert.equal(extractSpanMM(''), null)
+})
+
+test('extractWeightG: units, AUW phrasing, sanity bounds', () => {
+  assert.equal(extractWeightG('Flying weight: 680g without battery'), 680)
+  assert.equal(extractWeightG('Take-off Weight 1.2 kg'), 1200)
+  assert.equal(extractWeightG('AUW: 1,150 grams'), 1150)
+  assert.equal(extractWeightG('weight of packaging 2g'), null, 'sub-20g rejected')
+  assert.equal(extractWeightG('wingspan 800mm'), null)
+  assert.equal(extractWeightG('Shipping Weight 3.5 kg'), null, 'shipping weight is not the aircraft')
+  assert.equal(extractWeightG('Weight 3.5 kg Dimensions 110 x 30 cm'), null, 'bare Woo weight row rejected')
+  assert.equal(extractWeightG('Shipping weight: 2 kg. Flying weight 750g'), 750, 'flying weight survives the strip')
 })
 
 test('detectConfig: rtf > pnp > combo > kit', () => {

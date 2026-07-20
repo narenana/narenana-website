@@ -6,7 +6,7 @@
 // approved offer. A master whose offers are all dead/OOS keeps its page with
 // "last seen ₹X on <date>" — pages only vanish when the owner retires them.
 
-import { esc, inr } from './util.mjs'
+import { esc, inr, hostOf } from './util.mjs'
 
 // Site IDENTITY (domain, analytics id) is code config; all product/market
 // content — masters, offers, recipes, components — arrives as arguments,
@@ -143,6 +143,26 @@ function recipesFor(recipes, components) {
   </section>`
 }
 
+// Display labels/units for manufacturer-extracted spec keys (presentation
+// config, not content — values come from D1).
+const MFR_LABELS = { spanMM: ['Wingspan', 'mm'], auwG: ['Flying weight', 'g'], lengthMM: ['Length', 'mm'], battery: ['Battery', ''], material: ['Material', ''], motor: ['Motor', ''] }
+
+function mfrSection(m) {
+  let mfr = null
+  try {
+    mfr = m.mfr_specs ? JSON.parse(m.mfr_specs) : null
+  } catch {}
+  if (!mfr || (!Object.keys(mfr.specs ?? {}).length && !mfr.desc)) return ''
+  return `
+    <section class="mfr"><h2 class="sec">Manufacturer specs</h2>
+      ${mfr.desc ? `<p class="rp-sum">${esc(mfr.desc)}</p>` : ''}
+      ${Object.keys(mfr.specs ?? {}).length ? `<table class="vars rp-table"><tbody>
+        ${Object.entries(mfr.specs).map(([k, v]) => { const [label, unit] = MFR_LABELS[k] ?? [k, '']; return `<tr><td class="rp-role">${esc(label)}</td><td>${esc(String(v))}${unit}</td></tr>` }).join('')}
+      </tbody></table>` : ''}
+      <p class="rp-foot">From the manufacturer's page: <a href="${esc(mfr.url)}" target="_blank" rel="noopener">${esc(hostOf(mfr.url) ?? 'manufacturer site')} ↗</a> · checked ${dateOf(mfr.at)}</p>
+    </section>`
+}
+
 export function renderMaster(cat, m, offers, recipes = [], components = {}) {
   let specs = {}
   try {
@@ -221,6 +241,7 @@ export function renderMaster(cat, m, offers, recipes = [], components = {}) {
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
       <tbody>${offers.map(offerRow).join('')}</tbody></table>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
+    ${mfrSection(m)}
     ${recipesFor(recipes, components)}
   </main>`
   return page({

@@ -368,6 +368,9 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .rp-total td { font-size: 1rem !important; color: var(--ink) !important; font-weight: 700 !important; padding-top: 8px !important; }
 .rp-total td:last-child { color: var(--red) !important; font-size: 1.15rem !important; }
 
+.rp-foot { font-size: 0.8rem; color: var(--muted); margin: 12px 0 0; }
+.mfr .vars { max-width: 560px; }
+
 /* --- footer ------------------------------------------------------------- */
 .foot {
   max-width: 1140px;

@@ -386,6 +386,17 @@ async function api(request, url, env, ep, actor) {
   if (ep === 'master' && request.method === 'POST') {
     const m = await one(env, 'SELECT m.*, c.spec_schema FROM master_model m JOIN category c ON c.id=m.category_id WHERE m.id=?', body.id)
     if (!m) return json({ error: 'unknown master' }, 404)
+    // Manufacturer URL: owner-pasted data. Setting it resets the poll clock;
+    // empty string clears it (and the stored extract).
+    let mfrStmt = null
+    if (body.mfrUrl !== undefined) {
+      if (body.mfrUrl === '') mfrStmt = q(env, `UPDATE master_model SET mfr_url=NULL, mfr_specs=NULL, mfr_checked_at=NULL WHERE id=?`, body.id)
+      else {
+        const c = canonicalUrl(body.mfrUrl)
+        if (!c) return json({ error: 'invalid manufacturer URL' }, 400)
+        mfrStmt = q(env, `UPDATE master_model SET mfr_url=?, mfr_checked_at=NULL WHERE id=?`, c, body.id)
+      }
+    }
     if (body.status === 'ready') {
       const req = JSON.parse(m.spec_schema).filter((f) => f.required).map((f) => f.key)
       const specs = JSON.parse(body.specs ?? m.specs ?? '{}')
@@ -399,6 +410,7 @@ async function api(request, url, env, ep, actor) {
         body.brand ?? null, body.name ?? null,
         body.brand ? normName(body.brand) : null, body.name ? normName(body.name) : null,
         body.blurb ?? null, body.specs ?? null, body.status ?? null, now(), body.id),
+      ...(mfrStmt ? [mfrStmt] : []),
       audit(env, actor, 'master-update', 'master_model', body.id, body),
     ])
     catCache.at = 0
@@ -412,7 +424,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich|mfr)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })
