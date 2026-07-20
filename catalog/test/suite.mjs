@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSpanMM, detectConfig, cartSignals, isChallenge } from '../lib/adapters.mjs'
+import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct } from '../lib/adapters.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -48,6 +48,14 @@ test('isChallenge: bot walls are recognised, real pages are not', () => {
   assert.equal(isChallenge('<h1>Checking your browser before accessing</h1>'), true)
   assert.equal(isChallenge('<script src="https://challenges.cloudflare.com/turnstile"></script>'), true)
   assert.equal(isChallenge('<h1>ATOMRC Penguin</h1><span class="price">₹8,999</span>'), false)
+})
+
+test('checkWooProduct: unreachable API is blocked (preserve), never gone', async () => {
+  // A host that refuses/errored must NOT downgrade a listing — it returns
+  // {blocked} so verify keeps the last-known price.
+  const r = await checkWooProduct('https://catalog-test.invalid', '123')
+  assert.equal(r.blocked, true)
+  assert.notEqual(r.gone, true)
 })
 
 test('cartSignals: element-level add-to-cart detection (Zoho)', () => {
