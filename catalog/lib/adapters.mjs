@@ -314,13 +314,22 @@ export function isChallenge(html = '') {
 }
 
 // Direct product-page check.
-//   { gone }    — page is 404/unreachable
-//   { blocked } — a bot wall stood in for the page; caller must preserve data
-//   { priceINR, inStock, quoteOnly, variants?, img?, title? } — real listing
+//   { gone }    — page genuinely 404s
+//   { blocked } — any block/error (403/429/5xx, timeout, bot wall): the read
+//                 FAILED, so the caller must PRESERVE the last-known data and
+//                 never downgrade a live listing on a signal we can't trust
+//   { priceINR, inStock, quoteOnly, variants?, img?, title? } — real 200 listing
 export async function checkPage(url, source) {
-  const html = await getHtml(url)
-  if (html === null) return { gone: true }
-  if (isChallenge(html)) return { blocked: true }
+  let res
+  try {
+    res = await fetch(url, { headers: { 'user-agent': UA, accept: 'text/html,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(9000) })
+  } catch {
+    return { blocked: true } // network error / timeout — don't wipe on it
+  }
+  if (res.status === 404 || res.status === 410) return { gone: true }
+  if (!res.ok) return { blocked: true } // 403/429/5xx — WAF or seller hiccup
+  const html = await res.text()
+  if (isChallenge(html)) return { blocked: true } // 200 + interstitial
   const t = html.match(/<title[^>]*>([^<]+)<\/title>/i)
   const title = t ? t[1].replace(/\s*[|–—-]\s*[^|–—-]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 140) : null
   const img = ogImageFrom(html, url)
