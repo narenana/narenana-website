@@ -219,7 +219,9 @@ h1 .accent { color: var(--accent-bright); }
 
 .prod-cta {
   display: block;
-  margin: 0 13px 13px;
+  /* Inside the card anchor (the whole card is one tap target); auto top
+     margin pins it to the bottom so cards align across the row. */
+  margin: auto 13px 13px;
   background: var(--accent);
   color: #06222e;
   text-align: center;

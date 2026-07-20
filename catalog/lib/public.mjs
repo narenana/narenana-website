@@ -54,8 +54,8 @@ function masterCard(m, prefix) {
           <div class="prod-price">${price ? `<div class="price"><span class="price-pre">${oos ? 'was' : 'from'}</span> ${inr(price)}</div>` : '<div class="price is-muted">—</div>'}
             ${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
         </div>
+        <span class="prod-cta ${oos ? 'is-off' : ''}">${oos ? 'See details' : m.sellers > 1 ? `Compare ${m.sellers} sellers` : 'View & buy'}</span>
       </a>
-      <span class="prod-cta ${oos ? 'is-off' : ''}">${oos ? 'See details' : 'View offers'}</span>
     </li>`
 }
 
