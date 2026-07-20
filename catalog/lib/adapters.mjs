@@ -68,11 +68,14 @@ export async function wooPage(source, listUrl, cursor) {
   const list = Array.isArray(rows) ? rows : []
   const products = list.map((p) => {
     const div = 10 ** (p.prices?.currency_minor_unit ?? 2)
+    // ₹0 is not a price — discontinued/quote-only Woo products publish 0 and
+    // "0" is a truthy STRING, so guard on the parsed number.
+    const paise = Math.round(Number(p.prices?.price ?? 0) / div)
     return {
       pid: String(p.id),
       url: canonicalUrl(p.permalink),
       title: (p.name || '').replace(/&amp;/g, '&').replace(/&#8211;/g, '–').replace(/<[^>]+>/g, ''),
-      priceINR: p.prices?.price ? Math.round(Number(p.prices.price) / div) : null,
+      priceINR: paise > 0 ? paise : null,
       inStock: p.is_in_stock !== false,
       img: p.images?.[0]?.src ?? null,
       variants: [],
@@ -99,7 +102,7 @@ export async function shopifyPage(source, listUrl, cursor) {
     pid: String(p.id),
     url: canonicalUrl(`${origin}/products/${p.handle}`),
     title: p.title || '',
-    priceINR: p.variants?.[0]?.price ? Math.round(Number(p.variants[0].price)) : null,
+    priceINR: Number(p.variants?.[0]?.price) > 0 ? Math.round(Number(p.variants[0].price)) : null,
     inStock: p.variants?.some((x) => x.available) ?? true,
     img: p.images?.[0]?.src ?? null,
     variants: (p.variants ?? []).slice(0, 12).map((v) => ({
