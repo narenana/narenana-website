@@ -337,7 +337,11 @@ async function api(request, url, env, ep, actor) {
     let platform = 'html'
     if (await probeOk(`${home}/wp-json/wc/store/v1/products?per_page=1`)) platform = 'woocommerce'
     else if (await probeOk(`${canon.replace(/\/$/, '')}/products.json?limit=1`)) platform = 'shopify'
-    else if (/zoho/i.test((await getHtml(canon)) ?? '')) platform = 'zoho'
+    else {
+      const doc = (await getHtml(canon)) ?? ''
+      if (/zoho/i.test(doc)) platform = 'zoho'
+      else if (/\/skin\/frontend\/|var BLANK_URL|Mage\.Cookies|Magento/i.test(doc)) platform = 'magento'
+    }
     const t = now()
     const src = { id: sourceId, platform, home_url: home }
     // dry-run BEFORE saving — a broken root is rejected at add-time

@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct } from '../lib/adapters.mjs'
+import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -48,6 +48,32 @@ test('isChallenge: bot walls are recognised, real pages are not', () => {
   assert.equal(isChallenge('<h1>Checking your browser before accessing</h1>'), true)
   assert.equal(isChallenge('<script src="https://challenges.cloudflare.com/turnstile"></script>'), true)
   assert.equal(isChallenge('<h1>ATOMRC Penguin</h1><span class="price">₹8,999</span>'), false)
+})
+
+test('magentoPage: parses listing (url/pid/price/stock), stops on clamp', async () => {
+  const item = (pid, slug, name, price, stock) =>
+    `<a title="${name}" href="https://shop.example/cat/${slug}.html" class="product-image">` +
+    `<img id="product-collection-image-${pid}" class="defaultImage" src="https://shop.example/media/${slug}.jpg"/></a>` +
+    `<h2 class="product-name ff"><a href="https://shop.example/cat/${slug}.html">${name}</a></h2>` +
+    `<div class="price-box"><span class="regular-price" id="product-price-${pid}"><span class="price">₹${price}.00</span></span></div>` +
+    `<div class="actions">${stock ? '<button class="btn-cart">Add to Cart</button>' : '<p>Out of stock</p>'}</div>`
+  const html = item(11, 'talon', 'X-UAV Talon', '13,500', true) + item(12, 'cub', 'Piper Cub', '14,000', false)
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => html })
+  try {
+    const src = { home_url: 'https://shop.example', platform: 'magento' }
+    const r = await magentoPage(src, 'https://shop.example/cat.html', null)
+    assert.equal(r.products.length, 2)
+    assert.equal(r.products[0].priceINR, 13500)
+    assert.equal(r.products[0].inStock, true)
+    assert.equal(r.products[1].inStock, false)
+    assert.ok(r.products[0].url.endsWith('/cat/talon.html'))
+    // page 2 re-serves the same first pid → walker must stop
+    const p2 = await magentoPage(src, 'https://shop.example/cat.html', { page: 2, lastFirst: '11' })
+    assert.equal(p2.nextCursor, null)
+  } finally {
+    globalThis.fetch = realFetch
+  }
 })
 
 test('checkWooProduct: unreachable API is blocked (preserve), never gone', async () => {

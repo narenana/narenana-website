@@ -115,6 +115,60 @@ export async function shopifyPage(source, listUrl, cursor) {
   return { products, nextCursor: rows.length < 250 ? null : { page: page + 1 }, fetches: 1 }
 }
 
+// --- Magento (1.x/2.x, no public product API) ----------------------------
+// The category LISTING page carries everything per product: url (…/x.html),
+// pid (product-price-<id>), name, ₹price, image, and add-to-cart vs
+// out-of-stock. We segment on each `product-image` anchor and parse a window.
+function parseMagentoList(html, source) {
+  const origin = new URL(source.home_url).origin
+  // Anchor on the product-image <a> tag itself (it carries the href); the
+  // forward window to the next such tag holds pid, name, price, and stock.
+  const anchors = [...html.matchAll(/<a\s[^>]*class="product-image"[^>]*>/g)]
+  const out = []
+  const seen = new Set()
+  for (let i = 0; i < anchors.length; i++) {
+    const tag = anchors[i][0]
+    const fwd = html.slice(anchors[i].index, i + 1 < anchors.length ? anchors[i + 1].index : html.length)
+    const url = tag.match(/href="([^"]+\.html)"/)?.[1]
+    const pid = fwd.match(/product-(?:price|collection-image)-(\d+)/)?.[1]
+    if (!url || !pid || seen.has(pid)) continue
+    try {
+      if (new URL(url).origin !== origin) continue
+    } catch {
+      continue
+    }
+    seen.add(pid)
+    const name = fwd.match(/product-name[^>]*>\s*<a[^>]*>([^<]+)/)?.[1]
+    const price = fwd.match(/class="price"[^>]*>\s*(?:₹|Rs\.?)\s*([\d,]+)/i)?.[1]
+    const img = fwd.match(/defaultImage"\s+src="([^"]+)"/)?.[1] ?? fwd.match(/<img[^>]+src="([^"]+)"/)?.[1]
+    const inStock = /add to cart|btn-cart/i.test(fwd) && !/out of stock/i.test(fwd)
+    out.push({
+      pid,
+      url: canonicalUrl(url),
+      title: (name ?? '').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim(),
+      priceINR: price ? Number(price.replace(/,/g, '')) : null,
+      inStock,
+      img: img ?? null,
+      variants: [],
+    })
+  }
+  return out
+}
+
+export async function magentoPage(source, listUrl, cursor) {
+  const { page = 1, lastFirst = null } = cursor ?? {}
+  const sep = listUrl.includes('?') ? '&' : '?'
+  const url = page > 1 ? `${listUrl}${sep}p=${page}` : listUrl
+  const html = await getHtml(url)
+  if (!html) return { products: [], nextCursor: null, fetches: 1 }
+  const products = parseMagentoList(html, source)
+  const firstPid = products[0]?.pid ?? null
+  // Stop when a page is empty, when Magento clamps ?p past the end and
+  // re-serves the same page (firstPid repeats), or at a hard cap.
+  const stop = products.length === 0 || firstPid === lastFirst || page >= 8
+  return { products, nextCursor: stop ? null : { page: page + 1, lastFirst: firstPid }, fetches: 1, subtree: 1 }
+}
+
 // --- HTML (Zoho etc): listing page → product links; details need enrich ---
 function productLinks(html, source, pageUrl) {
   const origin = new URL(source.home_url).origin
@@ -207,6 +261,7 @@ export async function htmlPage(source, listUrl, cursor) {
 export function feedPage(source, listUrl, cursor) {
   if (source.platform === 'woocommerce') return wooPage(source, listUrl, cursor)
   if (source.platform === 'shopify') return shopifyPage(source, listUrl, cursor)
+  if (source.platform === 'magento') return magentoPage(source, listUrl, cursor)
   return htmlPage(source, listUrl, cursor)
 }
 
@@ -367,6 +422,12 @@ export async function checkPage(url, source) {
   const t = html.match(/<title[^>]*>([^<]+)<\/title>/i)
   const title = t ? t[1].replace(/\s*[|–—-]\s*[^|–—-]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 140) : null
   const img = ogImageFrom(html, url)
+  // Magento: no product API — parse the product page's own price + stock.
+  if (source?.platform === 'magento') {
+    const price = html.match(/class="price"[^>]*>\s*(?:₹|Rs\.?)\s*([\d,]+)/i)?.[1]
+    const inStock = /add to cart|btn-cart/i.test(html) && !/out of stock/i.test(html)
+    return { title, img, variants: [], quoteOnly: false, priceINR: price ? Number(price.replace(/,/g, '')) : null, inStock }
+  }
   const vars = source?.platform === 'woocommerce' ? parseWooVariants(html) : null
   if (vars?.length) {
     const live = vars.filter((v) => v.inStock)
