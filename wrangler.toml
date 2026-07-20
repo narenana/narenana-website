@@ -12,6 +12,8 @@
 name = "narenana-website"
 main = "src/index.js"
 compatibility_date = "2024-12-01"
+# @cloudflare/puppeteer (Browser Rendering) imports node:buffer.
+compatibility_flags = ["nodejs_compat"]
 
 [assets]
 directory = "./site"
