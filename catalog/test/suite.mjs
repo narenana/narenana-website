@@ -102,13 +102,16 @@ test('system settings: only known pause flags accepted', async () => {
 
 // ------------------------------------------------- lifecycle (opt-in, local)
 test('lifecycle: approve→draft→publish-gate→ready→public→unapprove', { skip: !MUTATE && 'set CATALOG_TEST_MUTATE=1' }, async () => {
-  const SLUG = 'zz-suite-master'
+  // Unique per run: a retired master from a previous run still owns its
+  // brand+name / slug uniqueness, so a fixed name 409s on the second run.
+  const RUN = Date.now().toString(36)
+  const SLUG = `zz-suite-master-${RUN}`
   const q = (await api('review?stock=all')).body
   const cand = q.skus.find((k) => k.score <= 0) ?? q.skus[0]
   assert.ok(cand, 'need a sku to play with')
 
   // approve → creates DRAFT master + offer atomically
-  const ap = await api('decide', { skuId: cand.id, action: 'approve', config: 'kit', master: { brand: 'ZTEST', name: 'Suite Master', slug: SLUG, specs: {} } })
+  const ap = await api('decide', { skuId: cand.id, action: 'approve', config: 'kit', master: { brand: 'ZTEST', name: 'Suite Master '+RUN, slug: SLUG, specs: {} } })
   assert.equal(ap.status, 200)
 
   // draft is NOT public
@@ -128,7 +131,7 @@ test('lifecycle: approve→draft→publish-gate→ready→public→unapprove', {
   // duplicate slug approve → 409
   const other = q.skus.find((k) => k.id !== cand.id)
   if (other) {
-    const dup = await api('decide', { skuId: other.id, action: 'approve', master: { brand: 'ZTEST', name: 'Suite Master', slug: SLUG } })
+    const dup = await api('decide', { skuId: other.id, action: 'approve', master: { brand: 'ZTEST', name: 'Suite Master '+RUN, slug: SLUG } })
     assert.equal(dup.status, 409)
   }
 
