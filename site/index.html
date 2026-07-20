@@ -119,432 +119,565 @@
       }
     </script>
 
+    <!-- ══ Narenana Daylight design system (design_handoff_narenana_landing) ══
+         Fonts: Bricolage Grotesque (display) · Hanken Grotesk (body) ·
+         JetBrains Mono (kickers/telemetry) · Grand Hotel (wordmark). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Grand+Hotel&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+
     <style>
-      :root {
-        --bg: #0e1117;
-        --fg: #e6edf3;
-        --muted: #8b949e;
-        --accent: #1f9bd9;
-        --accent-bright: #3eb5e8;
-        --card: #161b22;
-        --border: #30363d;
+      html{scroll-behavior:smooth;scroll-padding-top:82px}
+      body{margin:0;background:#F3EEE0;color:#0F2C39;font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:clip}
+      h1,h2,h3,h4{font-family:'Bricolage Grotesque','Hanken Grotesk',sans-serif;font-weight:800;margin:0;letter-spacing:-.02em}
+      a{color:#D8641A;text-underline-offset:3px}
+      a:hover{color:#0F2C39}
+      ::selection{background:#F79A3F;color:#0F2C39}
+      :focus-visible{outline:2px solid #EF7A25;outline-offset:2px}
+      .wordmark{font-family:'Grand Hotel',cursive;font-weight:400;letter-spacing:0}
+      .mono{font-family:'JetBrains Mono',monospace}
+      .wrap{max-width:1200px;margin:0 auto;padding-left:clamp(20px,4vw,44px);padding-right:clamp(20px,4vw,44px)}
+
+      @keyframes narz-cue{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(6px);opacity:1}}
+      @keyframes narz-pulse{0%,100%{opacity:1}50%{opacity:.25}}
+      @keyframes narz-shimmer{0%{background-position:-150% 0}100%{background-position:250% 0}}
+      @keyframes narz-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+      @keyframes narz-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
+
+      /* ── nav ── */
+      .nav{position:fixed;top:0;left:0;right:0;z-index:50;border-bottom:1px solid transparent;transition:background .3s ease,border-color .3s ease}
+      .nav.solid{background:rgba(12,37,49,.92);border-bottom-color:rgba(244,237,219,.14);-webkit-backdrop-filter:saturate(140%) blur(12px);backdrop-filter:saturate(140%) blur(12px)}
+      .nav-inner{max-width:1200px;margin:0 auto;padding:12px clamp(20px,4vw,44px);display:flex;align-items:center;gap:22px}
+      .nav-mark{text-decoration:none;color:#F4EDDB;font-size:30px;line-height:1;margin-right:auto;text-shadow:0 1px 6px rgba(15,44,57,.28)}
+      .nav-link{color:#F4EDDB;text-decoration:none;font-size:14px;font-weight:600;opacity:.92}
+      .nav-link:hover{opacity:1;color:#F79A3F}
+
+      /* ── buttons ── */
+      .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-family:'Hanken Grotesk',sans-serif;font-weight:700;border-radius:999px;transition:transform .2s ease,background .2s ease,color .2s ease,border-color .2s ease}
+      .btn svg{display:block}
+      .btn-orange{background:#EF7A25;color:#12303D;border:1.5px solid #EF7A25}
+      .btn-orange:hover{background:#F79A3F;border-color:#F79A3F;color:#12303D;transform:translateY(-2px)}
+      .btn-cream{background:transparent;color:#F4EDDB;border:1.5px solid rgba(244,237,219,.7)}
+      .btn-cream:hover{background:#F4EDDB;color:#12303D;border-color:#F4EDDB;transform:translateY(-2px)}
+      .btn-sky{background:#1E8FD6;color:#F4F9FC;border:1.5px solid #1E8FD6}
+      .btn-sky:hover{background:#1780C9;border-color:#1780C9;color:#F4F9FC;transform:translateY(-2px)}
+      .btn-sm{font-size:14px;padding:9px 17px}
+      .btn-sm:hover{transform:translateY(-1px)}
+      .btn-md{font-size:15px;padding:13px 22px}
+      .btn-lg{font-size:15px;padding:15px 26px;box-shadow:0 8px 24px rgba(15,44,57,.24)}
+      .btn-xl{font-size:17px;padding:17px 30px;white-space:nowrap;box-shadow:0 10px 30px rgba(15,44,57,.28)}
+      .btn-text{display:inline-flex;align-items:center;gap:6px;text-decoration:none;font-weight:700;font-size:15px;color:#D8641A;padding:13px 6px}
+      .btn-text:hover{color:#0F2C39}
+
+      /* ── hero (Layered depth) ── */
+      .hero{position:relative;min-height:100vh;overflow:hidden;display:flex;align-items:center}
+      .hero-sky{position:absolute;inset:-12% 0 0 0;z-index:0;background:linear-gradient(180deg,#54B4EC 0%,#2E9AE0 38%,#1B8AD4 68%,#1780C9 100%)}
+      .hero-glow-a{position:absolute;left:52%;top:-8%;width:70vw;height:60vh;z-index:0;background:radial-gradient(60% 60% at 50% 40%,rgba(255,255,255,.55) 0%,rgba(255,255,255,0) 62%);filter:blur(4px)}
+      .hero-glow-b{position:absolute;left:-14%;top:40%;width:52vw;height:40vh;z-index:0;background:radial-gradient(60% 60% at 50% 50%,rgba(255,255,255,.42) 0%,rgba(255,255,255,0) 64%);filter:blur(3px)}
+      .hero-quad{position:absolute;right:9%;top:11%;width:min(26vw,260px);aspect-ratio:1.35/1;z-index:1;animation:narz-float 7s ease-in-out infinite}
+      .hero-wing{position:absolute;right:6%;top:54%;width:min(40vw,420px);aspect-ratio:2.4/1;z-index:1;animation:narz-float 9s ease-in-out infinite}
+      .hero-fade{position:absolute;left:0;right:0;bottom:0;height:24%;z-index:2;pointer-events:none;background:linear-gradient(180deg,transparent,#F3EEE0 96%)}
+      .hero-copy{position:relative;z-index:5;width:100%}
+      .eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#F4EDDB}
+      .eyebrow i{width:7px;height:7px;background:#EF7A25;display:inline-block;box-shadow:0 0 0 3px rgba(239,122,37,.3)}
+      .hero h1{font-size:clamp(48px,7.4vw,100px);line-height:.94;margin:20px 0 0;color:#F7F1E2;text-wrap:balance;text-shadow:0 2px 20px rgba(15,44,57,.22)}
+      .hero h1 .hl{background:linear-gradient(transparent 62%,#EF7A25 62%,#EF7A25 92%,transparent 92%);padding:0 .04em}
+      .hero p{font-size:clamp(16px,1.55vw,21px);line-height:1.58;color:rgba(247,241,226,.92);margin:26px 0 0;max-width:52ch}
+      .hero-ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:36px}
+      .scroll-cue{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:5;width:38px;height:38px;border-radius:50%;background:rgba(244,237,219,.16);border:1.5px solid rgba(244,237,219,.7);display:grid;place-items:center;color:#F4EDDB;text-decoration:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+      .scroll-cue:hover{color:#F4EDDB}
+      .scroll-cue svg{animation:narz-cue 1.9s ease-in-out infinite}
+      @media (max-width:760px){
+        .hero-quad{right:4%;top:9%;width:34vw}
+        .hero-wing{right:-4%;top:60%;width:56vw;opacity:.85}
+        .nav-link{display:none}
       }
 
-      * { box-sizing: border-box; }
+      /* ── marquee ── */
+      .marquee{background:#0F2C39;color:#F4EDDB;overflow:hidden}
+      .marquee-track{display:flex;white-space:nowrap;animation:narz-marquee 30s linear infinite;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.14em;text-transform:uppercase;padding:13px 0}
+      .marquee-track>div{display:flex;flex-shrink:0}
+      .marquee-track span{padding:0 22px}
+      .marquee-track .st{color:#EF7A25}
 
-      html, body {
-        margin: 0;
-        padding: 0;
-        background: var(--bg);
-        color: var(--fg);
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-        line-height: 1.6;
-      }
+      /* ── value strip ── */
+      .value{padding:clamp(56px,7vw,92px) 0 clamp(28px,3vw,44px)}
+      .value-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:clamp(24px,3vw,44px)}
+      .value-item{border-top:2px solid #0F2C39;padding-top:18px}
+      .value-item .num{font-family:'JetBrains Mono',monospace;font-size:13px;color:#D8641A;letter-spacing:.1em}
+      .value-item h3{font-size:23px;margin:12px 0 0}
+      .value-item p{font-size:14.5px;line-height:1.6;color:#4C5C63;margin:10px 0 0}
+      .value-item a{color:#D8641A;font-weight:600}
 
-      .hero-pic { display: block; }
+      /* ── tools ── */
+      .sect{padding:clamp(56px,7vw,96px) 0}
+      .kicker{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:500;letter-spacing:.16em;text-transform:uppercase;color:#D8641A}
+      .sect-head{max-width:680px;margin-bottom:clamp(40px,5vw,64px)}
+      .sect-head h2,.videos-head h2{font-size:clamp(34px,4.6vw,58px);line-height:.98;margin:16px 0 0;text-wrap:balance}
+      .tool-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:clamp(32px,4vw,60px);align-items:center}
+      .tool-row+.tool-row{margin-top:clamp(56px,7vw,96px)}
+      .tagpill{display:inline-flex;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;border-radius:999px;font-weight:500}
+      .tagpill.orange{background:#EF7A25;color:#12303D}
+      .tagpill.sky{background:#1E8FD6;color:#F4F9FC}
+      .tool-row h3{font-size:clamp(28px,3.3vw,44px);line-height:1;margin:18px 0 0}
+      .tool-row .body{font-size:16.5px;line-height:1.62;color:#4C5C63;margin:16px 0 0;max-width:50ch}
+      .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+      .chip{display:inline-flex;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.03em;padding:5px 11px;border:1.5px solid #0F2C39;border-radius:999px}
+      .tool-ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:28px}
+      .mock{border:2px solid #0F2C39;border-radius:10px;overflow:hidden;background:#FCF9F1;transition:transform .28s ease,box-shadow .28s ease}
+      .mock:hover{transform:translate(-4px,-4px)}
+      .mock.acc-orange:hover{box-shadow:12px 12px 0 #EF7A25}
+      .mock.acc-sky:hover{box-shadow:12px 12px 0 #1E8FD6}
+      .mock-bar{display:flex;align-items:center;gap:7px;padding:11px 15px;border-bottom:2px solid #0F2C39;background:#F3EEE0}
+      .mock-bar i{width:10px;height:10px;border-radius:50%;border:1.5px solid #0F2C39}
+      .mock-bar .url{margin-left:8px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#5A6A70}
+      .mock-body{position:relative;aspect-ratio:16/10;background:#DDE9EE}
+      .mock-body img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+      .osd{position:absolute;inset:0;pointer-events:none;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;color:#F4EDDB;text-shadow:0 1px 5px rgba(0,0,0,.6)}
+      .osd .rec{position:absolute;left:14px;top:12px;display:flex;align-items:center;gap:6px}
+      .osd .rec i{width:7px;height:7px;border-radius:50%;background:#C63B2E;animation:narz-pulse 1.4s ease-in-out infinite}
+      .tele{position:absolute;left:0;right:0;bottom:0;padding:9px 14px;display:flex;gap:14px;flex-wrap:wrap;background:linear-gradient(180deg,transparent,rgba(15,44,57,.72));font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.05em;color:#BFE0F5}
+      @media (min-width:900px){.tool-row.flip .mock-col{order:-1}}
 
-      .hero-banner {
-        display: block;
-        width: 100%;
-        height: clamp(140px, 26vh, 420px);
-        object-fit: cover;
-        object-position: center;
-        background: #1580c4;
-      }
+      /* ── videos ── */
+      .videos-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap;margin-bottom:clamp(32px,4vw,48px)}
+      .yt-link{display:inline-flex;align-items:center;gap:7px;color:#D8641A;text-decoration:none;font-weight:700;font-size:14px;white-space:nowrap}
+      .yt-link:hover{color:#0F2C39}
+      .vid-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:clamp(18px,2vw,26px)}
+      .vid{display:block;text-decoration:none;color:#0F2C39;border:2px solid #0F2C39;border-radius:10px;overflow:hidden;background:#FCF9F1;transition:transform .26s ease,box-shadow .26s ease}
+      .vid:hover{transform:translate(-4px,-4px);box-shadow:9px 9px 0 #EF7A25;color:#0F2C39}
+      .vid-thumb{position:relative;aspect-ratio:16/9;background:#DDE9EE;border-bottom:2px solid #0F2C39}
+      .vid-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+      .vid-play{position:absolute;left:50%;top:50%;margin:-24px 0 0 -24px;width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:#EF7A25;color:#12303D;border:2px solid #0F2C39}
+      .vid-body{padding:14px 16px}
+      .vid-title{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:15px;line-height:1.24;letter-spacing:-.01em}
+      .vid-meta{display:flex;align-items:center;gap:7px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#7A8A90}
+      .vid-status{color:#4C5C63;font-size:14.5px}
 
-      .wrap {
-        max-width: 760px;
-        margin: 0 auto;
-        padding: 20px 24px 64px;
-      }
+      /* ── shop teaser ── */
+      .skel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:clamp(18px,2vw,24px)}
+      .skel{border:2px solid #0F2C39;border-radius:10px;overflow:hidden;background:#FCF9F1}
+      .skel-img{position:relative;aspect-ratio:4/3;background:#DDE9EE;border-bottom:2px solid #0F2C39}
+      .skel-lock{position:absolute;inset:0;display:grid;place-items:center;background:rgba(221,233,238,.35)}
+      .skel-lock span{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#F3EEE0;border:2px solid #0F2C39;color:#0F2C39}
+      .skel-tag{position:absolute;top:10px;left:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;padding:4px 9px;border-radius:999px;background:#EF7A25;color:#12303D}
+      .skel-body{padding:14px 15px 16px}
+      .skel-line{height:11px;width:70%;border-radius:3px;background:linear-gradient(90deg,#DAE6EB 30%,#EEF4F6 50%,#DAE6EB 70%);background-size:220% 100%;animation:narz-shimmer 2.4s linear infinite}
+      .skel-chips{display:flex;gap:7px;margin-top:14px}
+      .skel-chips span{height:9px;border-radius:3px;background:#DAE6EB}
+      .notify{margin-top:clamp(32px,4vw,44px);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+      .notify input{flex:1 1 240px;max-width:320px;height:46px;padding:0 16px;font-family:'Hanken Grotesk',sans-serif;font-size:15px;color:#0F2C39;background:#FCF9F1;border:2px solid #0F2C39;border-radius:999px}
+      .notify .hint{font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A8A90}
+      .notify .btn-md{height:46px;box-sizing:border-box;padding-top:0;padding-bottom:0}
 
-      h1 {
-        font-size: clamp(2.2rem, 6vw, 3.6rem);
-        font-weight: 800;
-        margin: 0 0 12px;
-        letter-spacing: -0.025em;
-        line-height: 1.1;
-      }
+      /* ── CTA band ── */
+      .cta-band{position:relative;overflow:hidden;background:linear-gradient(160deg,#2E9AE0,#1573B6)}
+      .cta-glow{position:absolute;left:60%;top:-30%;width:60vw;height:120%;z-index:0;background:radial-gradient(50% 50% at 50% 50%,rgba(239,122,37,.4) 0%,rgba(239,122,37,0) 66%)}
+      .cta-inner{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:clamp(64px,9vw,124px) clamp(20px,4vw,44px);display:flex;gap:32px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+      .cta-inner .kicker{color:#F79A3F;letter-spacing:.18em}
+      .cta-inner h2{font-size:clamp(40px,5.6vw,76px);line-height:.94;margin:16px 0 0;color:#F7F1E2;text-wrap:balance}
 
-      h1 .accent {
-        color: var(--accent-bright);
-      }
+      /* ── footer ── */
+      .foot{background:#0C2531;color:#EAE3D3;padding:clamp(56px,7vw,88px) 0 36px}
+      .foot-cols{display:flex;gap:clamp(32px,6vw,80px);flex-wrap:wrap;justify-content:space-between}
+      .foot-mark{text-decoration:none;color:#F4EDDB;font-size:34px;line-height:1}
+      .foot-tag{font-size:14.5px;line-height:1.6;color:#93A0A6;margin:14px 0 0;max-width:380px}
+      .socials{display:flex;gap:10px;margin-top:20px}
+      .socials a{width:42px;height:42px;border-radius:999px;display:grid;place-items:center;color:#EAE3D3;border:1.5px solid #2C4550;transition:background .2s ease,border-color .2s ease,color .2s ease}
+      .socials a:hover{background:#EF7A25;border-color:#EF7A25;color:#12303D}
+      .foot-links{display:flex;gap:clamp(32px,6vw,72px);flex-wrap:wrap}
+      .foot-col{display:flex;flex-direction:column;gap:11px}
+      .foot-col .h{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#6D7C82}
+      .foot-col a{font-size:14.5px;color:#EAE3D3;text-decoration:none}
+      .foot-col a:hover{color:#F79A3F}
+      .foot-col .soon{font-family:'JetBrains Mono',monospace;font-size:10px;color:#F79A3F}
+      .foot-div{height:1.5px;background:#1E3A45;margin:clamp(40px,5vw,64px) 0 0}
+      .foot-bottom{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:24px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6D7C82}
 
-      .lede {
-        font-size: 1.2rem;
-        color: var(--muted);
-        margin: 0 0 24px;
-        max-width: 38em;
-      }
-
-      /* On wider screens promote the CTA above the supporting bullets,
-         so it lands inside the top fold. The reorder uses CSS `order`,
-         not DOM order, so the bullets stay readable for screen readers. */
-      .top-block {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-      }
-      .top-block .features { order: 2; margin-bottom: 0; }
-      .top-block .tools-wrap { order: 1; }
-      .top-block .tools-wrap h2 {
-        margin: 0 0 10px;
-      }
-
-      .features {
-        display: grid;
-        gap: 8px;
-        margin: 0 0 16px;
-        padding: 0;
-        list-style: none;
-      }
-
-      .features li {
-        color: var(--muted);
-        padding-left: 22px;
-        position: relative;
-      }
-
-      .features li::before {
-        content: "→";
-        position: absolute;
-        left: 0;
-        color: var(--accent);
-      }
-
-      .features strong {
-        color: var(--fg);
-        font-weight: 600;
-      }
-
-      h2 {
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: var(--muted);
-        margin: 40px 0 12px;
-      }
-
-      .tools {
-        display: grid;
-        gap: 16px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .tool {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 24px;
-        text-decoration: none;
-        color: inherit;
-        display: grid;
-        grid-template-columns: 56px 1fr auto;
-        align-items: center;
-        gap: 20px;
-        transition: border-color 120ms, transform 120ms, background 120ms;
-      }
-
-      .tool:hover {
-        border-color: var(--accent);
-        transform: translateY(-1px);
-      }
-
-      /* Product screenshot strip across the top of each tool card —
-         the visual proof of what you're clicking into. */
-      .tool-shot {
-        grid-column: 1 / -1;
-        display: block;
-      }
-
-      .tool-shot img {
-        width: 100%;
-        height: auto;
-        aspect-ratio: 16 / 10;
-        object-fit: cover;
-        object-position: top;
-        border-radius: 10px;
-        border: 1px solid var(--border);
-        display: block;
-      }
-
-      .tool-icon {
-        width: 56px;
-        height: 56px;
-        display: block;
-        flex-shrink: 0;
-      }
-
-      .tool-body h3 {
-        margin: 0 0 4px;
-        font-size: 1.2rem;
-        font-weight: 700;
-      }
-
-      .tool-body p {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.95rem;
-      }
-
-      .cta {
-        background: var(--accent);
-        color: #06222e;
-        padding: 12px 22px;
-        border-radius: 10px;
-        font-weight: 700;
-        font-size: 0.95rem;
-        white-space: nowrap;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        transition: background 120ms, transform 120ms;
-      }
-
-      .tool:hover .cta {
-        background: var(--accent-bright);
-      }
-
-      @media (max-width: 540px) {
-        .tool {
-          grid-template-columns: 56px 1fr;
-          grid-template-areas:
-            "shot shot"
-            "icon body"
-            "cta cta";
-          gap: 16px;
-        }
-        .tool-shot { grid-area: shot; }
-        .tool-icon { grid-area: icon; }
-        .tool-body { grid-area: body; }
-        .cta {
-          grid-area: cta;
-          justify-content: center;
-          margin-top: 4px;
-        }
-      }
-
-      .videos {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 16px;
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-
-      .video {
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        overflow: hidden;
-        text-decoration: none;
-        color: inherit;
-        display: flex;
-        flex-direction: column;
-        transition: border-color 120ms, transform 120ms;
-      }
-
-      .video:hover {
-        border-color: var(--accent);
-        transform: translateY(-1px);
-      }
-
-      .thumb {
-        display: block;
-        width: 100%;
-        height: auto;
-        aspect-ratio: 16 / 9;
-        background: #000;
-        object-fit: cover;
-      }
-
-      .vmeta {
-        padding: 12px 16px 16px;
-      }
-
-      .vtitle {
-        margin: 0 0 4px;
-        font-size: 0.95rem;
-        font-weight: 600;
-        line-height: 1.3;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-
-      .vsub {
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.85rem;
-      }
-
-      .vempty {
-        color: var(--muted);
-        font-size: 0.95rem;
-        list-style: none;
-      }
-
-      footer {
-        margin-top: 96px;
-        font-size: 0.85rem;
-        color: var(--muted);
-      }
-
-      footer a {
-        color: var(--muted);
-      }
+      /* reveal-on-scroll initial state is applied by JS (so no-JS users see everything) */
+      @media (prefers-reduced-motion: reduce){*{animation:none !important;scroll-behavior:auto !important;transition:none !important}}
     </style>
   </head>
   <body>
-    <picture class="hero-pic">
-      <source type="image/avif" srcset="/assets/banner-800.avif 800w, /assets/banner-1600.avif 1600w" sizes="100vw" />
-      <source type="image/webp" srcset="/assets/banner-800.webp 800w, /assets/banner-1600.webp 1600w" sizes="100vw" />
-      <img class="hero-banner" src="/assets/banner.jpg" alt="narenana — RC drones and flying wings in flight" width="1600" height="900" loading="eager" fetchpriority="high" decoding="async" />
-    </picture>
+    <nav class="nav" id="nav" aria-label="Main">
+      <div class="nav-inner">
+        <a href="#top" class="wordmark nav-mark">narenana</a>
+        <a href="#tools" class="nav-link">Tools</a>
+        <a href="#videos" class="nav-link">Flights</a>
+        <a href="#shop" class="nav-link">Wings</a>
+        <a href="https://sim.narenana.com" target="_blank" rel="noopener" class="btn btn-orange btn-sm">Fly now
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </nav>
 
-    <main class="wrap">
-      <h1>Free browser tools <span class="accent">for RC pilots.</span></h1>
-      <p class="lede">Replay your flight logs in 3D, or practice on a realistic FPV wing simulator — all in your browser. <strong style="color: var(--fg)">Nothing ever leaves your machine.</strong></p>
+    <span id="top"></span>
 
-      <div class="top-block">
-        <ul class="features">
-          <li><strong>Zero uploads. Zero servers.</strong> Your logs never leave your device.</li>
-          <li><strong>Open source.</strong> Read it, fork it, host it yourself.</li>
-          <li><strong>Built at the field.</strong> By pilots who actually fly.</li>
-        </ul>
-
-        <div class="tools-wrap">
-          <h2>Free RC flight tools — available now</h2>
-          <ul class="tools">
-            <li>
-              <a class="tool" href="/log-viewer/">
-                <picture class="tool-shot">
-                  <source type="image/avif" srcset="/assets/shot-log-viewer.avif" />
-                  <source type="image/webp" srcset="/assets/shot-log-viewer.webp" />
-                  <img
-                    src="/assets/shot-log-viewer.jpg"
-                    alt="RC Log Viewer replaying a fixed-wing flight in 3D — satellite terrain, cyan flight path, live telemetry bar and synced charts"
-                    width="1200"
-                    height="750"
-                    loading="lazy"
-                  />
-                </picture>
-                <img class="tool-icon" src="/assets/log-viewer-icon.svg" alt="" width="56" height="56" />
-                <div class="tool-body">
-                  <h3>RC Log Viewer — replay EdgeTX &amp; blackbox flight logs in 3D</h3>
-                  <p>Drop an EdgeTX CSV or iNAV / Betaflight blackbox log. Replay every flight on a 3D globe with a live telemetry bar and synced charts.</p>
-                </div>
-                <span class="cta">Try now →</span>
-              </a>
-            </li>
-            <li>
-              <a class="tool" href="https://sim.narenana.com">
-                <picture class="tool-shot">
-                  <source type="image/avif" srcset="/assets/shot-nanawing.avif" />
-                  <source type="image/webp" srcset="/assets/shot-nanawing.webp" />
-                  <img
-                    src="/assets/shot-nanawing.jpg"
-                    alt="Nanawing FPV simulator in flight — a flying wing lining up on a race gate over farmland, with an iNAV-style OSD"
-                    width="1200"
-                    height="750"
-                    loading="lazy"
-                  />
-                </picture>
-                <img class="tool-icon" src="/assets/fpvsim-icon.svg" alt="" width="56" height="56" />
-                <div class="tool-body">
-                  <h3>Nanawing — free browser FPV flying-wing simulator</h3>
-                  <p>Free fixed-wing FPV simulator that runs in your browser — no download, no signup. Hand-launch a flying wing over realistic farmland with keyboard, gamepad or your real RC radio. iNAV-style OSD, simulated LiPo, race course.</p>
-                </div>
-                <span class="cta">Fly now →</span>
-              </a>
-            </li>
-          </ul>
+    <section class="hero" id="hero">
+      <div class="hero-sky" data-px data-speed="0.05"></div>
+      <div class="hero-glow-a" data-px data-speed="0.14"></div>
+      <div class="hero-glow-b" data-px data-speed="0.2"></div>
+      <!-- Aircraft cutouts: stylised SVG stand-ins matching the banner motifs
+           (swap for transparent-PNG photo cutouts when available). -->
+      <div class="hero-quad" data-px data-speed="0.42" data-speed-x="-0.05" aria-hidden="true">
+        <svg viewBox="0 0 260 192" width="100%" height="100%" style="filter:drop-shadow(0 14px 22px rgba(15,44,57,.28))">
+          <g stroke="#9c3126" stroke-width="8" stroke-linecap="round"><path d="M70 82 L190 124"/><path d="M190 82 L70 124"/></g>
+          <g fill="#22333d"><ellipse cx="70" cy="72" rx="32" ry="6"/><ellipse cx="190" cy="72" rx="32" ry="6"/><ellipse cx="70" cy="118" rx="32" ry="6"/><ellipse cx="190" cy="118" rx="32" ry="6"/></g>
+          <g fill="#C63B2E"><circle cx="70" cy="80" r="11"/><circle cx="190" cy="80" r="11"/><circle cx="70" cy="124" r="11"/><circle cx="190" cy="124" r="11"/></g>
+          <path d="M98 90 L162 90 Q172 90 170 102 L164 116 Q160 124 150 124 L110 124 Q100 124 96 116 L90 102 Q88 90 98 90 Z" fill="#C63B2E"/>
+          <path d="M98 90 L162 90 Q172 90 170 100 L90 100 Q88 90 98 90 Z" fill="#DE4E3F"/>
+          <rect x="118" y="98" width="24" height="12" rx="4" fill="#12303D"/>
+        </svg>
+      </div>
+      <div class="hero-wing" data-px data-speed="0.62" data-speed-x="0.04" aria-hidden="true">
+        <svg viewBox="0 0 420 175" width="100%" height="100%" style="filter:drop-shadow(0 18px 26px rgba(15,44,57,.3))">
+          <path d="M210 34 L18 138 Q14 144 22 144 L166 122 Q210 150 254 122 L398 144 Q406 144 402 138 Z" fill="#F5F1E4"/>
+          <path d="M210 34 L18 138 Q14 144 22 144 L166 122 Q188 136 210 138 Z" fill="#E4DCC6"/>
+          <path d="M195 120 Q210 132 225 120 L219 144 Q210 150 201 144 Z" fill="#C63B2E"/>
+          <path d="M210 34 L246 118 L210 138 L174 118 Z" fill="#EFE9D6"/>
+        </svg>
+      </div>
+      <div class="hero-fade" data-px data-speed="0.04"></div>
+      <div class="wrap hero-copy">
+        <div data-fade style="max-width:820px">
+          <span class="eyebrow"><i></i>Free · Open-source · In your browser</span>
+          <h1>Free <span class="hl">browser tools</span><br />for RC pilots.</h1>
+          <p>Replay your flight logs in 3D, or practice on a realistic FPV wing simulator — all in your browser. Nothing ever leaves your machine.</p>
+          <div class="hero-ctas">
+            <a href="https://sim.narenana.com" target="_blank" rel="noopener" class="btn btn-orange btn-lg">Fly the simulator
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+            </a>
+            <a href="/log-viewer/" class="btn btn-cream btn-lg">Open the log viewer</a>
+          </div>
         </div>
       </div>
+      <a href="#tools" class="scroll-cue" aria-label="Scroll to tools">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+      </a>
+    </section>
 
-      <h2>Latest FPV &amp; RC flying from YouTube</h2>
-      <ul class="videos" id="videos" aria-live="polite">
-        <li class="vempty" id="videos-status">Loading…</li>
-      </ul>
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee-track">
+        <div>
+          <span>EdgeTX CSV</span><span class="st">✦</span><span>iNAV blackbox</span><span class="st">✦</span><span>Betaflight</span><span class="st">✦</span><span>3D replay</span><span class="st">✦</span><span>Gamepad + RC radio</span><span class="st">✦</span><span>Simulated LiPo</span><span class="st">✦</span><span>Race course</span><span class="st">✦</span><span>Open source</span><span class="st">✦</span><span>Zero uploads</span><span class="st">✦</span>
+        </div>
+        <div>
+          <span>EdgeTX CSV</span><span class="st">✦</span><span>iNAV blackbox</span><span class="st">✦</span><span>Betaflight</span><span class="st">✦</span><span>3D replay</span><span class="st">✦</span><span>Gamepad + RC radio</span><span class="st">✦</span><span>Simulated LiPo</span><span class="st">✦</span><span>Race course</span><span class="st">✦</span><span>Open source</span><span class="st">✦</span><span>Zero uploads</span><span class="st">✦</span>
+        </div>
+      </div>
+    </div>
 
-      <footer>
-        <p>More tools coming. Source on <a href="https://github.com/narenana">GitHub</a>. Channel on <a href="https://www.youtube.com/@narenana">YouTube</a>.</p>
-      </footer>
-    </main>
+    <section class="value">
+      <div class="wrap value-grid">
+        <div class="value-item" data-reveal>
+          <div class="num">01</div>
+          <h3>Zero uploads, zero servers</h3>
+          <p>Every log and every flight is processed on your own machine. Your data never leaves your device.</p>
+        </div>
+        <div class="value-item" data-reveal data-reveal-delay="90">
+          <div class="num">02</div>
+          <h3>Open source</h3>
+          <p>Read it, fork it, host it yourself. Everything lives in the open on <a href="https://github.com/narenana" target="_blank" rel="noopener">GitHub</a>.</p>
+        </div>
+        <div class="value-item" data-reveal data-reveal-delay="180">
+          <div class="num">03</div>
+          <h3>Built at the field</h3>
+          <p>Made by pilots who actually fly — shaped by real logs, real crashes and real fixes between packs.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sect" id="tools">
+      <div class="wrap">
+        <div class="sect-head" data-reveal>
+          <span class="kicker">Available now</span>
+          <h2>Two free tools, right in your browser</h2>
+        </div>
+
+        <div class="tool-row">
+          <div data-reveal>
+            <span class="tagpill orange">FPV Simulator</span>
+            <h3>Nanawing — fly a wing in your browser</h3>
+            <p class="body">A free fixed-wing FPV simulator with no download and no signup. Hand-launch over realistic farmland with your keyboard, a gamepad, or your real RC radio — with an iNAV-style OSD, a simulated LiPo, and a race course to chase.</p>
+            <div class="chips">
+              <span class="chip">Keyboard · Gamepad · RC radio</span>
+              <span class="chip">iNAV-style OSD</span>
+              <span class="chip">Simulated LiPo</span>
+              <span class="chip">Race course</span>
+            </div>
+            <div class="tool-ctas">
+              <a href="https://sim.narenana.com" target="_blank" rel="noopener" class="btn btn-orange btn-md">Fly now
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+              </a>
+              <a href="#videos" class="btn-text">Watch a flight first</a>
+            </div>
+          </div>
+          <div data-reveal data-reveal-delay="120">
+            <div class="mock acc-orange">
+              <div class="mock-bar"><i></i><i></i><i></i><span class="url">sim.narenana.com</span></div>
+              <div class="mock-body">
+                <picture>
+                  <source srcset="/assets/shot-nanawing.avif" type="image/avif" />
+                  <source srcset="/assets/shot-nanawing.webp" type="image/webp" />
+                  <img src="/assets/shot-nanawing.jpg" alt="Nanawing simulator — a flying wing over golden farmland approaching a race gate" loading="lazy" />
+                </picture>
+                <div class="osd">
+                  <div class="rec"><i></i>REC</div>
+                  <div style="position:absolute;right:14px;top:12px">16.2V · 02:14</div>
+                  <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.75;color:#F79A3F"><svg width="34" height="34" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="24" cy="24" r="11" opacity=".55"/><path d="M24 6v8M24 34v8M6 24h8M34 24h8" stroke-linecap="round"/></svg></div>
+                  <div style="position:absolute;left:14px;bottom:12px">ALT 42m</div>
+                  <div style="position:absolute;right:14px;bottom:12px">SPD 68kph</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="tool-row flip">
+          <div class="mock-col" data-reveal data-reveal-delay="120">
+            <div class="mock acc-sky">
+              <div class="mock-bar"><i></i><i></i><i></i><span class="url">narenana.com/log-viewer</span></div>
+              <div class="mock-body">
+                <picture>
+                  <source srcset="/assets/shot-log-viewer.avif" type="image/avif" />
+                  <source srcset="/assets/shot-log-viewer.webp" type="image/webp" />
+                  <img src="/assets/shot-log-viewer.jpg" alt="RC Log Viewer — a wing diving into the Grand Canyon with its flight path drawn in 3D" loading="lazy" />
+                </picture>
+                <div class="tele"><span>ALT 128m</span><span>SPD 74kph</span><span>DIST 1.2km</span><span>SATS 14</span></div>
+              </div>
+            </div>
+          </div>
+          <div data-reveal>
+            <span class="tagpill sky">3D Log Viewer</span>
+            <h3>Replay your flights in 3D</h3>
+            <p class="body">Drop an EdgeTX CSV or an iNAV / Betaflight blackbox log and replay the whole flight on a 3D globe, with a live telemetry bar and charts that scrub in sync. It all runs locally — nothing is uploaded.</p>
+            <div class="chips">
+              <span class="chip">EdgeTX CSV</span>
+              <span class="chip">iNAV / Betaflight blackbox</span>
+              <span class="chip">3D globe</span>
+              <span class="chip">Synced charts</span>
+            </div>
+            <div class="tool-ctas">
+              <a href="/log-viewer/" class="btn btn-sky btn-md">Try now
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="sect" id="videos">
+      <div class="wrap">
+        <div class="videos-head" data-reveal>
+          <div style="max-width:620px">
+            <span class="kicker">From the channel</span>
+            <h2>Latest FPV &amp; RC flying</h2>
+          </div>
+          <a href="https://www.youtube.com/@narenana" target="_blank" rel="noopener" class="yt-link"><span class="wordmark" style="font-size:22px;line-height:1">narenana</span> on YouTube
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+        <div class="vid-grid" id="vid-grid" aria-live="polite">
+          <p class="vid-status" id="vid-status">Loading the latest flights…</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="sect" id="shop">
+      <div class="wrap">
+        <div class="sect-head" data-reveal style="margin-bottom:clamp(36px,4vw,52px)">
+          <span class="tagpill orange">Coming soon</span>
+          <h2 style="margin-top:18px">Curated wings, without the rabbit hole</h2>
+          <p class="body" style="max-width:none">A hand-picked buying guide for FPV flying wings — compare kits, specs and prices, and jump straight to where to buy, all chosen by pilots who fly them. Launching soon.</p>
+        </div>
+        <div class="skel-grid">
+          <div class="skel" data-reveal>
+            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
+            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:38px"></span><span style="width:52px"></span><span style="width:30px"></span></div></div>
+          </div>
+          <div class="skel" data-reveal data-reveal-delay="80">
+            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
+            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:44px"></span><span style="width:34px"></span><span style="width:50px"></span></div></div>
+          </div>
+          <div class="skel" data-reveal data-reveal-delay="160">
+            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
+            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:30px"></span><span style="width:56px"></span><span style="width:36px"></span></div></div>
+          </div>
+          <div class="skel" data-reveal data-reveal-delay="240">
+            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
+            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:48px"></span><span style="width:32px"></span><span style="width:44px"></span></div></div>
+          </div>
+        </div>
+        <div class="notify" data-reveal>
+          <input type="email" placeholder="you@email.com" aria-label="Email for launch news" />
+          <a href="https://www.youtube.com/@narenana" target="_blank" rel="noopener" class="btn btn-orange btn-md">Notify me
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+          </a>
+          <span class="hint">or subscribe on YouTube for launch news</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band" data-reveal>
+      <div class="cta-glow" data-px data-speed="-0.06"></div>
+      <div class="cta-inner">
+        <div style="max-width:660px">
+          <div class="kicker">Ready for takeoff</div>
+          <h2>Hand-launch a wing in about ten seconds.</h2>
+        </div>
+        <a href="https://sim.narenana.com" target="_blank" rel="noopener" class="btn btn-orange btn-xl">Launch the simulator
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+        </a>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="wrap">
+        <div class="foot-cols">
+          <div>
+            <a href="#top" class="wordmark foot-mark">narenana</a>
+            <p class="foot-tag">Free, open-source browser tools for RC pilots. Nothing ever leaves your machine. More tools coming.</p>
+            <div class="socials">
+              <a href="https://github.com/narenana" target="_blank" rel="noopener" aria-label="GitHub">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.09.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.62-3.37-1.37-3.37-1.37-.46-1.18-1.11-1.49-1.11-1.49-.91-.63.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.89 1.56 2.34 1.11 2.91.85.09-.66.35-1.11.63-1.36-2.22-.26-4.56-1.14-4.56-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.71 0 0 .84-.28 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9 0 1.37-.01 2.48-.01 2.82 0 .26.18.59.69.48A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/></svg>
+              </a>
+              <a href="https://www.youtube.com/@narenana" target="_blank" rel="noopener" aria-label="YouTube">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#0C2531"/></svg>
+              </a>
+            </div>
+          </div>
+          <div class="foot-links">
+            <div class="foot-col">
+              <div class="h">Tools</div>
+              <a href="https://sim.narenana.com" target="_blank" rel="noopener">FPV simulator</a>
+              <a href="/log-viewer/">3D log viewer</a>
+              <a href="#shop">Curated wings <span class="soon">SOON</span></a>
+            </div>
+            <div class="foot-col">
+              <div class="h">Community</div>
+              <a href="https://github.com/narenana" target="_blank" rel="noopener">GitHub</a>
+              <a href="https://www.youtube.com/@narenana" target="_blank" rel="noopener">YouTube</a>
+            </div>
+          </div>
+        </div>
+        <div class="foot-div"></div>
+        <div class="foot-bottom">
+          <span>© <span id="year">2026</span> narenana · Free &amp; open source</span>
+          <span>Built at the field by pilots who fly.</span>
+        </div>
+      </div>
+    </footer>
 
     <script>
-      (async () => {
-        const list = document.getElementById('videos')
-        const status = document.getElementById('videos-status')
-        if (!list) return
+      (function () {
+        'use strict'
+        var reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
 
-        let data
-        try {
-          const res = await fetch('/videos.json')
-          if (!res.ok) throw new Error()
-          data = await res.json()
-        } catch {
-          if (status) status.textContent = 'Couldn’t load videos right now. Visit youtube.com/@narenana directly.'
-          return
+        // © year
+        var y = document.getElementById('year')
+        if (y) y.textContent = String(new Date().getFullYear())
+
+        // ── Parallax + hero fade + nav solidify (single rAF-throttled pass) ──
+        var pxEls = Array.prototype.slice.call(document.querySelectorAll('[data-px]'))
+        var fadeEls = Array.prototype.slice.call(document.querySelectorAll('[data-fade]'))
+        var nav = document.getElementById('nav')
+        var hero = document.getElementById('hero')
+        var heroH = 700
+        var raf = 0
+        function measure () { heroH = hero ? hero.offsetHeight : (window.innerHeight || 700) }
+        function apply () {
+          raf = 0
+          var yOff = window.pageYOffset || document.documentElement.scrollTop || 0
+          var k = reduced ? 0 : 1
+          for (var i = 0; i < pxEls.length; i++) {
+            var n = pxEls[i]
+            var s = parseFloat(n.getAttribute('data-speed') || '0')
+            var sx = parseFloat(n.getAttribute('data-speed-x') || '0')
+            n.style.transform = 'translate3d(' + (yOff * sx * k) + 'px,' + (yOff * s * k) + 'px,0)'
+          }
+          for (var j = 0; j < fadeEls.length; j++) {
+            var f = fadeEls[j]
+            f.style.opacity = String(Math.max(0, 1 - (yOff / (heroH * 0.72))))
+            f.style.transform = 'translateY(' + (yOff * 0.12 * k) + 'px)'
+          }
+          if (nav) nav.classList.toggle('solid', yOff > 24)
+        }
+        function onScroll () { if (!raf) raf = requestAnimationFrame(apply) }
+        window.addEventListener('scroll', onScroll, { passive: true })
+        window.addEventListener('resize', function () { measure(); apply() })
+        measure(); apply()
+
+        // ── Reveal on scroll ──
+        if (!reduced && 'IntersectionObserver' in window) {
+          var io = new IntersectionObserver(function (ents) {
+            ents.forEach(function (e) {
+              if (!e.isIntersecting) return
+              var d = parseFloat(e.target.getAttribute('data-reveal-delay') || '0')
+              e.target.style.transitionDelay = d + 'ms'
+              e.target.style.opacity = '1'
+              e.target.style.transform = 'none'
+              io.unobserve(e.target)
+            })
+          }, { threshold: 0.1, rootMargin: '0px 0px -6% 0px' })
+          Array.prototype.slice.call(document.querySelectorAll('[data-reveal]')).forEach(function (el) {
+            el.style.opacity = '0'
+            el.style.transform = 'translateY(24px)'
+            el.style.transition = 'opacity .7s ease, transform .8s cubic-bezier(.2,.7,.15,1)'
+            io.observe(el)
+          })
         }
 
-        if (!data.videos || data.videos.length === 0) {
-          if (status) status.textContent = 'No videos yet.'
-          return
+        // ── Latest flights: live KV-cached feed, handoff list as fallback ──
+        var FALLBACK = [
+          { id: 'IE0N-NwE7oU', title: 'RC fake bomb drop from a Sky Surfer' },
+          { id: 'gmv1u3liw5U', title: 'Heewing F01 cruising over the countryside' },
+          { id: 'tiaQBH-iisc', title: 'TBS Chupito & AtomRC Dolphin in formation' },
+          { id: '-bYBr_juVRQ', title: 'DeepSpace Seeker 5 — chilling by the hill' },
+          { id: 'wBdqlpGiqzI', title: 'AtomRC Swordfish — maiden & formation flying' },
+          { id: '6MLQCoG5t2w', title: 'EdgeTX log viewer & visualiser' }
+        ]
+        function esc (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] }) }
+        function card (v, i) {
+          var href = v.url || ('https://www.youtube.com/watch?v=' + v.id)
+          var thumb = v.thumbnail || ('https://img.youtube.com/vi/' + v.id + '/hqdefault.jpg')
+          return '<a class="vid" href="' + esc(href) + '" target="_blank" rel="noopener" data-reveal data-reveal-delay="' + (i * 70) + '">' +
+            '<div class="vid-thumb"><img src="' + esc(thumb) + '" alt="" loading="lazy" />' +
+            '<div class="vid-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-left:2px"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></div></div>' +
+            '<div class="vid-body"><div class="vid-title">' + esc(v.title) + '</div>' +
+            '<div class="vid-meta"><svg width="15" height="15" viewBox="0 0 24 24" fill="#C63B2E" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#FCF9F1"/></svg>YOUTUBE</div></div></a>'
         }
-
-        const compact = new Intl.NumberFormat('en', { notation: 'compact' })
-        const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
-        const now = Date.now()
-
-        function relative(iso) {
-          const days = Math.round((now - new Date(iso)) / 86400000)
-          if (days < 1) return rtf.format(0, 'day')
-          if (days < 30) return rtf.format(-days, 'day')
-          if (days < 365) return rtf.format(-Math.round(days / 30), 'month')
-          return rtf.format(-Math.round(days / 365), 'year')
+        function renderVideos (list) {
+          var grid = document.getElementById('vid-grid')
+          if (!grid) return
+          grid.innerHTML = list.slice(0, 6).map(card).join('')
+          // Newly injected cards get the reveal treatment too.
+          if (!reduced && 'IntersectionObserver' in window) {
+            var io2 = new IntersectionObserver(function (ents) {
+              ents.forEach(function (e) {
+                if (!e.isIntersecting) return
+                var d = parseFloat(e.target.getAttribute('data-reveal-delay') || '0')
+                e.target.style.transitionDelay = d + 'ms'
+                e.target.style.opacity = '1'
+                e.target.style.transform = 'none'
+                io2.unobserve(e.target)
+              })
+            }, { threshold: 0.1, rootMargin: '0px 0px -6% 0px' })
+            Array.prototype.slice.call(grid.querySelectorAll('[data-reveal]')).forEach(function (el) {
+              el.style.opacity = '0'
+              el.style.transform = 'translateY(24px)'
+              el.style.transition = 'opacity .7s ease, transform .8s cubic-bezier(.2,.7,.15,1)'
+              io2.observe(el)
+            })
+          }
         }
-
-        const cards = data.videos.map((v) => {
-          const li = document.createElement('li')
-
-          const a = document.createElement('a')
-          a.className = 'video'
-          a.href = v.url
-          a.target = '_blank'
-          a.rel = 'noopener'
-
-          const img = document.createElement('img')
-          img.className = 'thumb'
-          img.src = v.thumbnail
-          img.alt = ''
-          img.loading = 'lazy'
-          img.width = 320
-          img.height = 180
-
-          const meta = document.createElement('div')
-          meta.className = 'vmeta'
-
-          const h3 = document.createElement('h3')
-          h3.className = 'vtitle'
-          h3.textContent = v.title
-
-          const sub = document.createElement('p')
-          sub.className = 'vsub'
-          sub.textContent = compact.format(v.views) + ' views · ' + relative(v.published)
-
-          meta.append(h3, sub)
-          a.append(img, meta)
-          li.append(a)
-          return li
-        })
-
-        list.replaceChildren(...cards)
+        fetch('/videos.json')
+          .then(function (r) { if (!r.ok) throw new Error('feed ' + r.status); return r.json() })
+          .then(function (d) {
+            var vids = (d && d.videos && d.videos.length) ? d.videos : FALLBACK
+            renderVideos(vids)
+          })
+          .catch(function () { renderVideos(FALLBACK) })
       })()
     </script>
   </body>
