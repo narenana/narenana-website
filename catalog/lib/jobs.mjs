@@ -148,10 +148,10 @@ export async function upsertProducts(env, su, products, spent) {
       }
     } else if (byU) {
       if (p.pid && byU.platform_pid && byU.platform_pid !== p.pid) {
-        // URL reuse: same address, different product. Close the old row loudly;
-        // the new listing enters review as a fresh row.
-        stmts.push(q(env, `UPDATE sku SET dead=1, flagged=? WHERE id=?`,
-          JSON.stringify({ kind: 'url-reused', detail: `pid ${byU.platform_pid} -> ${p.pid}`, at: t }), byU.id))
+        // URL reuse: same address, different product. Owner's rule: never
+        // auto-remove — flag into the Missing list; confirm-gone is the gate.
+        stmts.push(q(env, `UPDATE sku SET flagged=? WHERE id=?`,
+          JSON.stringify({ kind: 'missing', detail: `url now serves a different product (pid ${byU.platform_pid} → ${p.pid})`, at: t }), byU.id))
         inserts.push(p)
       } else {
         const changed = byU.price_inr !== p.priceINR || !!byU.in_stock !== !!p.inStock
@@ -313,23 +313,61 @@ async function verifySlice(env, trigger) {
   )
   const log = []
   const stmts = []
+  const kindOf = (f) => {
+    try {
+      return f ? JSON.parse(f).kind : null
+    } catch {
+      return null
+    }
+  }
   for (const sku of rows) {
     // WooCommerce: trust the Store API (reliable price/stock) over HTML scraping.
     const res =
       sku.platform === 'woocommerce' && sku.platform_pid
-        ? await checkWooProduct(sku.home_url, sku.platform_pid)
+        ? await checkWooProduct(sku.home_url, sku.platform_pid, sku.url_canonical)
         : await checkPage(sku.url_canonical, sku)
+    // The daily feed scan updates last_seen for every product still listed. A
+    // "gone" signal is only trusted to AUTO-remove when the feed ALSO stopped
+    // seeing it — a 404 that contradicts a fresh feed sighting is suspect.
+    const feedRecent = sku.last_seen && t - sku.last_seen < DAY
+
     if (res.blocked) {
-      // Seller put up a bot wall — we could NOT read the listing. Preserve the
-      // last-known price/stock; only advance last_checked so verify rotates on
-      // to other SKUs instead of spinning on this blocked seller forever.
+      // Bot wall / error — we could NOT read the listing. Preserve last-known
+      // price/stock; only advance last_checked so verify rotates onward.
       stmts.push(q(env, `UPDATE sku SET last_checked=? WHERE id=?`, t, sku.id))
       log.push(`${sku.id} ${sku.title?.slice(0, 30)}: blocked (data preserved)`)
       continue
     }
-    if (res.gone) {
-      stmts.push(q(env, `UPDATE sku SET misses=misses+1, last_checked=?, dead=CASE WHEN misses+1>=3 THEN 1 ELSE dead END WHERE id=?`, t, sku.id))
-      log.push(`${sku.id} ${sku.title?.slice(0, 30)}: page gone (miss ${sku.misses + 1})`)
+    if (res.gone && !feedRecent) {
+      // Hard 404 AND the feed dropped it → genuine deletion. THE ONLY auto-remove
+      // path (owner's rule), still gated behind 3 consecutive misses. No flag —
+      // the Removed tab lists dead rows; the audit row records the actor.
+      stmts.push(q(env, `UPDATE sku SET misses=misses+1, last_checked=?,
+        dead=CASE WHEN misses+1>=3 THEN 1 ELSE dead END WHERE id=?`, t, sku.id))
+      if (sku.misses + 1 >= 3) stmts.push(audit(env, 'verify', 'auto-removed-404', 'sku', sku.id, { url: sku.url_canonical }))
+      log.push(`${sku.id} ${sku.title?.slice(0, 30)}: 404+unlisted (miss ${sku.misses + 1})`)
+      continue
+    }
+    if (res.quoteOnly && res.priceINR == null && sku.price_inr != null) {
+      // A 200 page that no longer yields a price for a previously-priced
+      // product is AMBIGUOUS (soft-404, theme without price markup). Preserve
+      // the price and route to the owner's Missing list — never silently wipe.
+      if (kindOf(sku.flagged) === 'missing') stmts.push(q(env, `UPDATE sku SET last_checked=? WHERE id=?`, t, sku.id))
+      else stmts.push(q(env, `UPDATE sku SET flagged=?, last_checked=? WHERE id=?`,
+        JSON.stringify({ kind: 'missing', detail: 'page no longer shows a price', at: t }), t, sku.id))
+      log.push(`${sku.id} ${sku.title?.slice(0, 30)}: unpriced 200 → owner review (price preserved)`)
+      continue
+    }
+    if (res.missing || res.gone) {
+      // Missing-from-feed, or a 404 the feed contradicts. NEVER auto-remove —
+      // flag for the owner to confirm. Idempotent: re-flag only if not already.
+      if (kindOf(sku.flagged) === 'missing') {
+        stmts.push(q(env, `UPDATE sku SET last_checked=? WHERE id=?`, t, sku.id))
+      } else {
+        stmts.push(q(env, `UPDATE sku SET flagged=?, last_checked=? WHERE id=?`,
+          JSON.stringify({ kind: 'missing', detail: res.gone ? '404 but still in feed' : 'absent from seller feed', at: t }), t, sku.id))
+      }
+      log.push(`${sku.id} ${sku.title?.slice(0, 30)}: MISSING → owner review`)
       continue
     }
     const delta = sku.price_inr && res.priceINR ? Math.abs(res.priceINR - sku.price_inr) / sku.price_inr : 0
@@ -340,12 +378,15 @@ async function verifySlice(env, trigger) {
       log.push(`${sku.id} ${sku.title?.slice(0, 30)}: FLAG price ${sku.price_inr}→${res.priceINR}`)
     } else {
       const changed = sku.price_inr !== res.priceINR || !!sku.in_stock !== !!res.inStock
+      // A successful read auto-clears a stale 'missing' flag — the product is back.
+      const clearMissing = kindOf(sku.flagged) === 'missing' ? 1 : 0
       stmts.push(q(env,
         `UPDATE sku SET price_inr=?, in_stock=?, quote_only=?, image_url=COALESCE(image_url, ?),
            variants=CASE WHEN ? != '[]' THEN ? ELSE variants END,
+           flagged=CASE WHEN ?=1 THEN NULL ELSE flagged END,
            misses=0, dead=0, last_checked=? WHERE id=?`,
         res.priceINR, res.inStock == null ? null : res.inStock ? 1 : 0, res.quoteOnly ? 1 : 0, res.img ?? null,
-        JSON.stringify(res.variants ?? []), JSON.stringify(res.variants ?? []), t, sku.id))
+        JSON.stringify(res.variants ?? []), JSON.stringify(res.variants ?? []), clearMissing, t, sku.id))
       if (changed) stmts.push(q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`,
         sku.id, t, null, res.priceINR, res.inStock == null ? null : res.inStock ? 1 : 0))
       log.push(`${sku.id} ${sku.title?.slice(0, 30)}: ok ${res.priceINR ?? '—'}`)

@@ -84,6 +84,27 @@ test('checkWooProduct: unreachable API is blocked (preserve), never gone', async
   assert.notEqual(r.gone, true)
 })
 
+test('checkWooProduct: pid absent from API → disambiguate via product page', async () => {
+  const realFetch = globalThis.fetch
+  // API returns 200 [] (product not in feed); product page status decides.
+  const stub = (pageStatus, pageBody = '<h1>ok</h1>') => async (u) =>
+    String(u).includes('/wp-json/')
+      ? { ok: true, status: 200, json: async () => [] }
+      : { ok: pageStatus < 400, status: pageStatus, text: async () => pageBody }
+  try {
+    globalThis.fetch = stub(404)
+    assert.deepEqual(await checkWooProduct('https://s.example', '9', 'https://s.example/p/x'), { gone: true }, '404 page → gone (auto-remove path)')
+    globalThis.fetch = stub(200)
+    assert.deepEqual(await checkWooProduct('https://s.example', '9', 'https://s.example/p/x'), { missing: true }, 'live page but absent from feed → missing (owner confirms)')
+    globalThis.fetch = stub(403)
+    assert.deepEqual(await checkWooProduct('https://s.example', '9', 'https://s.example/p/x'), { blocked: true }, '403 page → blocked (preserve)')
+    globalThis.fetch = stub(200, '<title>Just a moment...</title>')
+    assert.deepEqual(await checkWooProduct('https://s.example', '9', 'https://s.example/p/x'), { blocked: true }, '200 challenge → blocked (preserve)')
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
 test('cartSignals: element-level add-to-cart detection (Zoho)', () => {
   const real = '<div class="theme-cart-button zpbutton" data-zs-add-to-cart data-zs-product-variant-id="1"></div><span class="theme-product-price">₹4,999.00</span>'
   assert.deepEqual(cartSignals(real), { inStock: true, priceINR: 4999 })

@@ -364,7 +364,7 @@ export function cartSignals(html = '') {
 // NOT by scraping product HTML — a simple Woo product often carries no price
 // JSON-LD, so HTML scraping wrongly reads it as quote-only. Returns the same
 // shape as checkPage: { blocked } | { gone } | { priceINR, inStock, ... }.
-export async function checkWooProduct(homeUrl, pid) {
+export async function checkWooProduct(homeUrl, pid, productUrl) {
   const origin = new URL(homeUrl).origin
   let res
   try {
@@ -381,7 +381,24 @@ export async function checkWooProduct(homeUrl, pid) {
   }
   if (!Array.isArray(arr)) return { blocked: true }
   const p = arr.find((x) => String(x.id) === String(pid))
-  if (!p) return { gone: true } // API reachable and product absent → really gone
+  if (!p) {
+    // Absent from the API result is AMBIGUOUS — a WAF can serve `200 []`, and a
+    // filtered/paused product isn't the same as a deleted one. Disambiguate via
+    // the product page: a real 404 is a genuine deletion; a page that still
+    // loads means "missing from feed" → owner confirms, never auto-removed.
+    if (!productUrl) return { missing: true }
+    let pr
+    try {
+      pr = await fetch(productUrl, { headers: { 'user-agent': UA, accept: 'text/html,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(9000) })
+    } catch {
+      return { blocked: true }
+    }
+    if (pr.status === 404 || pr.status === 410) return { gone: true }
+    if (!pr.ok) return { blocked: true }
+    const html = await pr.text().catch(() => '')
+    if (isChallenge(html)) return { blocked: true }
+    return { missing: true }
+  }
   const div = 10 ** (p.prices?.currency_minor_unit ?? 2)
   const paise = Math.round(Number(p.prices?.price ?? 0) / div)
   return {

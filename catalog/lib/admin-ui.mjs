@@ -37,7 +37,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v7</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v9</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
@@ -76,13 +76,14 @@ function renderFilters(){
   const c=data.counts;
   const btn=(grp,val,label,count)=>'<button class="chip '+(F[grp]===val?'on':'')+'" data-g="'+grp+'" data-v="'+val+'">'+label+(count!=null?' <span>'+(count??0)+'</span>':'')+'</button>';
   $('#filters').innerHTML=
-    btn('status','new','New',c.new)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)
-    +'<span style="width:10px"></span>'+btn('stock','in','In stock')+btn('stock','out','Not in stock')+btn('stock','all','Any')
+    btn('status','new','New',c.new)+btn('status','missing','Missing',c.missing)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)+btn('status','removed','Removed',c.removed)
+    +(F.status==='new'?'<span style="width:10px"></span>'+btn('stock','in','In stock')+btn('stock','out','Not in stock')+btn('stock','all','Any'):'')
     +'<span style="width:10px"></span>'+btn('src','','All sellers')+data.sources.map((s)=>btn('src',s.id,s.id)).join('');
   document.querySelectorAll('#filters .chip').forEach((b)=>b.onclick=()=>{F[b.dataset.g]=b.dataset.v;load()});
 }
 function skuRow(k){
-  const stock=k.flagged?'<span class="unk">⚑ flagged: '+esc(JSON.parse(k.flagged).kind)+'</span>':k.quote_only?'<span class="unk">quote only</span>':k.in_stock===1?'':k.in_stock===0?'<span class="oos">out of stock</span>':'<span class="unk">stock unverified</span>';
+  let flg=null;try{flg=k.flagged?JSON.parse(k.flagged):null}catch(e){}
+  const stock=flg?(flg.kind==='missing'?'<span class="oos">⚑ missing from seller'+(flg.detail?' ('+esc(flg.detail)+')':'')+'</span>':'<span class="unk">⚑ '+esc(flg.kind)+(flg.detail?': '+esc(flg.detail):'')+'</span>'):k.quote_only?'<span class="unk">quote only</span>':k.in_stock===1?'':k.in_stock===0?'<span class="oos">out of stock</span>':'<span class="unk">stock unverified</span>';
   const sugg=(k.suggestions||[]).map((m)=>'<button class="chip" data-a="attach" data-sku="'+k.id+'" data-master="'+m.id+'">→ '+esc(m.brand+' '+m.name)+'</button>').join('');
   const mapUI=F.status==='new'?'<div class="map"><div class="sugg">'+(sugg||'<span class="tag">no master match — create one:</span>')+'</div>'
     +'<div class="fields"><input data-f="brand" value="'+esc(k.guess.brand)+'" placeholder="Brand"/><input data-f="name" value="'+esc(k.guess.name)+'" placeholder="Model name"/><input data-f="slug" value="'+esc(k.guess.slug)+'" placeholder="slug"/><select data-f="config">'+(((data.cat||{}).configs)||[]).map((c)=>'<option'+(c===(k.guess.config||'kit')?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>'
@@ -92,6 +93,8 @@ function skuRow(k){
     ?'<button class="ok" data-a="approve" data-sku="'+k.id+'">Approve new</button><button class="no" data-a="reject" data-sku="'+k.id+'" data-r="accessory">Accessory</button><button class="no" data-a="reject" data-sku="'+k.id+'" data-r="out-of-scope">Out of scope</button><button class="no" data-a="reject" data-sku="'+k.id+'" data-r="junk">Junk</button>'
     :F.status==='rejected'?'<button data-a="restore" data-sku="'+k.id+'">Restore</button>'
     :F.status==='approved'?'<button class="no" data-a="unapprove" data-sku="'+k.id+'">Un-approve</button>'
+    :F.status==='missing'?'<button class="ok" data-a="unflag" data-sku="'+k.id+'">Still available (keep)</button><button class="no" data-a="confirm-gone" data-sku="'+k.id+'">Confirm removal</button>'
+    :F.status==='removed'?'<button class="ok" data-a="restore-live" data-sku="'+k.id+'">Restore</button>'
     :F.status==='flagged'?'<button class="ok" data-a="unflag" data-sku="'+k.id+'">Accept change</button><button class="no" data-a="unapprove" data-sku="'+k.id+'">Un-approve</button>':'';
   return '<div class="row" data-sku="'+k.id+'">'
     +(k.image_url?'<img class="thumb" loading="lazy" src="'+esc(k.image_url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'"/>':'<div class="noimg">no image</div>')
@@ -117,6 +120,7 @@ document.addEventListener('click',async(e)=>{
   }
   if(b.dataset.a==='attach'){const sel=row.querySelector('[data-f="config"]');body.config=sel?sel.value:'kit'}
   if(b.dataset.a==='unapprove'&&!confirm('Remove this offer from the live site?'))return;
+  if(b.dataset.a==='confirm-gone'&&!confirm('Confirm this product is gone and remove it from the live site? (the record is kept and can be restored)'))return;
   b.disabled=true;
   try{await api('decide',body);row.classList.add('gone');setTimeout(load,250)}catch(err){alert(err.message);b.disabled=false}
 });
@@ -172,8 +176,14 @@ function renderCatalog(){
 function renderSystem(){
   const s=data.settings;
   const tog=(k,label)=>'<button data-set="'+k+'" data-v="'+(s[k]==='1'?'0':'1')+'" class="'+(s[k]==='1'?'no':'ok')+'">'+label+': '+(s[k]==='1'?'PAUSED':'running')+'</button>';
+  const ago=(ms)=>{if(!ms)return '—';const h=Math.round((Date.now()-ms)/3.6e6);return (h<1?'<1h':h<48?h+'h':Math.round(h/24)+'d')+' ago';};
+  const health=(data.health||[]);
+  const healthTable='<h3>Source health</h3><table class="t"><thead><tr><th>Source</th><th>Last scan</th><th>Oldest verify</th><th>Live</th><th>Flagged</th><th>Removed</th></tr></thead><tbody>'
+    +health.map((r)=>{const stale=r.last_scan&&(Date.now()-r.last_scan)>36*3.6e6;return '<tr><td>'+esc(r.source_id)+'</td><td'+(stale?' style="color:var(--bad)"':'')+'>'+ago(r.last_scan)+'</td><td>'+ago(r.oldest_verify)+'</td><td>'+(r.live||0)+'</td><td'+(r.flagged>0?' style="color:var(--warn)"':'')+'>'+(r.flagged||0)+'</td><td>'+(r.removed||0)+'</td></tr>'}).join('')
+    +'</tbody></table>';
   $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('verify_paused','Verify')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
     +'<p class="meta">scan cursor: <pre>'+esc(s.scan_cursor||'—')+'</pre></p>'
+    +healthTable
     +'<h3>Recent audit</h3><table class="t"><tbody>'
     +data.audit.map((a)=>'<tr><td>'+new Date(a.at).toISOString().slice(0,16).replace('T',' ')+'</td><td>'+esc(a.actor)+'</td><td>'+esc(a.action)+'</td><td>'+esc(a.entity)+' '+esc(a.entity_id||'')+'</td></tr>').join('')
     +'</tbody></table>';

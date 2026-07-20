@@ -151,8 +151,10 @@ async function api(request, url, env, ep, actor) {
 
   if (ep === 'review') {
     const counts = {}
-    for (const r of await all(env, `SELECT review_status s, COUNT(*) n FROM sku WHERE flagged IS NULL GROUP BY review_status`)) counts[r.s] = r.n
-    counts.flagged = (await one(env, `SELECT COUNT(*) n FROM sku WHERE flagged IS NOT NULL`))?.n ?? 0
+    for (const r of await all(env, `SELECT review_status s, COUNT(*) n FROM sku WHERE flagged IS NULL AND dead=0 GROUP BY review_status`)) counts[r.s] = r.n
+    counts.flagged = (await one(env, `SELECT COUNT(*) n FROM sku WHERE flagged IS NOT NULL AND json_extract(flagged,'$.kind')!='missing' AND dead=0`))?.n ?? 0
+    counts.missing = (await one(env, `SELECT COUNT(*) n FROM sku WHERE json_extract(flagged,'$.kind')='missing' AND dead=0`))?.n ?? 0
+    counts.removed = (await one(env, `SELECT COUNT(*) n FROM sku WHERE dead=1`))?.n ?? 0
     const sources = await all(env, 'SELECT id FROM source ORDER BY id')
     const allCats = await categories(env)
     const cat = allCats.find((c) => c.id === url.searchParams.get('cat')) ?? allCats[0]
@@ -165,10 +167,16 @@ async function api(request, url, env, ep, actor) {
     const src = url.searchParams.get('src') ?? ''
     let where, params
     if (status === 'flagged') {
-      where = 'k.flagged IS NOT NULL'
+      where = `k.flagged IS NOT NULL AND json_extract(k.flagged,'$.kind')!='missing' AND k.dead=0`
+      params = []
+    } else if (status === 'missing') {
+      where = `json_extract(k.flagged,'$.kind')='missing' AND k.dead=0`
+      params = []
+    } else if (status === 'removed') {
+      where = `k.dead=1`
       params = []
     } else {
-      where = `k.review_status=? AND k.flagged IS NULL`
+      where = `k.review_status=? AND k.flagged IS NULL AND k.dead=0`
       params = [status]
       if (status === 'new') {
         if (stock === 'in') where += ' AND k.in_stock=1'
@@ -264,6 +272,19 @@ async function api(request, url, env, ep, actor) {
       await batch(env, [q(env, `UPDATE sku SET flagged=NULL, last_checked=NULL WHERE id=?`, k.id), audit(env, actor, 'unflag', 'sku', k.id)])
       return json({ ok: true })
     }
+    if (body.action === 'confirm-gone') {
+      // Owner confirms a flagged-missing product really is gone → remove it from
+      // the live site (dead=1). The row + price history stay for the record and
+      // it can be brought back via restore-live. Never a hard delete.
+      await batch(env, [q(env, `UPDATE sku SET dead=1, flagged=NULL, reviewed_at=? WHERE id=?`, now(), k.id), audit(env, actor, 'confirm-gone', 'sku', k.id)])
+      return json({ ok: true })
+    }
+    if (body.action === 'restore-live') {
+      // Bring a removed product back (owner spotted it relisted, or the
+      // auto-404 was wrong). Resets the miss counter so verify re-checks fresh.
+      await batch(env, [q(env, `UPDATE sku SET dead=0, misses=0, flagged=NULL, last_checked=NULL WHERE id=?`, k.id), audit(env, actor, 'restore-live', 'sku', k.id)])
+      return json({ ok: true })
+    }
     if (body.action === 'unapprove') {
       await batch(env, [
         q(env, `DELETE FROM offer WHERE sku_id=?`, k.id),
@@ -278,6 +299,8 @@ async function api(request, url, env, ep, actor) {
       await batch(env, [
         q(env, `INSERT OR IGNORE INTO offer (sku_id, master_model_id, config, pack_qty, created_at) VALUES (?,?,?,?,?)`, k.id, mm.id, body.config ?? 'kit', body.packQty ?? 1, t),
         q(env, `UPDATE sku SET review_status='approved', reviewed_at=? WHERE id=?`, t, k.id),
+        // snapshot the good price at approval → a guaranteed D1 recovery point
+        q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`, k.id, t, null, k.price_inr, k.in_stock),
         audit(env, actor, 'approve-attach', 'sku', k.id, { master: mm.id }),
       ])
       return json({ ok: true })
@@ -302,6 +325,8 @@ async function api(request, url, env, ep, actor) {
           q(env, `INSERT INTO offer (sku_id, master_model_id, config, pack_qty, created_at)
                   SELECT ?, id, ?, ?, ? FROM master_model WHERE category_id=? AND slug=?`, k.id, body.config ?? 'kit', body.packQty ?? 1, t, catId, m.slug),
           q(env, `UPDATE sku SET review_status='approved', reviewed_at=? WHERE id=?`, t, k.id),
+          // snapshot the good price at approval → a guaranteed D1 recovery point
+          q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`, k.id, t, null, k.price_inr, k.in_stock),
           audit(env, actor, 'approve-new-master', 'sku', k.id, { slug: m.slug }),
         ])
       } catch (e) {
@@ -443,7 +468,19 @@ async function api(request, url, env, ep, actor) {
     const settings = {}
     for (const r of await all(env, 'SELECT k, v FROM setting')) settings[r.k] = r.v
     const auditRows = await all(env, 'SELECT * FROM audit ORDER BY id DESC LIMIT 25')
-    return json({ settings, audit: auditRows })
+    // Source health: last scan + verify recency and live/flagged/removed counts,
+    // so a systematic block or drift is visible instead of silent.
+    const scans = await all(env, `SELECT source_id, MAX(last_scan_at) last_scan FROM source_url GROUP BY source_id`)
+    const counts = await all(env, `SELECT source_id,
+        SUM(CASE WHEN review_status='approved' AND dead=0 THEN 1 ELSE 0 END) live,
+        SUM(CASE WHEN flagged IS NOT NULL THEN 1 ELSE 0 END) flagged,
+        SUM(CASE WHEN dead=1 THEN 1 ELSE 0 END) removed,
+        MIN(CASE WHEN review_status='approved' AND dead=0 THEN last_checked END) oldest_verify
+      FROM sku GROUP BY source_id`)
+    const byId = {}
+    for (const r of scans) byId[r.source_id] = { source_id: r.source_id, last_scan: r.last_scan }
+    for (const r of counts) byId[r.source_id] = { ...(byId[r.source_id] ?? { source_id: r.source_id }), ...r }
+    return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
     if (!/^(scan|verify|enrich)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
