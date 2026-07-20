@@ -73,7 +73,7 @@ export function renderGrid(cat, masters) {
   const body = `
   <div class="shop-head"><div class="shop-head-in">
     <h1 class="shop-h1">${esc(cat.name)} in India</h1>
-    <p class="shop-sub">${live.length} wings in stock · cheapest first · live prices from Indian sellers</p>
+    <p class="shop-sub">${live.length} wings in stock · live prices from Indian sellers</p>
   </div></div>
   <main class="shop">
     <ul class="prods">${live.map((m) => masterCard(m, cat.path_prefix)).join('')}</ul>
