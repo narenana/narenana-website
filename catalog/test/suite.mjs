@@ -6,6 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { extractSpanMM, detectConfig } from '../lib/adapters.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -21,6 +22,26 @@ const api = async (p, body) => {
   })
   return { status: res.status, body: await res.json().catch(() => ({})) }
 }
+
+// ------------------------------------------------------ enrich extraction
+test('extractSpanMM: units, order, sanity bounds', () => {
+  assert.equal(extractSpanMM('ZOHD Dart 800mm Wingspan FPV Wing'), 800)
+  assert.equal(extractSpanMM('Wingspan: 1,200 mm | Length 830mm'), 1200)
+  assert.equal(extractSpanMM('Wing span 98 cm EPP trainer'), 980)
+  assert.equal(extractSpanMM('wingspan 1.2m powered glider'), 1200)
+  assert.equal(extractSpanMM('Wingspan: 39.4 inches'), 1001)
+  assert.equal(extractSpanMM('3.5mm gold connector pack'), null, 'connector size must not become a span')
+  assert.equal(extractSpanMM('M3 nylon bolts 20mm x 50'), null, 'hardware sizes rejected by sanity bounds')
+  assert.equal(extractSpanMM(''), null)
+})
+
+test('detectConfig: rtf > pnp > combo > kit', () => {
+  assert.equal(detectConfig('Dolphin 845mm PNP'), 'pnp')
+  assert.equal(detectConfig('Trainer Ready To Fly with remote'), 'rtf')
+  assert.equal(detectConfig('Wing combo with motor and ESC'), 'combo')
+  assert.equal(detectConfig('Balsa kit — laser cut'), 'kit')
+  assert.equal(detectConfig('Plug and play version'), 'pnp')
+})
 
 // ---------------------------------------------------------------- public
 test('category grid renders (SSR), stylesheet served', async () => {

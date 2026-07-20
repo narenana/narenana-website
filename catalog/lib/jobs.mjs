@@ -15,7 +15,7 @@
 //   * URL hit with mismatched pid ⇒ old row dead+flagged, new row inserted
 //   * a scan never rewrites identity fields of a reviewed row
 
-import { feedPage, checkPage } from './adapters.mjs'
+import { feedPage, checkPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { now } from './util.mjs'
 
@@ -47,6 +47,10 @@ export async function runSlice(env, trigger = 'cron') {
       }
     } else if (!scanState.done) {
       return await scanSlice(env, scanState, trigger)
+    }
+    if ((await getSetting(env, 'enrich_paused')) !== '1') {
+      const e = await enrichSlice(env, trigger)
+      if (e) return e
     }
     if ((await getSetting(env, 'verify_paused')) !== '1') return await verifySlice(env, trigger)
     return { idle: true }
@@ -191,6 +195,107 @@ export async function upsertProducts(env, su, products, spent) {
     spent.statements += stmts.length
   }
   return stats
+}
+
+// -------------------------------------------------------------- enrich slice
+// The system fills in as much data as it can BEFORE the owner reviews: one
+// product-page fetch per new sku → wingspan, config, image, price/stock (for
+// feed-less HTML/Zoho sources), brand matched against the category's brand
+// list (D1 data), plus an optional Workers-AI pass for kind + clean name.
+// Runs after the daily scan finishes, before verify; one-shot per sku.
+async function enrichSlice(env, trigger) {
+  const t = now()
+  const rows = await all(
+    env,
+    `SELECT k.*, c.triage FROM sku k
+     LEFT JOIN source_url_category suc ON suc.source_url_id=k.source_url_id
+     LEFT JOIN category c ON c.id=suc.category_id
+     WHERE k.review_status='new' AND k.enriched_at IS NULL AND k.dead=0
+     GROUP BY k.id ORDER BY k.first_seen DESC LIMIT 5`,
+  )
+  if (!rows.length) return null // nothing pending — let verify have the slice
+  const stmts = []
+  const log = []
+  for (const k of rows) {
+    const g = await buildGuess(env, k)
+    stmts.push(q(env,
+      `UPDATE sku SET guess=?, enriched_at=?, image_url=COALESCE(image_url, ?),
+         price_inr=COALESCE(price_inr, ?), in_stock=COALESCE(in_stock, ?) WHERE id=?`,
+      JSON.stringify(g), t, g._img ?? null, g._price ?? null, g._stock ?? null, k.id))
+    log.push(`${k.id} ${String(k.title ?? '').slice(0, 26)}: ${g.brand || '?'} span:${g.spanMM ?? '—'} ${g.config} [${g.via}]`)
+  }
+  await batch(env, stmts)
+  return { job: 'enrich', trigger, enriched: rows.length, log }
+}
+
+async function buildGuess(env, k) {
+  const title = k.title ?? ''
+  const triage = (() => { try { return JSON.parse(k.triage ?? '{}') } catch { return {} } })()
+  const brands = triage.brands ?? []
+  const html = (await getHtml(k.url_canonical, { tries: 1 })) ?? ''
+  // visible-ish text only: strip tags/scripts so regexes see prose, not markup
+  const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 20000)
+
+  const findBrand = (s) => brands.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(s))
+  let brand = findBrand(title) ?? findBrand(text.slice(0, 3000)) ?? (brands.find((b) => b.toLowerCase().replace(/[^a-z0-9]/g, '') === String(k.source_id).replace(/[^a-z0-9]/g, '')) || '')
+  let spanMM = extractSpanMM(title)
+  let via = spanMM ? 'title' : ''
+  if (!spanMM) {
+    spanMM = extractSpanMM(text)
+    if (spanMM) via = 'page'
+  }
+  const config = detectConfig(title + ' ' + text.slice(0, 2000))
+  // heuristic clean name: strip brand token, SEO tails, config words.
+  // SEO tails are cut ONLY at spaced separators — a bare hyphen is part of
+  // the model name ("VT-Allrounder", "X-UAV"), not a separator.
+  let name = title.replace(/\s+[|–—-]\s+[^|]*$/i, '').trim()
+  if (brand) name = name.replace(new RegExp('^' + brand.replace(/[-\s]/g, '[-\\s]?') + '[\\s:–—-]*', 'i'), '').trim() || name
+  name = name.replace(/\b(rc\s+(plane|aircraft|airplane)|for\s+beginners?|india|fpv\s+flight)\b/gi, ' ').replace(/\s+/g, ' ').trim()
+
+  // side-fill for feed-less sources: the page fetch is already paid for
+  let _img = null, _price = null, _stock = null
+  if (html && (k.image_url == null || k.price_inr == null || k.in_stock == null)) {
+    try {
+      _img = ogImageFrom(html, k.url_canonical)
+    } catch {}
+    const chk = parseJsonLd(html)
+    _price = chk?.priceINR ?? null
+    _stock = chk?.inStock == null ? null : chk.inStock ? 1 : 0
+  }
+
+  // optional Workers AI: kind + cleaner name (+ span only as a last resort)
+  let kind = null
+  const ai = await aiGuess(env, title, text.slice(0, 1600))
+  if (ai) {
+    kind = ai.kind ?? null
+    if (!brand && ai.brand) brand = String(ai.brand).slice(0, 40)
+    if (ai.name) name = String(ai.name).slice(0, 60)
+    if (!spanMM && Number(ai.spanMM) >= 200 && Number(ai.spanMM) <= 4000) {
+      spanMM = Math.round(Number(ai.spanMM))
+      via = 'ai'
+    }
+    via = via ? via + '+ai' : 'ai'
+  }
+  return { brand, name: name.slice(0, 60), spanMM, config, kind, via: via || 'none', at: now(), _img, _price, _stock }
+}
+
+async function aiGuess(env, title, snippet) {
+  if (!env.AI) return null
+  try {
+    const r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
+      max_tokens: 180,
+      messages: [
+        { role: 'system', content: 'You classify RC hobby-shop listings. Reply with ONLY a JSON object: {"kind":"aircraft"|"accessory"|"other","brand":string,"name":string,"spanMM":number}. kind=aircraft only for fixed-wing airplane/flying-wing/glider AIRFRAMES (kits/PNP/RTF). Motors, ESCs, servos, batteries, props, radios, FPV gear, spare parts, multirotors are accessory/other. name = clean model name without brand or marketing text. spanMM = wingspan in millimetres, 0 if unknown. brand = manufacturer if identifiable, else "".' },
+        { role: 'user', content: `Title: ${title}\nPage: ${snippet}` },
+      ],
+    })
+    const m = String(r?.response ?? '').match(/\{[\s\S]*?\}/)
+    if (!m) return null
+    const j = JSON.parse(m[0])
+    return { kind: ['aircraft', 'accessory', 'other'].includes(j.kind) ? j.kind : null, brand: j.brand, name: j.name, spanMM: j.spanMM }
+  } catch {
+    return null
+  }
 }
 
 // -------------------------------------------------------------- verify slice

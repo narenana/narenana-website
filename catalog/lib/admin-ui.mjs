@@ -37,7 +37,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v6</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v7</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
@@ -85,7 +85,7 @@ function skuRow(k){
   const stock=k.flagged?'<span class="unk">⚑ flagged: '+esc(JSON.parse(k.flagged).kind)+'</span>':k.quote_only?'<span class="unk">quote only</span>':k.in_stock===1?'':k.in_stock===0?'<span class="oos">out of stock</span>':'<span class="unk">stock unverified</span>';
   const sugg=(k.suggestions||[]).map((m)=>'<button class="chip" data-a="attach" data-sku="'+k.id+'" data-master="'+m.id+'">→ '+esc(m.brand+' '+m.name)+'</button>').join('');
   const mapUI=F.status==='new'?'<div class="map"><div class="sugg">'+(sugg||'<span class="tag">no master match — create one:</span>')+'</div>'
-    +'<div class="fields"><input data-f="brand" value="'+esc(k.guess.brand)+'" placeholder="Brand"/><input data-f="name" value="'+esc(k.guess.name)+'" placeholder="Model name"/><input data-f="slug" value="'+esc(k.guess.slug)+'" placeholder="slug"/><select data-f="config">'+(((data.cat||{}).configs)||[]).map((c)=>'<option>'+esc(c)+'</option>').join('')+'</select>'
+    +'<div class="fields"><input data-f="brand" value="'+esc(k.guess.brand)+'" placeholder="Brand"/><input data-f="name" value="'+esc(k.guess.name)+'" placeholder="Model name"/><input data-f="slug" value="'+esc(k.guess.slug)+'" placeholder="slug"/><select data-f="config">'+(((data.cat||{}).configs)||[]).map((c)=>'<option'+(c===(k.guess.config||'kit')?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>'
     +(data.specFields||[]).map((f)=>'<input data-f="spec:'+f.key+'" value="'+esc(k.guess.specs[f.key]??'')+'" placeholder="'+esc(f.label)+(f.required?' *':'')+'"/>').join('')
     +'</div></div>':'';
   const acts=F.status==='new'
@@ -95,7 +95,7 @@ function skuRow(k){
     :F.status==='flagged'?'<button class="ok" data-a="unflag" data-sku="'+k.id+'">Accept change</button><button class="no" data-a="unapprove" data-sku="'+k.id+'">Un-approve</button>':'';
   return '<div class="row" data-sku="'+k.id+'">'
     +(k.image_url?'<img class="thumb" loading="lazy" src="'+esc(k.image_url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'"/>':'<div class="noimg">no image</div>')
-    +'<div><p class="title">'+esc(k.title||'(untitled)')+' '+(k.score>0?'<span class="tag w">likely</span>':'<span class="tag">unsure</span>')+'</p>'
+    +'<div><p class="title">'+esc(k.title||'(untitled)')+' '+(k.guess.kind==='accessory'||k.guess.kind==='other'?'<span class="tag" style="color:var(--warn)">AI: not aircraft</span>':k.score>0||k.guess.kind==='aircraft'?'<span class="tag w">likely</span>':'<span class="tag">unsure</span>')+'</p>'
     +'<p class="meta"><span class="tag">'+esc(k.source_id)+'</span> '+(k.price_inr?'<span class="price">'+inr(k.price_inr)+'</span>':'no price')+' '+stock
     +(k.master?' · mapped to <b>'+esc(k.master)+'</b>':'')+' · <a href="'+esc(k.url_canonical)+'" target="_blank" rel="noopener">seller page ↗</a></p>'
     +mapUI+'</div><div class="acts">'+acts+'</div></div>';
@@ -172,7 +172,7 @@ function renderCatalog(){
 function renderSystem(){
   const s=data.settings;
   const tog=(k,label)=>'<button data-set="'+k+'" data-v="'+(s[k]==='1'?'0':'1')+'" class="'+(s[k]==='1'?'no':'ok')+'">'+label+': '+(s[k]==='1'?'PAUSED':'running')+'</button>';
-  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('verify_paused','Verify')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
+  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('verify_paused','Verify')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
     +'<p class="meta">scan cursor: <pre>'+esc(s.scan_cursor||'—')+'</pre></p>'
     +'<h3>Recent audit</h3><table class="t"><tbody>'
     +data.audit.map((a)=>'<tr><td>'+new Date(a.at).toISOString().slice(0,16).replace('T',' ')+'</td><td>'+esc(a.actor)+'</td><td>'+esc(a.action)+'</td><td>'+esc(a.entity)+' '+esc(a.entity_id||'')+'</td></tr>').join('')

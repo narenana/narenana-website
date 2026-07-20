@@ -208,7 +208,7 @@ export function feedPage(source, listUrl, cursor) {
 }
 
 // --- single-page enrichment / verification --------------------------------
-function parseJsonLd(html) {
+export function parseJsonLd(html) {
   for (const b of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     let data
     try {
@@ -253,6 +253,38 @@ export function ogImageFrom(html, base) {
     html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ||
     html.match(/data-large_image=["']([^"']+)["']/i)
   return m ? new URL(m[1], base).toString() : null
+}
+
+// --- spec extraction (pure text → data; used by the enrich job) -----------
+// Wingspan from product-page/title text. Handles mm / cm / m / inches;
+// sanity-bounded to 200–4000mm so "3.5mm connector" can't become a wingspan.
+export function extractSpanMM(text = '') {
+  const t = String(text)
+  const pats = [
+    [/wing\s*span[^0-9<>]{0,24}([\d,.]{2,7})\s*mm\b/i, 1],
+    [/([\d]{3,4})\s*mm\b[^.]{0,24}wing\s*span/i, 1],
+    [/wing\s*span[^0-9<>]{0,24}([\d,.]{1,6})\s*cm\b/i, 10],
+    [/wing\s*span[^0-9<>]{0,24}([\d.]{1,5})\s*m\b/i, 1000],
+    [/wing\s*span[^0-9<>]{0,24}([\d.]{1,5})\s*(?:in|inch|inches|")/i, 25.4],
+    [/\b([\d]{3,4})\s*mm\b/, 1], // bare "800mm" in a title
+  ]
+  for (const [rx, mul] of pats) {
+    const m = t.match(rx)
+    if (!m) continue
+    const v = Math.round(parseFloat(m[1].replace(/,/g, '')) * mul)
+    if (v >= 200 && v <= 4000) return v
+  }
+  return null
+}
+
+// kit / pnp / rtf / combo from listing text. Order matters: RTF claims beat
+// PNP beats combo beats the kit default.
+export function detectConfig(text = '') {
+  const t = String(text)
+  if (/\b(rtf|ready[\s-]?to[\s-]?fly)\b/i.test(t)) return 'rtf'
+  if (/\b(pnp|pnf|plug[\s-]?(?:and|n|&)[\s-]?(?:play|fly))\b/i.test(t)) return 'pnp'
+  if (/\b(combo|bundle|with\s+(?:motor|electronics|fc|flight\s*controller))\b/i.test(t)) return 'combo'
+  return 'kit'
 }
 
 // Direct product-page check. { gone } | { priceINR, inStock, quoteOnly, variants?, img?, title? }

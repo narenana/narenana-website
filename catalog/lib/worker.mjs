@@ -193,24 +193,36 @@ async function api(request, url, env, ep, actor) {
     for (const k of skus) {
       k.score = score(k.title)
       const t = k.title ?? ''
+      // The enrich job's stored guess (product-page fetch + optional Workers
+      // AI) wins; title heuristics are the fallback for not-yet-enriched skus.
+      let stored = null
+      try {
+        stored = k.guess ? JSON.parse(k.guess) : null
+      } catch {}
       // Brand: known brand in the title → that; house-brand shop → the shop;
       // otherwise leave EMPTY for the owner rather than guessing the first
       // word (which produced brands like "Batman" and "1000mm").
       const brand =
-        KNOWN.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(t)) ??
-        houseBrandOf(k.source_id)
+        stored?.brand ||
+        (KNOWN.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(t)) ??
+          houseBrandOf(k.source_id))
       // Name: the title minus any leading brand token — never "Batman Batman".
-      let name = t.replace(/\s*[|–—-]\s*[^|]*$/i, '').trim()
+      // SEO tails cut only at SPACED separators (bare hyphens are model names).
+      let name = t.replace(/\s+[|–—-]\s+[^|]*$/i, '').trim()
       if (brand) {
         const rx = new RegExp('^' + brand.replace(/[-\s]/g, '[-\\s]?') + '[\\s:–—-]*', 'i')
         name = name.replace(rx, '').trim() || name
       }
-      const span = t.match(/(\d{3,4})\s*mm/i)?.[1] ?? ''
+      if (stored?.name) name = stored.name
+      const span = stored?.spanMM ?? (t.match(/(\d{3,4})\s*mm/i)?.[1] ?? '')
       k.guess = {
         brand,
         name: name.slice(0, 60),
         slug: slugify((brand ? brand + ' ' : '') + name),
         specs: { spanMM: span },
+        config: stored?.config,
+        kind: stored?.kind,
+        via: stored?.via,
       }
       const tn = normName(t)
       k.suggestions = masters
@@ -395,7 +407,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })
