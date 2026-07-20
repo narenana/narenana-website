@@ -152,7 +152,46 @@ async function renderHome(request, env) {
   } catch {
     // Leave the page untransformed rather than inject garbage on a KV blip.
   }
-  if (videos.length === 0) return response
+
+  // Live catalog cards for the #shop-grid section. Fail-open on ANY D1
+  // problem — the static "Browse every wing" fallback card stays.
+  let wings = []
+  try {
+    if (env.CATALOG_DB) {
+      const cat = (await env.CATALOG_DB.prepare(`SELECT id, path_prefix FROM category WHERE live=1 LIMIT 1`).all()).results?.[0]
+      if (cat) {
+        wings = (
+          await env.CATALOG_DB.prepare(
+            `SELECT m.id, m.slug, m.brand, m.name, m.specs,
+                COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero,
+                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS price
+             FROM master_model m
+             JOIN offer o ON o.master_model_id=m.id
+             JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+             WHERE m.category_id=? AND m.status='ready'
+             GROUP BY m.id HAVING price IS NOT NULL AND hero IS NOT NULL
+             ORDER BY price DESC LIMIT 4`,
+          ).bind(cat.id).all()
+        ).results.map((m) => ({ ...m, prefix: cat.path_prefix }))
+      }
+    }
+  } catch {
+    // fallback card remains
+  }
+  if (videos.length === 0 && wings.length === 0) return response
+
+  const wingCard = (m) => {
+    let span = ''
+    try {
+      span = JSON.parse(m.specs || '{}').spanMM || ''
+    } catch {}
+    return (
+      `<a class="shopc" href="${esc(m.prefix)}/${esc(m.slug)}/">` +
+      `<div class="shopc-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" loading="lazy" /><span class="skel-tag">IN STOCK</span></div>` +
+      `<div class="shopc-body"><div class="shopc-brand">${esc(m.brand)}</div><div class="shopc-name">${esc(m.name)}</div>` +
+      `<div class="shopc-meta"><span class="shopc-price">from ₹${Number(m.price).toLocaleString('en-IN')}</span>${span ? `<span class="shopc-chip">${esc(span)}mm</span>` : ''}</div></div></a>`
+    )
+  }
 
   const card = (v) => {
     const href = v.url || `https://www.youtube.com/watch?v=${v.id}`
@@ -166,13 +205,20 @@ async function renderHome(request, env) {
     )
   }
 
-  return new HTMLRewriter()
-    .on('#vid-grid', {
+  let rw = new HTMLRewriter()
+  if (videos.length)
+    rw = rw.on('#vid-grid', {
       element(el) {
         el.setInnerContent(videos.map(card).join(''), { html: true })
       },
     })
-    .transform(response)
+  if (wings.length)
+    rw = rw.on('#shop-grid', {
+      element(el) {
+        el.setInnerContent(wings.map(wingCard).join(''), { html: true })
+      },
+    })
+  return rw.transform(response)
 }
 
 function esc(s) {

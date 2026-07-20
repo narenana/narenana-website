@@ -482,36 +482,36 @@
     </section>
 
     <section class="sect" id="shop">
+      <style>
+        .shopc{display:block;border:2px solid #0F2C39;border-radius:10px;overflow:hidden;background:#FCF9F1;color:inherit;text-decoration:none;transition:transform .18s ease,box-shadow .18s ease}
+        .shopc:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(15,44,57,.14)}
+        .shopc-img{position:relative;aspect-ratio:4/3;background:#fff;border-bottom:2px solid #0F2C39}
+        .shopc-img img{width:100%;height:100%;object-fit:contain;display:block}
+        .shopc-body{padding:14px 15px 16px}
+        .shopc-brand{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.62}
+        .shopc-name{font-weight:600;margin:3px 0 8px;font-size:15px;line-height:1.3}
+        .shopc-meta{display:flex;align-items:center;justify-content:space-between;gap:8px}
+        .shopc-price{font-weight:700;color:#C63B2E;font-size:14px}
+        .shopc-chip{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.06em;padding:3px 8px;border-radius:999px;background:#DDE9EE;color:#12303D}
+        .shop-cta-row{display:flex;align-items:center;gap:14px;margin-top:clamp(24px,3vw,34px);flex-wrap:wrap}
+      </style>
       <div class="wrap">
         <div class="sect-head" data-reveal style="margin-bottom:clamp(36px,4vw,52px)">
-          <span class="tagpill orange">Coming soon</span>
-          <h2 style="margin-top:18px">Curated wings, without the rabbit hole</h2>
-          <p class="body" style="max-width:none">A hand-picked buying guide for FPV flying wings — compare kits, specs and prices, and jump straight to where to buy, all chosen by pilots who fly them. Launching soon.</p>
+          <span class="tagpill orange">Now live</span>
+          <h2 style="margin-top:18px">Every fixed wing you can buy in India</h2>
+          <p class="body" style="max-width:none">Kits, PNP and RTF airframes from Indian sellers — live prices compared across shops, stock checked through the day, and build suggestions for what to put in them.</p>
         </div>
-        <div class="skel-grid">
-          <div class="skel" data-reveal>
-            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
-            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:38px"></span><span style="width:52px"></span><span style="width:30px"></span></div></div>
-          </div>
-          <div class="skel" data-reveal data-reveal-delay="80">
-            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
-            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:44px"></span><span style="width:34px"></span><span style="width:50px"></span></div></div>
-          </div>
-          <div class="skel" data-reveal data-reveal-delay="160">
-            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
-            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:30px"></span><span style="width:56px"></span><span style="width:36px"></span></div></div>
-          </div>
-          <div class="skel" data-reveal data-reveal-delay="240">
-            <div class="skel-img"><div class="skel-lock"><span><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span></div><span class="skel-tag">COMING SOON</span></div>
-            <div class="skel-body"><div class="skel-line"></div><div class="skel-chips"><span style="width:48px"></span><span style="width:32px"></span><span style="width:44px"></span></div></div>
-          </div>
+        <div class="skel-grid" id="shop-grid">
+          <a class="shopc" href="/wings/" data-reveal>
+            <div class="shopc-img" style="display:grid;place-items:center"><span class="skel-tag">LIVE</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;opacity:.6">narenana.com/wings</span></div>
+            <div class="shopc-body"><div class="shopc-brand">Catalog</div><div class="shopc-name">Browse every wing →</div></div>
+          </a>
         </div>
-        <div class="notify" data-reveal>
-          <input type="email" placeholder="you@email.com" aria-label="Email for launch news" />
-          <a href="https://www.youtube.com/@narenana" target="_blank" rel="noopener" class="btn btn-orange btn-md">Notify me
+        <div class="shop-cta-row" data-reveal>
+          <a href="/wings/" class="btn btn-orange btn-md">Browse the full catalog
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
           </a>
-          <span class="hint">or subscribe on YouTube for launch news</span>
+          <span class="hint">live prices from Indian sellers · updated through the day</span>
         </div>
       </div>
     </section>
