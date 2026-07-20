@@ -99,7 +99,7 @@
             "@type": "ItemList",
             "@id": "https://www.narenana.com/#tools",
             "name": "narenana tools",
-            "numberOfItems": 2,
+            "numberOfItems": 3,
             "itemListElement": [
               {
                 "@type": "ListItem",
@@ -112,6 +112,12 @@
                 "position": 2,
                 "name": "Nanawing",
                 "item": { "@id": "https://sim.narenana.com/#app" }
+              },
+              {
+                "@type": "ListItem",
+                "position": 3,
+                "name": "Wings — fixed-wing catalog for India",
+                "url": "https://www.narenana.com/wings/"
               }
             ]
           }
@@ -124,7 +130,13 @@
          JetBrains Mono (kickers/telemetry) · Grand Hotel (wordmark). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Grand+Hotel&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+    <!-- Async fonts: media="print" defers CSS evaluation off the render path,
+         onload flips it live; display=swap means text paints immediately in
+         fallbacks. Lighthouse measured the blocking variant at ~2.4s of FCP. -->
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Grand+Hotel&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Grand+Hotel&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" /></noscript>
+    <!-- The hero wing cutout is the LCP element — start its fetch immediately. -->
+    <link rel="preload" as="image" href="/assets/hero-wing.webp" type="image/webp" fetchpriority="high" />
 
     <style>
       html{scroll-behavior:smooth;scroll-padding-top:82px}
@@ -140,7 +152,6 @@
 
       @keyframes narz-cue{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(6px);opacity:1}}
       @keyframes narz-pulse{0%,100%{opacity:1}50%{opacity:.25}}
-      @keyframes narz-shimmer{0%{background-position:-150% 0}100%{background-position:250% 0}}
       @keyframes narz-marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
       @keyframes narz-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px)}}
 
@@ -258,19 +269,8 @@
 
       /* ── shop teaser ── */
       .skel-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:clamp(18px,2vw,24px)}
-      .skel{border:2px solid #0F2C39;border-radius:10px;overflow:hidden;background:#FCF9F1}
-      .skel-img{position:relative;aspect-ratio:4/3;background:#DDE9EE;border-bottom:2px solid #0F2C39}
-      .skel-lock{position:absolute;inset:0;display:grid;place-items:center;background:rgba(221,233,238,.35)}
-      .skel-lock span{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#F3EEE0;border:2px solid #0F2C39;color:#0F2C39}
       .skel-tag{position:absolute;top:10px;left:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;padding:4px 9px;border-radius:999px;background:#EF7A25;color:#12303D}
-      .skel-body{padding:14px 15px 16px}
-      .skel-line{height:11px;width:70%;border-radius:3px;background:linear-gradient(90deg,#DAE6EB 30%,#EEF4F6 50%,#DAE6EB 70%);background-size:220% 100%;animation:narz-shimmer 2.4s linear infinite}
-      .skel-chips{display:flex;gap:7px;margin-top:14px}
-      .skel-chips span{height:9px;border-radius:3px;background:#DAE6EB}
-      .notify{margin-top:clamp(32px,4vw,44px);display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-      .notify input{flex:1 1 240px;max-width:320px;height:46px;padding:0 16px;font-family:'Hanken Grotesk',sans-serif;font-size:15px;color:#0F2C39;background:#FCF9F1;border:2px solid #0F2C39;border-radius:999px}
-      .notify .hint{font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A8A90}
-      .notify .btn-md{height:46px;box-sizing:border-box;padding-top:0;padding-bottom:0}
+      .hint{font-family:'JetBrains Mono',monospace;font-size:12px;color:#7A8A90}
 
       /* ── CTA band ── */
       .cta-band{position:relative;overflow:hidden;background:linear-gradient(160deg,#2E9AE0,#1573B6)}
@@ -330,7 +330,7 @@
       <div class="hero-wing" data-px data-speed="0.62" data-speed-x="0.04" aria-hidden="true">
         <picture>
           <source srcset="/assets/hero-wing.webp" type="image/webp" />
-          <img src="/assets/hero-wing.png" alt="" width="840" height="415" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 20px 30px rgba(15,44,57,.3))" />
+          <img src="/assets/hero-wing.png" alt="" width="840" height="415" fetchpriority="high" style="width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 20px 30px rgba(15,44,57,.3))" />
         </picture>
       </div>
       <div class="hero-fade" data-px data-speed="0.04"></div>
@@ -549,7 +549,7 @@
               <div class="h">Tools</div>
               <a href="https://sim.narenana.com" target="_blank" rel="noopener">FPV simulator</a>
               <a href="/log-viewer/">3D log viewer</a>
-              <a href="#shop">Curated wings <span class="soon">SOON</span></a>
+              <a href="/wings/">Wings catalog</a>
             </div>
             <div class="foot-col">
               <div class="h">Community</div>
