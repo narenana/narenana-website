@@ -7,7 +7,10 @@
 //   everything else             → env.ASSETS.fetch(request) → site/ files
 //
 // scheduled() (hourly cron): fetch RSS for YOUTUBE_CHANNEL_ID, parse, write to
-// KV under key "feed". Page reloads naturally pick up the new payload.
+// KV under key "feed". Page reloads naturally pick up the new payload. Also
+// runs the Wings pipeline (availability refresh + discovery), gated internally.
+
+import { handleCatalog, catalogScheduled } from '../catalog/lib/worker.mjs'
 
 export default {
   async fetch(request, env, ctx) {
@@ -21,7 +24,11 @@ export default {
     const isLocal =
       url.hostname === 'localhost' ||
       url.hostname === '127.0.0.1' ||
-      url.hostname.endsWith('.localhost')
+      url.hostname.endsWith('.localhost') ||
+      // Private-range IPs = wrangler dev exposed on the LAN (e.g. testing from
+      // another device). Never a canonical production host, so don't force
+      // https onto them — there's no cert there to serve it.
+      /^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(url.hostname)
     const isApex = url.hostname === 'narenana.com'
     if (!isLocal && (url.protocol === 'http:' || isApex)) {
       url.protocol = 'https:'
@@ -47,6 +54,20 @@ export default {
       return harden(await videosResponse(env), url, isLocal)
     }
 
+    // Catalog platform — public category pages (D1-backed), /admin, /api/*,
+    // /img/* and /catalog.css. Returns null for paths it doesn't own.
+    // FAIL OPEN: a D1 outage (or missing tables) must degrade to the catalog
+    // paths 404-ing via assets — never take the homepage down with it.
+    {
+      let r = null
+      try {
+        r = await handleCatalog(request, url, env, ctx)
+      } catch (e) {
+        console.error('catalog unavailable, falling through to assets:', e)
+      }
+      if (r) return harden(r, url, isLocal)
+    }
+
     // The home page's "Latest from YouTube" grid hydrates client-side, so
     // crawlers / AI answer engines would otherwise see none of it. Inject a
     // <noscript> fallback list from the KV feed the Worker already holds.
@@ -59,7 +80,10 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(refreshFeed(env))
+    // Dispatch on the cron expression — each schedule owns ONE job. Without
+    // this branch the hourly RSS refresh would re-fire on every */15 tick.
+    if (event.cron === '0 * * * *') ctx.waitUntil(refreshFeed(env))
+    else catalogScheduled(event, env, ctx)
   },
 }
 
@@ -108,9 +132,13 @@ function harden(response, url, isLocal) {
   })
 }
 
-// Server-rendered <noscript> fallback for the client-hydrated YouTube grid,
-// built from the same KV feed. Crawlers and AI answer engines that don't run
-// the page script still get the latest video titles + links as crawlable text.
+// Server-render the "Latest FPV & RC flying" cards into #vid-grid from the
+// same KV feed the /videos.json endpoint serves. Crawlers (and Bing, which is
+// unreliable about executing JS) get the six titles + links as real HTML, the
+// grid paints without waiting for the client fetch, and freshness is visible
+// at crawl time. The client script skips its own fetch when it finds these
+// cards already present (falling back to hydration only if KV was empty).
+// Markup mirrors the client renderer in site/index.html — keep in sync.
 async function renderHome(request, env) {
   const response = await env.ASSETS.fetch(request)
   if (!(response.headers.get('content-type') || '').includes('text/html')) {
@@ -126,15 +154,22 @@ async function renderHome(request, env) {
   }
   if (videos.length === 0) return response
 
-  const items = videos
-    .map((v) => `<li><a href="${esc(v.url)}">${esc(v.title)}</a></li>`)
-    .join('')
-  const noscript = `<noscript><ul>${items}</ul></noscript>`
+  const card = (v) => {
+    const href = v.url || `https://www.youtube.com/watch?v=${v.id}`
+    const thumb = v.thumbnail || `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
+    return (
+      `<a class="vid" href="${esc(href)}" target="_blank" rel="noopener">` +
+      `<div class="vid-thumb"><img src="${esc(thumb)}" alt="${esc(v.title)}" loading="lazy" />` +
+      `<div class="vid-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-left:2px"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></div></div>` +
+      `<div class="vid-body"><div class="vid-title">${esc(v.title)}</div>` +
+      `<div class="vid-meta"><svg width="15" height="15" viewBox="0 0 24 24" fill="#C63B2E" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#FCF9F1"/></svg>YOUTUBE</div></div></a>`
+    )
+  }
 
   return new HTMLRewriter()
-    .on('#videos', {
+    .on('#vid-grid', {
       element(el) {
-        el.after(noscript, { html: true })
+        el.setInnerContent(videos.map(card).join(''), { html: true })
       },
     })
     .transform(response)
