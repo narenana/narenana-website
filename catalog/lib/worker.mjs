@@ -6,7 +6,7 @@ import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster } from './public.mjs'
 import { runSlice, upsertProducts } from './jobs.mjs'
-import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
+import { getHtml, ogImageFrom, feedPage, checkPage, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge } from './util.mjs'
 
@@ -433,6 +433,25 @@ async function api(request, url, env, ep, actor) {
         await browser?.close()
       } catch {}
     }
+  }
+
+  // Debug: what does the Worker's plain fetch see for a URL, and how does
+  // checkPage classify it? (build marker: BUILD=be10192+)
+  if (ep === 'check-debug') {
+    const u = canonicalUrl(url.searchParams.get('url'))
+    if (!u) return json({ error: 'bad url' }, 400)
+    let status = null, snippet = '', challenge = null
+    try {
+      const r = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36', accept: 'text/html,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(9000) })
+      status = r.status
+      const html = await r.text()
+      snippet = (html.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1] ?? html.slice(0, 120)).trim()
+      challenge = isChallenge(html)
+    } catch (e) {
+      snippet = 'THREW: ' + String(e.message || e).slice(0, 80)
+    }
+    const decision = await checkPage(u, {})
+    return json({ build: 'be10192', status, title: snippet, isChallenge: challenge, checkPage: decision })
   }
 
   if (ep === 'system' && request.method === 'GET') {
