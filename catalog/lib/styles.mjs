@@ -311,6 +311,23 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .vars td:last-child { font-weight: 700; white-space: nowrap; }
 .vars tr.is-dim { opacity: 0.55; }
 
+/* Outbound seller links: real tap targets (≥44px), not tiny table text. */
+.offer-seller {
+  display: inline-block;
+  padding: 8px 0;
+  font-weight: 700;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--faint);
+  text-underline-offset: 4px;
+}
+.offer-seller:hover { color: var(--orange-deep); text-decoration-color: var(--orange-deep); }
+.cta-buy { padding: 12px 24px; font-size: 0.95rem; }
+@media (max-width: 640px) {
+  .vars { font-size: 0.85rem; }
+  .cta-buy { display: block; text-align: center; padding: 13px 10px; }
+}
+
 .recipes { margin-top: 44px; }
 
 /* --- recipe tabs -------------------------------------------------------- */
