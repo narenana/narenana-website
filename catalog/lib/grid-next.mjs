@@ -7,7 +7,7 @@
 //   • reads role_tags (JSON array already stored on masters; [0] = primary)
 //   • power switch = server navigation; role/size/condition/sort = client-side
 //     instant filtering over an embedded dataset (progressive enhancement:
-//     no-JS still gets the full in-stock grid for the chosen power)
+//     no-JS still gets a consistent, filtered in-stock grid for the chosen power)
 import { esc, inr } from './util.mjs'
 import { all } from './db.mjs'
 import { page } from './public.mjs'
@@ -15,8 +15,11 @@ import { page } from './public.mjs'
 const ROLE_VOCAB = ['Trainer', 'Sport / Park Flyer', 'Aerobatic / 3D', 'Warbird', 'Jet / EDF', 'Glider / Sailplane', 'FPV / Flying Wing', 'Scale Civilian', 'Airliner']
 const SIZE_BUCKETS = [['small', 'Small · under 1 m'], ['medium', 'Medium · 1–1.5 m'], ['large', 'Large · over 1.5 m']]
 const SORTS = ['price-desc', 'price-asc', 'span-desc', 'span-asc', 'name']
-const sizeOf = (mm) => (!mm ? '' : mm < 1000 ? 'small' : mm < 1500 ? 'medium' : 'large')
+// boundary is inclusive of the label ranges: medium = [1000, 1500], large = >1500
+const sizeOf = (mm) => (!mm ? '' : mm < 1000 ? 'small' : mm <= 1500 ? 'medium' : 'large')
 const ri = (t) => ROLE_VOCAB.indexOf(t)
+// JSON embedded in an inline <script> must not let a '<' start a </script> break-out.
+const jsonSafe = (o) => JSON.stringify(o).replace(/</g, '\\u003c')
 
 const specLine = (m) => {
   try {
@@ -26,7 +29,11 @@ const specLine = (m) => {
 }
 
 // All in-stock ready masters for one power (no pagination — the client filters).
+// Condition is derived per-offer and split into two in-stock signals so a master
+// with BOTH a new and a used listing is correctly filterable as either.
 export async function gridDataNext(env, cat, power) {
+  const USED = `(LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%'
+                 OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%')`
   return all(
     env,
     `SELECT m.id, m.slug, m.brand, m.name, m.power, m.role_tags, m.specs, m.hero_image,
@@ -34,8 +41,8 @@ export async function gridDataNext(env, cat, power) {
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
             MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
-            MAX(CASE WHEN LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%'
-                  OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%' THEN 1 ELSE 0 END) AS preowned
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND ${USED} THEN 1 ELSE 0 END) AS preowned_stock,
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND NOT ${USED} THEN 1 ELSE 0 END) AS new_stock
      FROM master_model m
      JOIN offer o ON o.master_model_id = m.id
      JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
@@ -50,13 +57,14 @@ const chip = (f, v, label, count, on, extra = '') =>
   `<button class="fx-chip ${extra} ${on ? 'is-on' : ''}" role="checkbox" aria-checked="${on ? 'true' : 'false'}" data-f="${f}" data-v="${esc(v)}">` +
   `${extra.includes('cb') ? '<span class="fx-cbx" aria-hidden="true"></span>' : ''}${esc(label)}<b class="fx-n">${count}</b></button>`
 
-function cardNext(it, pref) {
+function cardNext(it, pref, hidden) {
   const m = it.m
   const hero = m.hero_any ?? m.hero_image
   const price = m.min_price
-  return `<li class="prod" data-id="${m.id}">
+  const preOwnedOnly = it.cp && !it.cn // only obtainable pre-owned → surface the tag
+  return `<li class="prod" data-id="${m.id}"${hidden ? ' style="display:none"' : ''}>
     <a class="prod-link" href="${pref}/${esc(m.slug)}/">
-      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}${it.condition === 'pre-owned' ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
+      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
       <div class="prod-body">
         <p class="prod-brand">${esc(m.brand)}</p>
         <h3 class="prod-name">${esc(m.name)}</h3>
@@ -79,25 +87,25 @@ export function renderGridNext(cat, rows, opts = {}) {
   const items = rows.map((m) => {
     let tags = []
     try { tags = JSON.parse(m.role_tags || '[]') } catch {}
-    tags = (Array.isArray(tags) ? tags : []).filter(Boolean)
-    return { m, tags, size: sizeOf(m.span_mm), condition: m.preowned ? 'pre-owned' : 'new', price: m.min_price ?? null, span: m.span_mm || 0 }
+    tags = (Array.isArray(tags) ? tags : []).filter((t) => ROLE_VOCAB.includes(t)) // vocab-only (drops "Other"; hardens the embed)
+    return { m, tags, size: sizeOf(m.span_mm), cn: !!m.new_stock, cp: !!m.preowned_stock, price: m.min_price ?? null, span: m.span_mm || 0 }
   })
 
   const mRoles = (it) => !selRoles.length || selRoles.some((t) => it.tags.includes(t))
   const mSizes = (it) => !selSizes.length || selSizes.includes(it.size)
-  const mCond = (it) => cond === 'all' || it.condition === cond
+  const mCond = (it) => cond === 'all' || (cond === 'new' ? it.cn : it.cp)
   const visible = (it) => mRoles(it) && mSizes(it) && mCond(it)
   const resultN = items.filter(visible).length
 
   // contextual facets present in this power
   const rolesPresent = ROLE_VOCAB.filter((t) => items.some((it) => it.tags.includes(t)))
   const sizesPresent = SIZE_BUCKETS.filter(([k]) => items.some((it) => it.size === k))
-  const hasPreowned = items.some((it) => it.condition === 'pre-owned')
+  const hasCond = items.some((it) => it.cp) // only offer the condition facet when some listing is pre-owned
 
   // server-side facet counts (mirror the client; keeps no-JS correct)
   const roleCount = (t) => items.filter((it) => it.tags.includes(t) && mSizes(it) && mCond(it)).length
   const sizeCount = (k) => items.filter((it) => it.size === k && mRoles(it) && mCond(it)).length
-  const condCount = (c) => items.filter((it) => it.condition === c && mRoles(it) && mSizes(it)).length
+  const condCount = (c) => items.filter((it) => (c === 'new' ? it.cn : it.cp) && mRoles(it) && mSizes(it)).length
 
   // server initial order (client re-sorts identically)
   const cmp = (a, b) => {
@@ -120,11 +128,12 @@ export function renderGridNext(cat, rows, opts = {}) {
 
   const sortSel = `<select id="fx-sort" class="fx-sortsel" aria-label="Sort">${[['price-desc', 'Price: high to low'], ['price-asc', 'Price: low to high'], ['span-desc', 'Wingspan: large to small'], ['span-asc', 'Wingspan: small to large'], ['name', 'Name: A → Z']].map(([v, t]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`
 
+  const condLabel = (c) => (c === 'new' ? 'New' : 'Pre-owned')
   const nActive = selRoles.length + selSizes.length + (cond !== 'all' ? 1 : 0)
-  const activeTags = [...selRoles.map((t) => ['role', t, t]), ...selSizes.map((k) => ['size', k, SIZE_BUCKETS.find((s) => s[0] === k)[1]]), ...(cond !== 'all' ? [['cond', cond, cond]] : [])]
+  const activeTags = [...selRoles.map((t) => ['role', t, t]), ...selSizes.map((k) => ['size', k, SIZE_BUCKETS.find((s) => s[0] === k)[1]]), ...(cond !== 'all' ? [['cond', cond, condLabel(cond)]] : [])]
     .map(([f, v, label]) => `<span class="fx-atag" data-f="${f}" data-v="${esc(v)}">${esc(label)}<button aria-label="Remove">×</button></span>`).join('')
 
-  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, c: it.condition, sp: it.span, p: it.price }))
+  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price }))
 
   const body = `
   <div class="shop-head"><div class="shop-head-in">
@@ -139,7 +148,7 @@ export function renderGridNext(cat, rows, opts = {}) {
       <div class="fx-active" id="fx-active">${activeTags}</div>
       <button class="fx-clear" id="fx-clear"${nActive ? '' : ' hidden'}>Clear all</button>
     </div>
-    <ul class="prods" id="fx-grid">${ordered.map((it) => cardNext(it, pref)).join('')}</ul>
+    <ul class="prods" id="fx-grid">${ordered.map((it) => cardNext(it, pref, !visible(it))).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
 
     <div class="fx-backdrop" id="fx-backdrop" hidden>
@@ -149,7 +158,7 @@ export function renderGridNext(cat, rows, opts = {}) {
           <div class="fx-frow"><span class="fx-fgl">Category</span>${powerSeg('fx-powmodal')}</div>
           <div class="fx-frow"><span class="fx-fgl">Type <em id="fx-rolehint"></em></span><div class="fx-chips" id="fx-roles">${roleChips}</div></div>
           <div class="fx-frow"><span class="fx-fgl">Size</span><div class="fx-chips" id="fx-sizes">${sizeChips}</div></div>
-          <div class="fx-frow" id="fx-condwrap"${hasPreowned ? '' : ' hidden'}><span class="fx-fgl">Condition</span><div class="fx-chips" id="fx-conds">${condChips}</div></div>
+          <div class="fx-frow" id="fx-condwrap"${hasCond ? '' : ' hidden'}><span class="fx-fgl">Condition</span><div class="fx-chips" id="fx-conds">${condChips}</div></div>
           <div class="fx-frow"><span class="fx-fgl">Sort</span>${sortSel}</div>
         </div>
         <footer class="fx-modal-foot"><button class="fx-mclear" id="fx-mclear">Clear all</button><button class="fx-mshow" id="fx-mshow">Show <b id="fx-mshown">${resultN}</b> models</button></footer>
@@ -157,7 +166,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     </div>
   </main>
   <style>${FX_CSS}</style>
-  <script>var FX_DATA=${JSON.stringify(fxData)},FX_POWER=${JSON.stringify(power)},FX_SORT=${JSON.stringify(sort)},FX_INIT=${JSON.stringify({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${JSON.stringify(pref)};</script>
+  <script>var FX_DATA=${jsonSafe(fxData)},FX_POWER=${jsonSafe(power)},FX_SORT=${jsonSafe(sort)},FX_INIT=${jsonSafe({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${jsonSafe(pref)};</script>
   <script>${FX_JS}</script>`
 
   return page({
@@ -222,11 +231,12 @@ const FX_CSS = `
 const FX_JS = `(function(){
   var state={roles:new Set(FX_INIT.roles),sizes:new Set(FX_INIT.sizes),cond:FX_INIT.cond||'all',sort:FX_SORT};
   var SIZELABEL={small:'Small · under 1 m',medium:'Medium · 1–1.5 m',large:'Large · over 1.5 m'};
+  var CONDLABEL={'new':'New','pre-owned':'Pre-owned'};
   var grid=document.getElementById('fx-grid');
   var cardEls={}; [].slice.call(grid.querySelectorAll('.prod')).forEach(function(c){cardEls[c.getAttribute('data-id')]=c;});
   function mRoles(d){if(!state.roles.size)return true;for(var i=0;i<d.t.length;i++)if(state.roles.has(d.t[i]))return true;return false;}
   function mSizes(d){return state.sizes.size===0||state.sizes.has(d.s);}
-  function mCond(d){return state.cond==='all'||d.c===state.cond;}
+  function mCond(d){return state.cond==='all'||(state.cond==='new'?d.cn:d.cp);}
   function results(){return FX_DATA.filter(function(d){return mRoles(d)&&mSizes(d)&&mCond(d);});}
   function cmp(a,b){
     if(state.sort==='name'){return (cardEls[a.i].querySelector('.prod-name').textContent).localeCompare(cardEls[b.i].querySelector('.prod-name').textContent);}
@@ -239,7 +249,6 @@ const FX_JS = `(function(){
   function render(){
     var res=results();
     var vis={}; res.forEach(function(d){vis[d.i]=1;});
-    // recount facet chips (each facet ignores its own selection)
     [].slice.call(document.querySelectorAll('#fx-roles .fx-chip')).forEach(function(btn){
       var v=btn.getAttribute('data-v');
       var n=FX_DATA.filter(function(d){return d.t.indexOf(v)>-1&&mSizes(d)&&mCond(d);}).length;
@@ -252,30 +261,27 @@ const FX_JS = `(function(){
     });
     [].slice.call(document.querySelectorAll('#fx-conds .fx-chip')).forEach(function(btn){
       var v=btn.getAttribute('data-v');
-      var n=v==='all'?FX_DATA.filter(function(d){return mRoles(d)&&mSizes(d);}).length:FX_DATA.filter(function(d){return d.c===v&&mRoles(d)&&mSizes(d);}).length;
+      var n=v==='all'?FX_DATA.filter(function(d){return mRoles(d)&&mSizes(d);}).length:FX_DATA.filter(function(d){return (v==='new'?d.cn:d.cp)&&mRoles(d)&&mSizes(d);}).length;
       btn.querySelector('.fx-n').textContent=n; setChip(btn,state.cond===v);
     });
     var hint=document.getElementById('fx-rolehint'); if(hint)hint.textContent=state.roles.size?'· '+state.roles.size+' selected':'· tick any that apply';
-    // grid: show/hide + reorder
     res.sort(cmp);
     for(var id in cardEls){cardEls[id].style.display=vis[id]?'':'none';}
     res.forEach(function(d){grid.appendChild(cardEls[d.i]);});
     document.getElementById('fx-nres').textContent=res.length;
     document.getElementById('fx-mshown').textContent=res.length;
-    var emp=document.getElementById('fx-empty'); emp.hidden=res.length>0;
-    // active tags
+    document.getElementById('fx-empty').hidden=res.length>0;
     var act=document.getElementById('fx-active'); act.innerHTML='';
     function atag(f,v,label){var s=document.createElement('span');s.className='fx-atag';s.textContent=label;var x=document.createElement('button');x.setAttribute('aria-label','Remove');x.textContent='×';x.onclick=function(){toggle(f,v,true);};s.appendChild(x);act.appendChild(s);}
     state.roles.forEach(function(v){atag('role',v,v);});
     state.sizes.forEach(function(v){atag('size',v,SIZELABEL[v]||v);});
-    if(state.cond!=='all')atag('cond',state.cond,state.cond);
+    if(state.cond!=='all')atag('cond',state.cond,CONDLABEL[state.cond]||state.cond);
     var nA=state.roles.size+state.sizes.size+(state.cond!=='all'?1:0);
     document.getElementById('fx-clear').hidden=!nA;
     var badge=document.getElementById('fx-badge'); badge.hidden=!nA; badge.textContent=nA;
-    // URL
     try{var p=new URLSearchParams();p.set('ui','next');if(FX_POWER!=='electric')p.set('power',FX_POWER);
-      if(state.roles.size)p.set('role',[].concat(Array.from(state.roles)).join(','));
-      if(state.sizes.size)p.set('size',[].concat(Array.from(state.sizes)).join(','));
+      if(state.roles.size)p.set('role',Array.from(state.roles).join(','));
+      if(state.sizes.size)p.set('size',Array.from(state.sizes).join(','));
       if(state.cond!=='all')p.set('cond',state.cond);
       if(state.sort!=='price-desc')p.set('sort',state.sort);
       history.replaceState(null,'',FX_PREF+'/?'+p.toString());}catch(e){}
@@ -290,7 +296,6 @@ const FX_JS = `(function(){
   document.getElementById('fx-sizes').addEventListener('click',function(e){var b=e.target.closest('.fx-chip');if(b&&!b.disabled)toggle('size',b.getAttribute('data-v'));});
   document.getElementById('fx-conds').addEventListener('click',function(e){var b=e.target.closest('.fx-chip');if(b)toggle('cond',b.getAttribute('data-v'));});
   document.getElementById('fx-sort').addEventListener('change',function(e){state.sort=e.target.value;render();});
-  // modal open/close
   var bd=document.getElementById('fx-backdrop'),ob=document.getElementById('fx-open');
   function setModal(o){bd.hidden=!o;ob.setAttribute('aria-expanded',o?'true':'false');document.body.style.overflow=o?'hidden':'';if(o){var x=document.getElementById('fx-mx');if(x)x.focus();}}
   ob.onclick=function(){setModal(true);};

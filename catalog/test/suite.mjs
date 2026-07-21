@@ -199,20 +199,40 @@ test('roleTags: multi-tag role classification', () => {
 
 test('renderGridNext: isolated faceted grid — reuse, contextual facets, server filter', () => {
   const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings' }
+  // new_stock / preowned_stock are per-offer in-stock condition signals (a master can be both).
   const rows = [
-    { id: 1, slug: 'mig', brand: '', name: 'MiG-29', power: 'electric', role_tags: '["Jet / EDF","Warbird"]', specs: '{"spanMM":600}', sellers: 1, hero_any: null, min_price: 4500, span_mm: 600, preowned: 0 },
-    { id: 2, slug: 'cub', brand: 'FMS', name: 'Sport Cub', power: 'electric', role_tags: '["Scale Civilian","Trainer"]', specs: '{"spanMM":1400}', sellers: 1, hero_any: null, min_price: 12000, span_mm: 1400, preowned: 0 },
-    { id: 3, slug: 'tele', brand: '', name: 'Telemaster', power: 'electric', role_tags: '["Scale Civilian"]', specs: '{"spanMM":1900}', sellers: 1, hero_any: null, min_price: 6000, span_mm: 1900, preowned: 1 },
+    { id: 1, slug: 'mig', brand: '', name: 'MiG-29', power: 'electric', role_tags: '["Jet / EDF","Warbird"]', specs: '{"spanMM":600}', sellers: 1, hero_any: null, min_price: 4500, span_mm: 600, new_stock: 1, preowned_stock: 0 },
+    { id: 2, slug: 'cub', brand: 'FMS', name: 'Sport Cub', power: 'electric', role_tags: '["Scale Civilian","Trainer"]', specs: '{"spanMM":1400}', sellers: 1, hero_any: null, min_price: 12000, span_mm: 1400, new_stock: 1, preowned_stock: 0 },
+    { id: 3, slug: 'tele', brand: '', name: 'Telemaster', power: 'electric', role_tags: '["Scale Civilian"]', specs: '{"spanMM":1900}', sellers: 1, hero_any: null, min_price: 6000, span_mm: 1900, new_stock: 0, preowned_stock: 1 },
+    // mixed: has BOTH a new and a used in-stock offer; span exactly 1500mm; a junk role tag
+    { id: 4, slug: 'mix', brand: '', name: 'Extra 300', power: 'electric', role_tags: '["Aerobatic / 3D","Other","</script>x"]', specs: '{"spanMM":1500}', sellers: 2, hero_any: null, min_price: 9000, span_mm: 1500, new_stock: 1, preowned_stock: 1 },
   ]
-  const out = renderGridNext(cat, rows, { power: 'electric', roles: ['Warbird'], sizes: [], cond: 'all', sort: 'price-desc', counts: { electric: 3, gas: 0 } })
+  const cnt = { electric: 4, gas: 0 }
+  const base = { power: 'electric', roles: [], sizes: [], cond: 'all', sort: 'price-desc', counts: cnt }
+  const out = renderGridNext(cat, rows, base)
   assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
   assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
   assert.ok(out.includes('name="robots" content="noindex"'), 'beta grid is noindexed')
   assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
-  assert.ok(out.includes('data-v="Warbird"') && out.includes('data-v="Scale Civilian"') && out.includes('data-v="Trainer"'), 'present roles get chips')
   assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
-  assert.ok(/id="fx-nres">1</.test(out), 'server honors ?role=Warbird → 1 result')
-  assert.ok(out.includes('data-v="small"') && out.includes('data-v="large"'), 'size buckets rendered from spans')
+
+  // fix #4: junk / breakout role tags are vocab-filtered out of the embed, '<' is escaped
+  assert.ok(!/<\/script>x/.test(out), 'no </script> breakout from a poisoned role_tags value')
+  assert.ok(!out.includes('"Other"') && !out.includes('data-v="Other"'), '"Other" is not a filter chip')
+
+  // fix #1: the mixed master (new + used) is present under BOTH New and Pre-owned
+  const outNew = renderGridNext(cat, rows, { ...base, cond: 'new' })
+  assert.ok(/id="fx-nres">3</.test(outNew), 'New keeps every master with an in-stock new offer (3: mig, cub, mix)')
+  const outUsed = renderGridNext(cat, rows, { ...base, cond: 'pre-owned' })
+  assert.ok(/id="fx-nres">2</.test(outUsed), 'Pre-owned = masters with an in-stock used offer (2: tele, mix)')
+
+  // fix #2: 1500mm is 'medium' (not 'large') — matches the "1–1.5 m" label
+  const outLarge = renderGridNext(cat, rows, { ...base, sizes: ['large'] })
+  assert.ok(/id="fx-nres">1</.test(outLarge), '1500mm bucketed as medium → only the 1900mm plane is Large')
+
+  // fix #3: server hides non-matching cards so the no-JS count matches the grid
+  const outWb = renderGridNext(cat, rows, { ...base, roles: ['Warbird'] })
+  assert.ok(/id="fx-nres">1</.test(outWb) && outWb.includes('style="display:none"'), 'filtered link hides non-matching cards server-side')
 })
 
 // The admin SPA is a huge inline <script> inside a backtick template. A stray
