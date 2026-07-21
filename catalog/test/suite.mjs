@@ -159,6 +159,13 @@ test('powerType: gas markers vs electric default', () => {
   assert.equal(powerType('FMS Viper 70mm EDF Jet'), 'electric')
   assert.equal(powerType('ZOHD Dart XL 1000mm brushless'), 'electric')
   assert.equal(powerType('QIDI 510mm Gyro RTF Plane'), 'electric')
+  // combustion-engine words + brands (no cc/nitro marker in the title)
+  assert.equal(powerType('Seagull Extreme Decathlon 79 with DLE20RA Engine'), 'gas')
+  assert.equal(powerType('Dhansu Danda By Airhawk Models 54.99in with NGH GT9 Pro'), 'gas')
+  assert.equal(powerType('Decathlon DLE 30'), 'gas')
+  assert.equal(powerType('Extra 300 DA-50 Gasser'), 'gas')
+  assert.equal(powerType('Saito FG-60 powered Cub'), 'gas')
+  assert.equal(powerType('Freewing F-16 90mm EDF brushless motor'), 'electric', 'electric uses a motor, not an engine')
 })
 
 // ---------------------------------------------------------------- public

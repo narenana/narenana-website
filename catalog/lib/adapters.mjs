@@ -262,7 +262,40 @@ export function feedPage(source, listUrl, cursor) {
   if (source.platform === 'woocommerce') return wooPage(source, listUrl, cursor)
   if (source.platform === 'shopify') return shopifyPage(source, listUrl, cursor)
   if (source.platform === 'magento') return magentoPage(source, listUrl, cursor)
+  if (source.platform === 'wix') return wixPage(source, listUrl, cursor)
   return htmlPage(source, listUrl, cursor)
+}
+
+// --- Wix Stores -----------------------------------------------------------
+// No product feed, but /sitemap.xml → store-products-sitemap.xml lists every
+// /product-page/<slug>, and each product page server-renders Product JSON-LD
+// (so enrich/verify read price+stock via parseJsonLd, no browser needed). Wix
+// prices in a base currency and converts via ?currency=… ON THE URL — so the
+// source root carries e.g. ?currency=INR and we append it to every product URL,
+// which makes the JSON-LD render that currency. Products discovered once, then
+// paginated from the cached sitemap list held in the cursor.
+export async function wixPage(source, listUrl, cursor) {
+  const origin = new URL(source.home_url).origin
+  const currency = new URL(listUrl).searchParams.get('currency')
+  const qs = currency ? `?currency=${encodeURIComponent(currency)}` : ''
+  let urls = cursor?.urls
+  let fetches = 0
+  if (!urls) {
+    const idx = (await getHtml(`${origin}/sitemap.xml`)) ?? ''
+    fetches++
+    const locs = [...idx.matchAll(/<loc>([^<]+)<\/loc>/gi)].map((m) => m[1])
+    const psm = locs.find((u) => /store-products-sitemap/i.test(u)) ?? `${origin}/store-products-sitemap.xml`
+    const doc = (await getHtml(psm)) ?? ''
+    fetches++
+    urls = [...new Set([...doc.matchAll(/<loc>([^<]+\/product-page\/[^<]+)<\/loc>/gi)].map((m) => m[1].replace(/&amp;/g, '&').split('?')[0]))]
+  }
+  const PAGE = 20
+  const page = cursor?.page ?? 0
+  const products = urls.slice(page * PAGE, page * PAGE + PAGE).map((u) => ({
+    pid: null, url: canonicalUrl(u + qs), title: titleFromUrl(u), priceINR: null, inStock: null, img: null, variants: [],
+  }))
+  const done = (page + 1) * PAGE >= urls.length
+  return { products, nextCursor: done ? null : { urls, page: page + 1 }, fetches, subtree: Math.max(1, Math.ceil(urls.length / PAGE)) }
 }
 
 // --- single-page enrichment / verification --------------------------------
@@ -278,10 +311,16 @@ export function parseJsonLd(html) {
     for (const n of nodes) {
       const isP = n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product')))
       if (!isP) continue
-      const offer = Array.isArray(n.offers) ? n.offers[0] : n.offers
+      // Wix emits "Offers"/"Availability" (capitalised); schema.org standard is
+      // lowercase — accept either. Guard on currency so a source rendered in a
+      // foreign base currency (Wix without ?currency=INR) can't store USD as INR.
+      const offerRaw = n.offers ?? n.Offers
+      const offer = Array.isArray(offerRaw) ? offerRaw[0] : offerRaw
       const price = Number(offer?.price ?? offer?.lowPrice)
       if (!price) continue
-      return { priceINR: Math.round(price), inStock: /InStock/i.test(String(offer.availability || '')) }
+      const cur = String(offer?.priceCurrency ?? '').toUpperCase()
+      if (cur && cur !== 'INR') continue
+      return { priceINR: Math.round(price), inStock: /InStock/i.test(String(offer?.availability ?? offer?.Availability ?? '')) }
     }
   }
   return null

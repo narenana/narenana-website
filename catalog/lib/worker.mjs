@@ -416,12 +416,15 @@ async function api(request, url, env, ep, actor) {
     const home = `https://${new URL(canon).hostname}`
     // probe platform
     let platform = 'html'
+    // Probe at the ORIGIN — building /products.json off a canon that carries a
+    // query (?currency=…) produced a malformed URL that could false-detect.
     if (await probeOk(`${home}/wp-json/wc/store/v1/products?per_page=1`)) platform = 'woocommerce'
-    else if (await probeOk(`${canon.replace(/\/$/, '')}/products.json?limit=1`)) platform = 'shopify'
+    else if (await probeOk(`${home}/products.json?limit=1`)) platform = 'shopify'
     else {
       const doc = (await getHtml(canon)) ?? ''
       if (/zoho/i.test(doc)) platform = 'zoho'
       else if (/\/skin\/frontend\/|var BLANK_URL|Mage\.Cookies|Magento/i.test(doc)) platform = 'magento'
+      else if (/static\.wixstatic\.com|_wixCIDX|wixBiSession|wix-code/i.test(doc)) platform = 'wix'
     }
     const t = now()
     const src = { id: sourceId, platform, home_url: home }

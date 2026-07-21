@@ -67,7 +67,11 @@ export function powerType(text = '') {
   const t = String(text).toLowerCase()
   if (/\b\d{2,3}\s*cc\b/.test(t)) return 'gas' // 35cc, 100cc, 60cc (covers 50-60cc)
   if (/(^|[\s(/])\.\d{2}\b/.test(t)) return 'gas' // .46, .61 glow engine size
-  if (/\b(nitro|glow|petrol|gasoline|2[\s-]?stroke|4[\s-]?stroke)\b/.test(t)) return 'gas'
+  if (/\b(nitro|glow|petrol|gasoline|gasser|engine|2[\s-]?stroke|4[\s-]?stroke)\b/.test(t)) return 'gas'
+  // combustion-engine brands — a plane specced with one is glow/gas ("Decathlon
+  // DLE 30", "…with NGH GT9", "DA-50"). In RC, electric uses a "motor", not an
+  // "engine", so these tokens never name an electric aircraft.
+  if (/\b(dle|dla|saito|zenoah|ngh|moki|3w|da[\s-]?\d{2})\b/.test(t)) return 'gas'
   return 'electric'
 }
 
