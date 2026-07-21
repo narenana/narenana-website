@@ -305,7 +305,7 @@ function recipesFor(recipes, components) {
   </section>`
 }
 
-export function renderMaster(cat, m, offers, recipes = [], components = {}) {
+export function renderMaster(cat, m, offers, similar = []) {
   let specs = {}
   try {
     specs = JSON.parse(m.specs || '{}')
@@ -383,7 +383,7 @@ export function renderMaster(cat, m, offers, recipes = [], components = {}) {
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
       <tbody>${offers.map(offerRow).join('')}</tbody></table>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
-    ${recipesFor(recipes, components)}
+    ${similar.length ? `<section class="similar" style="margin-top:44px"><h2 class="sec">Similar models</h2><ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul></section>` : ''}
   </main>`
   return page({
     title: `${m.brand} ${m.name} — price in India | narenana`,

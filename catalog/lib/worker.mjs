@@ -84,19 +84,11 @@ export async function handleCatalog(request, url, env, ctx) {
          ORDER BY k.dead ASC, k.in_stock DESC, k.price_inr ASC`,
         m.id,
       )
-      // Build recipes are DATA: matched from D1 by category + spec band.
-      let span = NaN
-      try {
-        span = Number(JSON.parse(m.specs || '{}').spanMM)
-      } catch {}
-      const recipes = Number.isFinite(span) && span > 0
-        ? await all(env, `SELECT * FROM recipe WHERE category_id=? AND (span_min IS NULL OR span_min<=?) AND (span_max IS NULL OR span_max>=?)`, cat.id, span, span)
-        : []
-      const components = {}
-      const compIds = [...new Set(recipes.flatMap((r) => { try { return JSON.parse(r.picks).map((p) => p.component_id) } catch { return [] } }))]
-      if (compIds.length)
-        for (const c of await all(env, `SELECT * FROM component WHERE id IN (${compIds.map(() => '?').join(',')})`, ...compIds)) components[c.id] = c
-      return html(renderMaster(cat, m, offers, recipes, components))
+      // "What to put in it" (recipes/components) is removed until we build a
+      // trustworthy framework for it. Product pages now show similar models
+      // instead — same category, in-stock, sharing a role tag.
+      const similar = await similarMasters(env, cat, m)
+      return html(renderMaster(cat, m, offers, similar))
     }
   }
   // unknown slug → the REAL category grid (page 1, electric) with 404 status
@@ -140,6 +132,45 @@ async function gridMasters(env, cat, power = 'electric', page = 1, sort = 'price
      LIMIT ? OFFSET ?`,
     ...params,
   )
+}
+
+// Similar models for a product page: same category, in-stock, sharing ≥1 role
+// tag with m. Ranked by shared-tag count, then closest wingspan. Returns the
+// grid-card shape (reuses masterCard). Empty if m has no role tags.
+async function similarMasters(env, cat, m) {
+  let myTags = []
+  try { myTags = JSON.parse(m.role_tags || '[]') } catch {}
+  myTags = (Array.isArray(myTags) ? myTags : []).filter(Boolean)
+  if (!myTags.length) return []
+  const like = myTags.map(() => `m.role_tags LIKE ?`).join(' OR ')
+  const params = [cat.id, m.id, ...myTags.map((t) => `%"${t}"%`)]
+  const rows = await all(
+    env,
+    `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
+            COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
+            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+     FROM master_model m
+     JOIN offer o ON o.master_model_id = m.id
+     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     WHERE m.category_id=? AND m.status='ready' AND m.id<>? AND (${like})
+     GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
+     LIMIT 60`,
+    ...params,
+  )
+  const mySet = new Set(myTags)
+  const mySpan = Number(m.span_mm) || (() => { try { return Number(JSON.parse(m.specs || '{}').spanMM) || 0 } catch { return 0 } })()
+  return rows
+    .map((r) => {
+      let rt = []
+      try { rt = JSON.parse(r.role_tags || '[]') } catch {}
+      return { r, shared: rt.filter((t) => mySet.has(t)).length, dspan: Math.abs((r.span_mm || 0) - mySpan) }
+    })
+    .sort((a, b) => b.shared - a.shared || a.dspan - b.dspan)
+    .slice(0, 8)
+    .map((x) => x.r)
 }
 
 // In-stock master counts per power (for the filter chips + page total).
