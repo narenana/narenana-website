@@ -31,7 +31,7 @@ export async function handleCatalog(request, url, env, ctx) {
     return new Response(CSS, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=31536000, immutable' } })
 
   // ---- image proxy (public; host-allowlisted to registered sellers) ----
-  if (path.startsWith('/img/')) return imgProxy(env, path)
+  if (path.startsWith('/img/')) return imgProxy(env, path, ctx)
 
   // ---- admin (HTTP Basic) ----
   if (path === '/admin' || path.startsWith('/api/')) {
@@ -202,7 +202,13 @@ async function setMasterPower(env, masterId) {
 }
 
 // ---------------------------------------------------------------- img proxy
-async function imgProxy(env, path) {
+// FNV-1a of the source URL → stable R2 key (dedups images shared across masters;
+// a changed source URL naturally gets a new key + re-fetch).
+const imgKey = (src) => { let h = 0x811c9dc5; for (let i = 0; i < src.length; i++) { h ^= src.charCodeAt(i); h = Math.imul(h, 0x01000193) } return 'i/' + (h >>> 0).toString(16) }
+const IMG_CDN = /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com)$/
+const IMG_CACHE = { 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800', 'x-content-type-options': 'nosniff' }
+
+async function imgProxy(env, path, ctx) {
   const m = path.match(/^\/img\/(master|sku)\/(\d+)$/)
   if (!m) return new Response('bad path', { status: 400 })
   const src =
@@ -215,22 +221,32 @@ async function imgProxy(env, path) {
           FROM master_model mm WHERE mm.id=?`, m[2]))?.u
       : (await one(env, 'SELECT image_url AS u FROM sku WHERE id=?', m[2]))?.u
   if (!src) return new Response('no image', { status: 404 })
+
+  const key = imgKey(src)
+  // Durable copy: once an image is in R2 we never touch the seller again, so a
+  // down / slow / geo-blocked seller site can't blank the catalog.
+  if (env.IMAGES) {
+    const hit = await env.IMAGES.get(key)
+    if (hit) return new Response(hit.body, { headers: { ...IMG_CACHE, 'content-type': hit.httpMetadata?.contentType || 'image/jpeg', 'x-img': 'r2' } })
+  }
+
+  // Miss → fetch origin (host-allowlisted), relay, and stash in R2 for next time.
   const hosts = (await all(env, 'SELECT home_url FROM source')).map((s) => hostOf(s.home_url))
   const h = hostOf(src)
-  const okHost = h && (hosts.includes(h) || /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com)$/.test(h))
-  if (!okHost) return new Response('host not allowed', { status: 403 })
-  const img = await fetch(src, { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${h}/` } })
+  if (!(h && (hosts.includes(h) || IMG_CDN.test(h)))) return new Response('host not allowed', { status: 403 })
+  let img
+  try { img = await fetch(src, { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${h}/` } }) }
+  catch { return new Response('origin unreachable', { status: 502 }) }
   // Re-check after redirects — a seller 30x'ing to an arbitrary host must not
-  // turn this into an open proxy. And only ever relay actual images.
+  // turn this into an open proxy.
   const finalHost = hostOf(img.url)
-  const okFinal = finalHost && (hosts.includes(finalHost) || /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com)$/.test(finalHost))
-  if (!okFinal) return new Response('redirect off-allowlist', { status: 403 })
+  if (!(finalHost && (hosts.includes(finalHost) || IMG_CDN.test(finalHost)))) return new Response('redirect off-allowlist', { status: 403 })
   const ct = img.headers.get('content-type') ?? 'image/jpeg'
-  if (img.ok && !/^image\//i.test(ct)) return new Response('not an image', { status: 502 })
-  return new Response(img.body, {
-    status: img.status,
-    headers: { 'content-type': ct, 'x-content-type-options': 'nosniff', 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800' },
-  })
+  if (!img.ok) return new Response('origin error', { status: img.status })
+  if (!/^image\//i.test(ct)) return new Response('not an image', { status: 502 })
+  const buf = await img.arrayBuffer()
+  if (env.IMAGES && ctx?.waitUntil) ctx.waitUntil(env.IMAGES.put(key, buf, { httpMetadata: { contentType: ct } }))
+  return new Response(buf, { headers: { ...IMG_CACHE, 'content-type': ct, 'x-img': 'origin' } })
 }
 
 // --------------------------------------------------------------------- API

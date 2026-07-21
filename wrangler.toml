@@ -77,6 +77,13 @@ binding = "AI"
 [browser]
 binding = "BROWSER"
 
+# R2 — durable cache of product images. The /img proxy stores each fetched
+# image here on first request and serves from R2 thereafter, so images survive
+# seller-site outages. All code guards on env.IMAGES (optional binding).
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "narenana-images"
+
 # The catalog admin at /admin is gated by HTTP Basic auth (user `admin`). The
 # password is NOT set here (secrets never live in the repo):
 #   npx wrangler secret put ADMIN_PASS
