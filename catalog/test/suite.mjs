@@ -8,6 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
+import { powerType } from '../lib/public.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -146,6 +147,18 @@ test('dedup.findDuplicates: obvious cluster picks ready survivor; 3-way collapse
   assert.equal(bestSurvivor(fms).id, 29, 'ready master with more offers survives')
   const volantex = obviousClusters.find((c) => c.some((m) => m.id === 122))
   assert.equal(volantex.length, 3, 'the three Ranger 600 colourways form ONE cluster')
+})
+
+test('powerType: gas markers vs electric default', () => {
+  assert.equal(powerType('Extreme Flight Slick 104in 100cc'), 'gas')
+  assert.equal(powerType('SEAGULL Boomerang V3 Trainer 61" ARF .46 2-stroke'), 'gas')
+  assert.equal(powerType('Cap 232 .46 Size ARF'), 'gas')
+  assert.equal(powerType('Westland Lysander 118in 50-60cc'), 'gas')
+  assert.equal(powerType('SKYWING Extra NG 74in 35cc/120E'), 'gas', 'gas-class airframe even with an electric option')
+  assert.equal(powerType('ATOMRC Dolphin Pro 800mm PNP'), 'electric')
+  assert.equal(powerType('FMS Viper 70mm EDF Jet'), 'electric')
+  assert.equal(powerType('ZOHD Dart XL 1000mm brushless'), 'electric')
+  assert.equal(powerType('QIDI 510mm Gyro RTF Plane'), 'electric')
 })
 
 // ---------------------------------------------------------------- public

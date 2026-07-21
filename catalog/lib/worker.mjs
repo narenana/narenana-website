@@ -94,6 +94,7 @@ async function gridMasters(env, cat) {
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
+            GROUP_CONCAT(k.title, ' ') AS titles,
             MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m

@@ -177,6 +177,21 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .shop-sub { margin: 0; color: var(--muted); font-size: 0.92rem; }
 .shop-intro { margin: 10px 0 0; color: var(--muted); font-size: 0.95rem; max-width: 56em; }
 
+/* --- power filter (electric / gas-nitro / all) --------------------------- */
+.filt { display: inline-flex; margin: 18px 0 0; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; background: var(--card); }
+.filt-b {
+  appearance: none; border: none; background: transparent;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 0.85rem; font-weight: 700; color: var(--muted);
+  padding: 9px 18px; cursor: pointer; white-space: nowrap;
+  border-right: 2px solid var(--ink);
+}
+.filt-b:last-child { border-right: none; }
+.filt-b span { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; opacity: 0.6; margin-left: 5px; }
+.filt-b:hover { color: var(--ink); }
+.filt-b.is-on { background: var(--orange); color: var(--ink-2); }
+.filt-b.is-on span { opacity: 0.75; }
+
 .shop { max-width: 1140px; margin: 0 auto; padding: 24px 24px 64px; }
 
 /* --- product grid ------------------------------------------------------- */

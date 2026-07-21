@@ -59,6 +59,18 @@ if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native'
 </body></html>`
 }
 
+// Power class from a listing's text. LOGIC is in code; the text (engine
+// markers — displacement, glow size, fuel) is DATA, living in seller titles.
+// gas/nitro when such a marker is present; electric is the common default
+// (foam, PNP, EDF, brushless).
+export function powerType(text = '') {
+  const t = String(text).toLowerCase()
+  if (/\b\d{2,3}\s*cc\b/.test(t)) return 'gas' // 35cc, 100cc, 60cc (covers 50-60cc)
+  if (/(^|[\s(/])\.\d{2}\b/.test(t)) return 'gas' // .46, .61 glow engine size
+  if (/\b(nitro|glow|petrol|gasoline|2[\s-]?stroke|4[\s-]?stroke)\b/.test(t)) return 'gas'
+  return 'electric'
+}
+
 // Card price: cheapest orderable across base-config offers. Never a pack/combo
 // price masquerading as the unit price.
 function masterCard(m, prefix) {
@@ -66,7 +78,7 @@ function masterCard(m, prefix) {
   const oos = !m.any_stock
   const hero = m.hero_any ?? m.hero_image // hero_any = offer-sku fallback (grid query)
   return `
-    <li class="prod" data-price="${price ?? 999999}" data-stock="${oos ? 0 : 1}">
+    <li class="prod" data-price="${price ?? 999999}" data-stock="${oos ? 0 : 1}" data-power="${m.power}"${m.power === 'gas' ? ' style="display:none"' : ''}>
       <a class="prod-link" href="${prefix}/${esc(m.slug)}/">
         <div class="prod-img">
           ${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
@@ -94,18 +106,47 @@ const specLine = (m) => {
 }
 
 export function renderGrid(cat, masters) {
-  const live = masters
+  // Power class per master, derived from its offers' seller titles (engine
+  // markers). Electric is the default view; gas/nitro filtered in on demand.
+  const live = masters.map((m) => ({ ...m, power: powerType(m.titles ?? `${m.brand} ${m.name} ${m.specs ?? ''}`) }))
+  const nElec = live.filter((m) => m.power === 'electric').length
+  const nGas = live.filter((m) => m.power === 'gas').length
+  const filt = `
+    <div class="filt" role="tablist" aria-label="Power type">
+      <button class="filt-b is-on" data-power="electric">Electric <span>${nElec}</span></button>
+      <button class="filt-b" data-power="gas">Gas / Nitro <span>${nGas}</span></button>
+      <button class="filt-b" data-power="all">All <span>${live.length}</span></button>
+    </div>`
   const body = `
   <div class="shop-head"><div class="shop-head-in">
     <p class="shop-kicker">narenana catalog</p>
     <h1 class="shop-h1">${esc(cat.name)} in India</h1>
-    <p class="shop-sub">${live.length} in stock right now · live prices from Indian sellers</p>
+    <p class="shop-sub"><span id="shop-count">${nElec}</span> <span id="shop-count-label">electric</span> in stock · live prices from Indian sellers</p>
     <p class="shop-intro">Kits, PNP and ready-to-fly aircraft from Indian hobby shops, in one place. Prices and stock come from each seller's live listing and are re-checked through the day — every card opens a spec sheet, and every offer links straight to the seller.</p>
+    ${filt}
   </div></div>
   <main class="shop">
     <ul class="prods">${live.map((m) => masterCard(m, cat.path_prefix)).join('')}</ul>
     ${live.length === 0 ? '<p class="empty">Nothing live yet.</p>' : ''}
-  </main>`
+    <p class="empty" id="filt-empty" hidden>Nothing in this category right now.</p>
+  </main>
+  <script>(function(){
+    var btns=document.querySelectorAll('.filt-b');if(!btns.length)return;
+    var count=document.getElementById('shop-count'),label=document.getElementById('shop-count-label'),empty=document.getElementById('filt-empty');
+    var LBL={electric:'electric',gas:'gas / nitro',all:''};
+    function apply(p){
+      btns.forEach(function(b){b.classList.toggle('is-on',b.dataset.power===p)});
+      var shown=0;
+      document.querySelectorAll('.prods .prod').forEach(function(li){
+        var vis=(p==='all'||li.dataset.power===p);li.style.display=vis?'':'none';if(vis)shown++;
+      });
+      count.textContent=shown;label.textContent=LBL[p];empty.hidden=shown>0;
+      try{history.replaceState(null,'',p==='electric'?location.pathname:location.pathname+'?power='+p)}catch(e){}
+    }
+    btns.forEach(function(b){b.onclick=function(){apply(b.dataset.power)}});
+    var init=new URLSearchParams(location.search).get('power');
+    apply(init==='gas'||init==='all'?init:'electric');
+  })()</script>`
   const jsonld = live.length
     ? {
         '@context': 'https://schema.org',
