@@ -254,7 +254,10 @@ async function buildGuess(env, k) {
   const title = k.title ?? ''
   const triage = (() => { try { return JSON.parse(k.triage ?? '{}') } catch { return {} } })()
   const brands = triage.brands ?? []
-  const raw = (await getHtml(k.url_canonical, { tries: 1 })) ?? ''
+  // Feed-less (Zoho) sources get price/stock ONLY here — enrich runs once per
+  // sku (enriched_at gates it), so a single transient empty fetch would strand
+  // price/stock as null until verify happens to catch it. Retry to avoid that.
+  const raw = (await getHtml(k.url_canonical, { tries: 2 })) ?? ''
   // A bot wall carries no product data — don't let it null out price/stock.
   const html = isChallenge(raw) ? '' : raw
   // visible-ish text only: strip tags/scripts so regexes see prose, not markup
