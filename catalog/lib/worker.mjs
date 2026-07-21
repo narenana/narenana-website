@@ -5,6 +5,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
+import { gridDataNext, renderGridNext } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
@@ -55,6 +56,14 @@ export async function handleCatalog(request, url, env, ctx) {
   if (!cat || !cat.live) return null
 
   if (path === cat.path_prefix) {
+    // NEW faceted grid, behind ?ui=next — fully isolated from the live grid below.
+    if (url.searchParams.get('ui') === 'next') {
+      const p = url.searchParams.get('power') === 'gas' ? 'gas' : 'electric'
+      const roles = (url.searchParams.get('role') || '').split(',').filter(Boolean)
+      const sizes = (url.searchParams.get('size') || '').split(',').filter(Boolean)
+      const [rows, counts] = await Promise.all([gridDataNext(env, cat, p), gridCounts(env, cat)])
+      return html(renderGridNext(cat, rows, { power: p, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts }))
+    }
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
     const sort = ['price-desc', 'price-asc', 'span-desc', 'span-asc'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'price-desc'
     const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)

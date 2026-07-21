@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
+import { renderGridNext } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
@@ -194,6 +195,24 @@ test('roleTags: multi-tag role classification', () => {
   const d = roleTags('Guinea Pig 900mm foamy')
   assert.deepEqual(d.tags, ['Sport / Park Flyer'])
   assert.equal(d.confident, false, 'unknown name is not confident → AI fallback eligible')
+})
+
+test('renderGridNext: isolated faceted grid — reuse, contextual facets, server filter', () => {
+  const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings' }
+  const rows = [
+    { id: 1, slug: 'mig', brand: '', name: 'MiG-29', power: 'electric', role_tags: '["Jet / EDF","Warbird"]', specs: '{"spanMM":600}', sellers: 1, hero_any: null, min_price: 4500, span_mm: 600, preowned: 0 },
+    { id: 2, slug: 'cub', brand: 'FMS', name: 'Sport Cub', power: 'electric', role_tags: '["Scale Civilian","Trainer"]', specs: '{"spanMM":1400}', sellers: 1, hero_any: null, min_price: 12000, span_mm: 1400, preowned: 0 },
+    { id: 3, slug: 'tele', brand: '', name: 'Telemaster', power: 'electric', role_tags: '["Scale Civilian"]', specs: '{"spanMM":1900}', sellers: 1, hero_any: null, min_price: 6000, span_mm: 1900, preowned: 1 },
+  ]
+  const out = renderGridNext(cat, rows, { power: 'electric', roles: ['Warbird'], sizes: [], cond: 'all', sort: 'price-desc', counts: { electric: 3, gas: 0 } })
+  assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
+  assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
+  assert.ok(out.includes('name="robots" content="noindex"'), 'beta grid is noindexed')
+  assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
+  assert.ok(out.includes('data-v="Warbird"') && out.includes('data-v="Scale Civilian"') && out.includes('data-v="Trainer"'), 'present roles get chips')
+  assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
+  assert.ok(/id="fx-nres">1</.test(out), 'server honors ?role=Warbird → 1 result')
+  assert.ok(out.includes('data-v="small"') && out.includes('data-v="large"'), 'size buckets rendered from spans')
 })
 
 // The admin SPA is a huge inline <script> inside a backtick template. A stray
