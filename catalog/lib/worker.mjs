@@ -205,7 +205,7 @@ async function setMasterPower(env, masterId) {
 // FNV-1a of the source URL → stable R2 key (dedups images shared across masters;
 // a changed source URL naturally gets a new key + re-fetch).
 const imgKey = (src) => { let h = 0x811c9dc5; for (let i = 0; i < src.length; i++) { h ^= src.charCodeAt(i); h = Math.imul(h, 0x01000193) } return 'i/' + (h >>> 0).toString(16) }
-const IMG_CDN = /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com)$/
+const IMG_CDN = /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com|wixstatic\.com)$/
 const IMG_CACHE = { 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800', 'x-content-type-options': 'nosniff' }
 
 async function imgProxy(env, path, ctx) {
