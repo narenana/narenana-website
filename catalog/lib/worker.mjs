@@ -462,14 +462,17 @@ async function api(request, url, env, ep, actor) {
     const cats = await categories(env)
     const PAGE = 50
     const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
-    const total = (await one(env, `SELECT COUNT(*) n FROM master_model`))?.n ?? 0
+    const anomalyOnly = url.searchParams.get('anomaly') === '1'
+    const where = anomalyOnly ? 'WHERE m.anomaly IS NOT NULL' : ''
+    const total = (await one(env, `SELECT COUNT(*) n FROM master_model m ${where}`))?.n ?? 0
+    const anomalyCount = (await one(env, `SELECT COUNT(*) n FROM master_model WHERE anomaly IS NOT NULL`))?.n ?? 0
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
         SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
-      GROUP BY m.id ORDER BY m.updated_at DESC LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
+      ${where} GROUP BY m.id ORDER BY m.updated_at DESC LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
     for (const m of masters) m.path = `${cats.find((c) => c.id === m.category_id)?.path_prefix ?? ''}/${m.slug}/`
-    return json({ masters, page, total, pageSize: PAGE })
+    return json({ masters, page, total, pageSize: PAGE, anomalyCount })
   }
 
   if (ep === 'master' && request.method === 'POST') {
@@ -484,10 +487,11 @@ async function api(request, url, env, ep, actor) {
     await batch(env, [
       q(env, `UPDATE master_model SET brand=COALESCE(?, brand), name=COALESCE(?, name),
               brand_norm=COALESCE(?, brand_norm), name_norm=COALESCE(?, name_norm),
-              blurb=COALESCE(?, blurb), specs=COALESCE(?, specs), status=COALESCE(?, status), updated_at=? WHERE id=?`,
+              blurb=COALESCE(?, blurb), specs=COALESCE(?, specs), status=COALESCE(?, status),
+              anomaly=CASE WHEN ? IS NOT NULL THEN NULL ELSE anomaly END, updated_at=? WHERE id=?`,
         body.brand ?? null, body.name ?? null,
         body.brand ? normName(body.brand) : null, body.name ? normName(body.name) : null,
-        body.blurb ?? null, body.specs ?? null, body.status ?? null, now(), body.id),
+        body.blurb ?? null, body.specs ?? null, body.status ?? null, body.brand ?? null, now(), body.id),
       audit(env, actor, 'master-update', 'master_model', body.id, body),
     ])
     catCache.at = 0

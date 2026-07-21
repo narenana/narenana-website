@@ -95,7 +95,7 @@ async function load(){
     let d;
     if(tab==='review')d=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src)+'&page='+F.page);
     else if(tab==='sources')d=await api('sources');
-    else if(tab==='catalog')d=await api('catalog?page='+F.page);
+    else if(tab==='catalog')d=await api('catalog?page='+F.page+(F.anomaly?'&anomaly=1':''));
     else if(tab==='dupes')d=await api('duplicates');
     else if(tab==='system')d=await api('system');
     if(my!==reqSeq)return;          // a newer load() superseded this one
@@ -197,13 +197,16 @@ function renderCatalog(){
         +'<input class="inline" style="width:70px" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'" placeholder="Brand"/>'
         +'<input class="inline" style="flex:1" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'" placeholder="Name"/>'
         +'<input class="inline" style="width:78px" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'" placeholder="span mm"/></div>';
-      return '<tr><td style="min-width:120px"><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span></td>'
+      const anom=(function(){if(!m.anomaly)return '';var a;try{a=JSON.parse(m.anomaly)}catch(e){return ''}return '<div class="unk" style="margin-top:3px;font-size:11px" title="detected by dedup finder">⚑ '+esc(a.detail||a.kind)+'</div>'})();
+      return '<tr'+(m.anomaly?' style="background:rgba(198,59,46,.06)"':'')+'><td style="min-width:120px"><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span>'+anom+'</td>'
       +'<td>'+esc(m.status)+'</td><td>'+m.offers+' ('+m.live_offers+' live)</td>'
       +'<td style="min-width:280px">'+specIn+'<input class="inline" style="width:100%" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="one-line blurb"/></td>'
       +'<td style="white-space:nowrap"><button data-mm="'+m.id+'" data-st="'+(m.status==='ready'?'draft':'ready')+'">'+(m.status==='ready'?'Unpublish':'Publish')+'</button> '
       +'<a class="tag" href="'+esc(m.path)+'" target="_blank">view ↗</a></td></tr>'}).join('')
-    +'</tbody></table><p class="meta">Edit brand / name / wingspan / blurb inline — saves on blur. Publish requires the required specs (the API refuses otherwise). '+(data.total||0)+' models total.</p>'+pager(data.total,data.pageSize,data.page||1);
+    +'</tbody></table><div style="margin:8px 0"><button id="anomToggle" class="chip'+(F.anomaly?' on':'')+'">⚑ '+(data.anomalyCount||0)+' flagged'+(F.anomaly?' — showing only these (clear)':' — show')+'</button></div>'
+    +'<p class="meta">Edit brand / name / wingspan / blurb inline — saves on blur. Publish requires the required specs (the API refuses otherwise). '+(data.total||0)+' models'+(F.anomaly?' flagged':' total')+'.</p>'+pager(data.total,data.pageSize,data.page||1);
   wirePager();
+  (function(){var at=$('#anomToggle');if(at)at.onclick=()=>{F.anomaly=!F.anomaly;F.page=1;load()}})();
   document.querySelectorAll('button[data-mm]').forEach((b)=>b.onclick=async()=>{try{await api('master',{id:+b.dataset.mm,status:b.dataset.st});load()}catch(e){alert(e.message)}});
   document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{
     const id=+i.dataset.m,f=i.dataset.f,body={id};

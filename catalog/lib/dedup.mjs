@@ -48,6 +48,46 @@ const spanOf = (m) => {
   }
 }
 
+// --- brand confirmation ----------------------------------------------------
+// A master's brand is "confirmed" when a distinctive word of it actually shows
+// up in its own listing titles. Guessed-but-wrong brands (the Volantex-vs-FMS
+// Ranger) fail this. Generic words appear in many brand names AND in ordinary
+// titles, so they never confirm/accuse a brand on their own; house/blank brands
+// have nothing to confirm.
+const GENERIC_BRAND = new Set(['wing', 'wings', 'hobby', 'hobbies', 'model', 'models', 'plane', 'planes', 'aero', 'aircraft', 'airplane', 'sky', 'fly', 'flying', 'world', 'kit', 'kits', 'toys', 'toy', 'tech', 'craft', 'works', 'sport', 'sports', 'racing', 'star', 'rc'])
+const HOUSE_BRAND = new Set(['', 'unbranded', 'generic', 'diy'])
+const normText = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+export const brandWords = (bn = '') => String(bn).split(/\s+/).filter((w) => w.length >= 4 && !GENERIC_BRAND.has(w))
+export function brandConfirmed(brandNorm, titlesNorm) {
+  if (titlesNorm == null) return true // no titles to check against → don't accuse
+  const w = brandWords(brandNorm)
+  if (!w.length) return true
+  const t = ' ' + normText(titlesNorm) + ' '
+  return w.some((x) => t.includes(' ' + x))
+}
+
+// compareCross(a, b): compare(a,b) with the same-brand gate removed — used only
+// to surface a possible mislabel where one side's brand isn't confirmed. Returns
+// a containment score 0..1 (0 = not a candidate). Never auto-merges: a same
+// TYPE across real brands (Seagull vs FMS Cessna 182) also scores here, so the
+// owner adjudicates every cross-brand pair.
+export function compareCross(a, b) {
+  const na = sizeTokens(a.name_norm), nb = sizeTokens(b.name_norm)
+  if (na.size && nb.size && ![...na].some((x) => nb.has(x))) return 0
+  const sa = spanOf(a), sb = spanOf(b)
+  if (sa && sb && Math.abs(sa - sb) / Math.max(sa, sb) > 0.1) return 0
+  const setA = new Set(coreTokens(a.name_norm, a.brand_norm))
+  const setB = new Set(coreTokens(b.name_norm, b.brand_norm))
+  const inter = [...setA].filter((x) => setB.has(x)).length
+  const minLen = Math.min(setA.size, setB.size)
+  if (!minLen || !inter) return 0
+  const containment = inter / minLen
+  const spanMatch = !!(sa && sb && Math.abs(sa - sb) / Math.max(sa, sb) <= 0.05)
+  const sharedSize = [...na].some((x) => nb.has(x))
+  if (containment >= 0.6 && (spanMatch || sharedSize || minLen >= 2)) return containment
+  return 0
+}
+
 // compare(a, b) → { score 0..1, obvious, reason }. Order-independent.
 export function compare(a, b) {
   if (!a.brand_norm || a.brand_norm !== b.brand_norm) return { score: 0, obvious: false, reason: 'different brand' }
@@ -150,5 +190,39 @@ export function findDuplicates(masters) {
     clusters.get(r).push(byId.get(id))
   }
   const obviousClusters = [...clusters.values()].filter((c) => c.length > 1)
-  return { obviousClusters, candidatePairs }
+
+  // --- brand anomalies + cross-brand duplicate candidates -------------------
+  // Only runs when masters carry `titles` (dedupSlice supplies them; the unit
+  // tests don't, so their behaviour is unchanged). Trusted brand vocabulary =
+  // distinctive words of brands confirmed by their own titles somewhere.
+  const vocab = new Map()
+  for (const m of masters) if (m.brand_norm && brandConfirmed(m.brand_norm, m.titles)) for (const w of brandWords(m.brand_norm)) if (!vocab.has(w)) vocab.set(w, m.brand)
+  const byCat = new Map()
+  for (const m of masters) { const g = byCat.get(m.category_id) ?? []; g.push(m); byCat.set(m.category_id, g) }
+  const anomalies = []
+  const seenCross = new Set()
+  for (const m of masters) {
+    if (m.titles == null) continue
+    const house = HOUSE_BRAND.has(String(m.brand_norm || '').trim())
+    if (!m.brand_norm || house || brandConfirmed(m.brand_norm, m.titles)) continue
+    // (a) a DISTINCTIVE different brand appears in the listing titles → mislabel
+    const tn = ' ' + normText(m.titles) + ' '
+    const mine = new Set(brandWords(m.brand_norm))
+    const others = new Set()
+    for (const [w, canon] of vocab) if (!mine.has(w) && tn.includes(' ' + w)) others.add(canon)
+    if (others.size) anomalies.push({ id: m.id, kind: 'brand-mismatch', detail: `listing titles say ${[...others].join(' / ')}, tagged "${m.brand}"` })
+    // (b) unconfirmed brand + strong match to an other-brand master → the owner
+    //     confirms whether it's the same product mislabelled, or a real sibling.
+    for (const o of byCat.get(m.category_id) ?? []) {
+      if (o.id === m.id || o.brand_norm === m.brand_norm) continue
+      const key = m.id < o.id ? m.id + ':' + o.id : o.id + ':' + m.id
+      if (seenCross.has(key)) continue
+      const score = compareCross(m, o)
+      if (score <= 0) continue
+      seenCross.add(key)
+      const a = bestSurvivor([m, o]); const b = a === m ? o : m
+      candidatePairs.push({ a, b, score: +score.toFixed(2), reason: `possible mislabel — same model, brand differs (${a.brand || '—'} vs ${b.brand || '—'})` })
+    }
+  }
+  return { obviousClusters, candidatePairs, anomalies }
 }

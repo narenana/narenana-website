@@ -337,10 +337,11 @@ export async function dedupSlice(env, trigger, force = false) {
   if (!force && t - last < DEDUP_EVERY) return null // not due — let verify have the slice
   await setSetting(env, 'dedup_last', String(t))
 
-  const masters = await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status,
-      (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=m.id) AS offers
+  const masters = await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status, m.category_id,
+      (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=m.id) AS offers,
+      (SELECT GROUP_CONCAT(k.title, ' | ') FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=m.id) AS titles
      FROM master_model m WHERE m.status IN ('ready','draft')`)
-  const { obviousClusters, candidatePairs } = findDuplicates(masters)
+  const { obviousClusters, candidatePairs, anomalies } = findDuplicates(masters)
 
   // Rejected pairs must never be re-proposed (auto-merge or candidate).
   const rejected = new Set((await all(env, `SELECT a_id, b_id FROM merge_candidate WHERE status='rejected'`)).map((r) => `${r.a_id}:${r.b_id}`))
@@ -367,7 +368,13 @@ export async function dedupSlice(env, trigger, force = false) {
       Math.min(p.a.id, p.b.id), Math.max(p.a.id, p.b.id), p.score, p.reason, t)
     flagged++
   }
-  return { job: 'dedup', trigger, merged, flagged, log }
+  // Brand anomalies (auto-recomputed every run): clear the old set, stamp the
+  // current one. Fixing the brand — or merging the master away — clears it on
+  // the next pass. The Catalog tab shows the badge so the owner can correct it.
+  await run(env, `UPDATE master_model SET anomaly=NULL WHERE anomaly IS NOT NULL`)
+  if (anomalies.length) await batch(env, anomalies.map((a) =>
+    q(env, `UPDATE master_model SET anomaly=? WHERE id=?`, JSON.stringify({ kind: a.kind, detail: a.detail, at: t }), a.id)))
+  return { job: 'dedup', trigger, merged, flagged, anomalies: anomalies.length, log }
 }
 
 // Merge master B into A: move B's offers to A (dropping any that would collide
