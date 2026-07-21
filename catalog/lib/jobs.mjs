@@ -385,7 +385,12 @@ export async function mergeMasters(env, aId, bId, actor, reason) {
     q(env, `DELETE FROM offer WHERE master_model_id=? AND sku_id IN (SELECT sku_id FROM offer WHERE master_model_id=?)`, bId, aId),
     q(env, `UPDATE offer SET master_model_id=? WHERE master_model_id=?`, aId, bId),
     q(env, `UPDATE master_model SET specs=?, hero_image=COALESCE(hero_image, ?), updated_at=? WHERE id=?`, JSON.stringify(specs), b.hero_image, now(), aId),
-    q(env, `UPDATE merge_candidate SET status='merged', decided_at=? WHERE (a_id=? AND b_id=?) OR (a_id=? AND b_id=?)`, now(), aId, bId, bId, aId),
+    // B is absorbed then deleted — first remove EVERY merge_candidate row that
+    // references B: the current pair AND any other pending pairs B sits in.
+    // Otherwise deleting the master trips the a_id/b_id foreign key (RESTRICT)
+    // and the whole merge throws. The next dedup pass re-evaluates the survivor
+    // A against everything and re-creates candidates if they still look alike.
+    q(env, `DELETE FROM merge_candidate WHERE a_id=? OR b_id=?`, bId, bId),
     q(env, `DELETE FROM master_model WHERE id=?`, bId),
     audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason }),
   ]
