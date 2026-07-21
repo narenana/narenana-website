@@ -18,7 +18,7 @@
 import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
-import { powerType } from './public.mjs'
+import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
 import { storeSnapshot } from './snapshot.mjs'
 import { now } from './util.mjs'
 
@@ -58,6 +58,10 @@ export async function runSlice(env, trigger = 'cron') {
     if ((await getSetting(env, 'dedup_paused')) !== '1') {
       const dd = await dedupSlice(env, trigger)
       if (dd) return dd
+    }
+    if ((await getSetting(env, 'classify_paused')) !== '1') {
+      const cl = await classifySlice(env, trigger)
+      if (cl) return cl
     }
     if ((await getSetting(env, 'verify_paused')) !== '1') return await verifySlice(env, trigger)
     return { idle: true }
@@ -325,6 +329,65 @@ async function aiGuess(env, title, snippet) {
   } catch {
     return null
   }
+}
+
+// Role/type tags via Workers AI — the fallback for models the deterministic
+// roleTags() rules can't confidently place. Free-tier binding; validated & pruned
+// through normalizeRoleTags so the model can only emit vocabulary tags.
+async function aiRoleTags(env, text) {
+  if (!env.AI) return null
+  try {
+    const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+      max_tokens: 120,
+      messages: [
+        { role: 'system', content: `You tag fixed-wing RC model aircraft by role/type. Use ONLY these tags: ${ROLE_TAGS.join(', ')}. A model may have more than one. Rules: military JETS => "Jet / EDF" plus "Warbird"; prop military scale => "Warbird"; civilian replicas (Cessna, Piper Cub, Decathlon, Beaver) => "Scale Civilian"; dedicated aerobats (Extra, MXS, Sbach, Pitts) => "Aerobatic / 3D"; FPV platforms and flying wings => "FPV / Flying Wing"; gliders/sailplanes => "Glider / Sailplane"; commercial airliners => "Airliner"; beginner trainers => "Trainer"; generic foam sport models => "Sport / Park Flyer". Reply with ONLY a JSON array of tag strings, most defining first, e.g. ["Warbird"].` },
+        { role: 'user', content: String(text).slice(0, 600) },
+      ],
+    })
+    const m = String(r?.response ?? '').match(/\[[\s\S]*?\]/)
+    if (!m) return null
+    const tags = normalizeRoleTags(JSON.parse(m[0]))
+    return tags.length ? { tags } : null
+  } catch {
+    return null
+  }
+}
+
+// ---------------------------------------------------------------- classify slice
+// Assigns role_tags to masters that lack them (new/inbound; the existing catalog
+// was seeded from a reviewed pass). Rules place the confident majority for free;
+// only the uncertain tail spends a Workers AI call (capped per slice). Returns null
+// when there's no backlog, so verify still gets the tick.
+async function classifySlice(env, trigger) {
+  const t = now()
+  const rows = await all(
+    env,
+    `SELECT m.id, m.brand, m.name, GROUP_CONCAT(k.title, ' ') AS titles
+     FROM master_model m
+     LEFT JOIN offer o ON o.master_model_id = m.id
+     LEFT JOIN sku k ON k.id = o.sku_id
+     WHERE m.status IN ('ready','draft') AND m.role_tags IS NULL
+     GROUP BY m.id ORDER BY m.id LIMIT 12`,
+  )
+  if (!rows.length) return null // no backlog — let verify have the slice
+  const stmts = []
+  const log = []
+  let aiCalls = 0
+  for (const m of rows) {
+    const text = `${m.brand ?? ''} ${m.name ?? ''} ${m.titles ?? ''}`.trim()
+    const r = roleTags(text)
+    let tags = r.tags
+    let source = 'rules'
+    if (!r.confident && aiCalls < 8) {
+      aiCalls++
+      const ai = await aiRoleTags(env, text)
+      if (ai) { tags = ai.tags; source = 'ai' }
+    }
+    stmts.push(q(env, `UPDATE master_model SET role_tags=?, role_source=?, updated_at=? WHERE id=?`, JSON.stringify(tags), source, t, m.id))
+    log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: ${tags.join('+')} [${source}]`)
+  }
+  await batch(env, stmts)
+  return { job: 'classify', trigger, classified: rows.length, ai: aiCalls, log }
 }
 
 // -------------------------------------------------------------- dedup slice

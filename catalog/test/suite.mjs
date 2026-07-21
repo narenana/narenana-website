@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
-import { powerType, conditionOf } from '../lib/public.mjs'
+import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -174,6 +174,25 @@ test('conditionOf: pre-owned vs new', () => {
   assert.equal(conditionOf('PT19 Sparingly used model like NEW'), 'used')
   assert.equal(conditionOf('FMS 1500mm Cessna 182 PNP RC Airplane'), 'new')
   assert.equal(conditionOf('Brand new unused EDF jet'), 'new', 'bare "unused" must not read as used')
+})
+
+test('roleTags: multi-tag role classification', () => {
+  const tags = (s) => roleTags(s).tags
+  assert.deepEqual(tags('North American P-51 Mustang 1100mm PNP'), ['Warbird'])
+  assert.deepEqual(tags('Freewing F-16 Fighting Falcon 70mm EDF'), ['Jet / EDF', 'Warbird'], 'military jet is both a jet and a warbird')
+  assert.deepEqual(tags('FMS Cessna 182 Skylane 1500mm PNP'), ['Scale Civilian'])
+  assert.deepEqual(tags('Extreme Flight Extra 330SC 3D Aerobatic'), ['Aerobatic / 3D'])
+  assert.deepEqual(tags('ATOMRC Dolphin FPV Fixed Wing 845mm'), ['FPV / Flying Wing'])
+  assert.deepEqual(tags('Volantex Ranger 2000 FPV Platform'), ['FPV / Flying Wing'])
+  assert.deepEqual(tags('E-flite Radian XL 2.6m Glider'), ['Glider / Sailplane'])
+  assert.deepEqual(tags('Airbus A320 Twin 70mm EDF Airliner'), ['Jet / EDF', 'Airliner'])
+  // combo prune the owner requested: Warbird/Scale never keep a "Trainer" secondary
+  assert.ok(!tags('FMS T-28 Trojan Warbird Trainer 1400mm').includes('Trainer'), 'T-28 stays Warbird, not Trainer')
+  assert.ok(!tags('FMS PA-18 Super Cub Trainer 1300mm').includes('Trainer'), 'Cub stays Scale Civilian, not Trainer')
+  // unknown foamie name → Sport/Park default, flagged low-confidence for the AI fallback
+  const d = roleTags('Guinea Pig 900mm foamy')
+  assert.deepEqual(d.tags, ['Sport / Park Flyer'])
+  assert.equal(d.confident, false, 'unknown name is not confident → AI fallback eligible')
 })
 
 // ---------------------------------------------------------------- public

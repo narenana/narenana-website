@@ -84,6 +84,53 @@ export function powerType(text = '') {
   return 'electric'
 }
 
+// Role / type — the going-forward classifier for inbound models. Multi-label: a
+// listing can carry several tags (a MiG-29 is a jet AND a warbird; a Piper Cub is
+// scale civilian). tags[0] is the primary (card) label. Pure & deterministic like
+// powerType/conditionOf. The existing catalog was seeded from a reviewed pass; new
+// masters get rules here, and the classify slice falls back to Workers AI only when
+// a listing is not confidently placed (`confident:false`).
+export const ROLE_TAGS = ['Trainer', 'Sport / Park Flyer', 'Aerobatic / 3D', 'Warbird', 'Jet / EDF', 'Glider / Sailplane', 'FPV / Flying Wing', 'Scale Civilian', 'Airliner']
+
+// [tag, regex]. Rules fire independently (multi-tag); a model name/title is matched
+// on aircraft-type knowledge (designations, platform brands, keywords) — general
+// knowledge, not catalog content. Listing order also sets primary precedence.
+const ROLE_RULES = [
+  ['Jet / EDF', /\bedf\b|ducted[\s-]?fan|\bturbine\b|\bjet\b|\bf-?1[45678]\b|\bf-?22\b|\bf-?35\b|\bmig-?\d|\bsu-?\d\d|\bj-?20\b|\bj-?11\b|rafale|typhoon|viggen|mirage|tornado|\bl-?39\b|\ba-?10\b|\bt-?45\b|mb-?339|\bviper\b|goshawk|funjet|albatross/],
+  ['Warbird', /mustang|\bp-?51\b|spitfire|corsair|f4u|\bzero\b|a6m|bf-?109|fw-?190|messerschmitt|\bp-?47\b|\bp-?40\b|\bp-?39\b|\bp-?38\b|\bt-?28\b|trojan|\bstuka\b|hurricane|mosquito|lancaster|\bb-?17\b|\bb-?25\b|texan|\bat-?6\b|warbird|\bmig-?\d|\bsu-?\d\d|\bf-?1[45678]\b|\bf-?22\b|rafale|viggen|mirage|tornado|\bl-?39\b|\ba-?10\b|\bt-?45\b|goshawk|mb-?339|\bj-?20\b|hansa|\bpc-?9\b/],
+  ['Airliner', /airbus|\ba3\d0\b|boeing|\b7[0-9]7\b|\b747\b|\b737\b|airliner|globemaster|emirates/],
+  ['Glider / Sailplane', /glider|sailplane|\bsoar|\bdlg\b|hand[\s-]?launch|radian|discus|\bsalto\b|motor[\s-]?glider|thermal|\bbixler\b/],
+  ['FPV / Flying Wing', /\bfpv\b|flying[\s-]?wing|\btalon\b|sky[\s-]?surfer|\branger\b|\bzohd\b|atomrc|heewing|skywalker|x-?uav|mapbird|believer|striver|\bdart\b|swordfish|\bdolphin\b|\bpenguin\b|\bmobula\b|vortex-?rc|batman|\bplank\b|caipirinha|reptile|makeflyeasy/],
+  ['Aerobatic / 3D', /\b3d\b|aerobatic|extra[\s-]?\d|edge[\s-]?540|edge[\s-]?\d|yak-?\d|\bmxs\b|slick|pitts|sbach|\blaser[\s-]?\d|acromaster|katana|addiction|revolto|\bcrack\b|\b260\b|\b330\b|dirty[\s-]?birdy|vanquish|gee[\s-]?bee/],
+  ['Scale Civilian', /cessna|piper|\bcub\b|decathlon|beaver|otter|\bwaco\b|pilatus|kingfisher|telemaster|tiger[\s-]?moth|skylane|\bsr22\b|carbon[\s-]?cub|space[\s-]?walker|stinson|\bj-?3\b|maule|\bchamp\b|bird[\s-]?dog|\bdraco\b|columbia/],
+  ['Trainer', /trainer|beginner|apprentice|easy[\s-]?trainer|first[\s-]?step|\bcadet\b|\bkadet\b|challenger|allrounder|boomerang|arising[\s-]?star|school[\s-]?marm/],
+  ['Sport / Park Flyer', /sport|park[\s-]?flyer|fun[\s-]?cub|foam[\s-]?board|depron|gyro[\s-]?rtf|allrounder|wingnetic/],
+]
+// Primary precedence when several tags match (jets lead over their warbird tag; a
+// scale civilian outranks a bare "trainer"; sport is the catch-all).
+const ROLE_PRIMARY = ['Jet / EDF', 'Warbird', 'Airliner', 'Glider / Sailplane', 'FPV / Flying Wing', 'Aerobatic / 3D', 'Scale Civilian', 'Trainer', 'Sport / Park Flyer']
+
+// Dedup, validate against the vocabulary, pick a primary, drop the combos the owner
+// removed (no Warbird+Trainer, no Scale Civilian+Trainer — keep the primary), and
+// return with primary first. Shared by the rule classifier and the AI fallback.
+export function normalizeRoleTags(tags) {
+  let t = [...new Set((tags || []).filter((x) => ROLE_TAGS.includes(x)))]
+  if (!t.length) return []
+  const primary = ROLE_PRIMARY.find((p) => t.includes(p)) ?? t[0]
+  for (const other of ['Warbird', 'Scale Civilian']) {
+    if (t.includes(other) && t.includes('Trainer')) t = t.filter((x) => x !== (primary === 'Trainer' ? other : 'Trainer'))
+  }
+  return [primary, ...t.filter((x) => x !== primary)]
+}
+
+export function roleTags(text = '') {
+  const s = String(text).toLowerCase()
+  const tags = normalizeRoleTags(ROLE_RULES.filter(([, re]) => re.test(s)).map(([tag]) => tag))
+  // Nothing distinctive matched → default to the sport/park catch-all, but mark it
+  // low-confidence so the classify slice can ask the AI.
+  return tags.length ? { tags, confident: true } : { tags: ['Sport / Park Flyer'], confident: false }
+}
+
 // Card price: cheapest orderable across base-config offers. Never a pack/combo
 // price masquerading as the unit price.
 function masterCard(m, prefix) {

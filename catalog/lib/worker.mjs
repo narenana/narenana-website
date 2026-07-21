@@ -653,7 +653,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich|dedup)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich|dedup|classify)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })
