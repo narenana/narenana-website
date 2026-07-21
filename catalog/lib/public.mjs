@@ -151,7 +151,7 @@ export function renderGrid(cat, masters, opts = {}) {
   </main>
   <script>(function(){
     var more=document.getElementById('grid-more'),grid=document.getElementById('grid');
-    if(!more||!grid||!('IntersectionObserver' in window))return;
+    if(!more||!grid)return;
     var page=+more.dataset.page,pages=+more.dataset.pages,power=more.dataset.power,prefix=more.dataset.prefix,loading=false,done=page>=pages;
     var pgr=document.querySelector('.pager');if(pgr)pgr.style.display='none';
     var end=document.createElement('p');end.className='empty';end.hidden=true;
@@ -159,6 +159,7 @@ export function renderGrid(cat, masters, opts = {}) {
     more.after(end);
     var spin=document.createElement('p');spin.className='empty';spin.hidden=true;spin.textContent='Loading more…';more.after(spin);
     function href(p){var qs=[];if(power!=='electric')qs.push('power='+power);qs.push('page='+p);return prefix+'/?'+qs.join('&')}
+    function near(){return more.getBoundingClientRect().top-window.innerHeight<700}
     function loadMore(){
       if(loading||done)return;loading=true;spin.hidden=false;
       fetch(href(page+1)).then(function(r){return r.text()}).then(function(t){
@@ -166,11 +167,18 @@ export function renderGrid(cat, masters, opts = {}) {
         doc.querySelectorAll('.prods .prod').forEach(function(c){grid.appendChild(document.importNode(c,true))});
         page++;loading=false;spin.hidden=true;
         try{history.replaceState(null,'',href(page).replace(/&?page=1$/,'').replace(/\\?$/,''))}catch(e){}
-        if(page>=pages){done=true;end.hidden=false;io.disconnect()}
+        if(page>=pages){done=true;end.hidden=false;teardown()}else check();
       }).catch(function(){loading=false;spin.hidden=true});
     }
-    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)loadMore()})},{rootMargin:'700px'});
-    io.observe(more);
+    function check(){if(!done&&!loading&&near())loadMore()}
+    // Primary: IntersectionObserver. Fallback: throttled scroll/resize — the pager is hidden,
+    // so loading must never depend on the observer alone. Initial check() auto-fills a tall viewport.
+    var io=('IntersectionObserver' in window)?new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)loadMore()})},{rootMargin:'700px'}):null;
+    if(io)io.observe(more);
+    var t;function onScroll(){if(t)return;t=setTimeout(function(){t=0;check()},150)}
+    function teardown(){if(io)io.disconnect();removeEventListener('scroll',onScroll);removeEventListener('resize',onScroll)}
+    addEventListener('scroll',onScroll,{passive:true});addEventListener('resize',onScroll,{passive:true});
+    check();
   })()</script>`
   const jsonld = masters.length
     ? {
