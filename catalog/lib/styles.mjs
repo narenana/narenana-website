@@ -1,4 +1,5 @@
 // Generated from catalog/catalog.css — edit that, then: npm run catalog:css
+export const CSS_VER = '1598312f'
 export const CSS = `/* narenana catalog — Narenana Daylight design system (matches the homepage).
    Tokens: paper #F3EEE0 · card #FCF9F1 · ink #0F2C39 · soft #DDE9EE ·
    orange #EF7A25 / #D8641A · red #C63B2E. Fonts: Bricolage Grotesque
@@ -192,6 +193,24 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .filt-b.is-on { background: var(--orange); color: var(--ink-2); }
 .filt-b.is-on span { opacity: 0.75; }
 a.filt-b { text-decoration: none; }
+
+/* --- sort dropdown ------------------------------------------------------- */
+.sortsel { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.sortsel-lbl {
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--muted); font-weight: 700;
+}
+.sortsel-in {
+  appearance: none; -webkit-appearance: none;
+  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-size: 0.85rem; font-weight: 700; color: var(--ink);
+  background-color: var(--card);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%230F2C39' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat; background-position: right 12px center;
+  border: 2px solid var(--ink); border-radius: 999px;
+  padding: 9px 34px 9px 16px; cursor: pointer;
+}
+.sortsel-in:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
 /* --- pagination ---------------------------------------------------------- */
 .pager { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 40px 0 8px; }
@@ -405,6 +424,18 @@ a.filt-b { text-decoration: none; }
 @media (max-width: 640px) {
   .vars { font-size: 0.85rem; }
   .cta-buy { display: block; text-align: center; padding: 13px 10px; }
+  /* Compact the shop header so a product card is visible in the first fold. */
+  .shop-head-in { padding: 16px 16px 14px; }
+  .shop-kicker { margin-bottom: 5px; }
+  .shop-h1 { font-size: 1.35rem; margin-bottom: 4px; }
+  .shop-sub { font-size: 0.82rem; }
+  .shop-intro { display: none; }              /* marketing copy — desktop only, stays in DOM */
+  .filt-row { margin-top: 12px !important; gap: 10px !important; }
+  .filt { margin-top: 0; width: 100%; }
+  .filt-b { flex: 1; padding: 9px 6px; text-align: center; }
+  .sortsel { margin-left: 0; width: 100%; }
+  .sortsel-in { flex: 1; }
+  .shop { padding-top: 16px; }
 }
 
 .recipes { margin-top: 44px; }

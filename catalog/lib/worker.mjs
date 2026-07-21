@@ -25,7 +25,9 @@ export async function handleCatalog(request, url, env, ctx) {
   if (!env.CATALOG_DB) return null
 
   if (path === '/catalog.css')
-    return new Response(CSS, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=3600' } })
+    // URL is versioned (?v=<hash> in the <link>), so the bytes are immutable:
+    // a CSS change ships a new URL rather than mutating this one.
+    return new Response(CSS, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=31536000, immutable' } })
 
   // ---- image proxy (public; host-allowlisted to registered sellers) ----
   if (path.startsWith('/img/')) return imgProxy(env, path)

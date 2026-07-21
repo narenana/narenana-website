@@ -7,6 +7,7 @@
 // "last seen ₹X on <date>" — pages only vanish when the owner retires them.
 
 import { esc, inr } from './util.mjs'
+import { CSS_VER } from './styles.mjs'
 
 // Site IDENTITY (domain, analytics id) is code config; all product/market
 // content — masters, offers, recipes, components — arrives as arguments,
@@ -29,7 +30,7 @@ export function page({ title, desc, path, body, jsonld, noindex, image }) {
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700..800&family=Grand+Hotel&family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
 <script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
-<link rel="stylesheet" href="/catalog.css" />
+<link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
 </head><body>
 <header class="nav"><a class="nav-back" href="/">narenana</a><span class="nav-sep">/</span><a class="nav-here" href="${esc(path.split('/').slice(0, 2).join('/'))}/">${esc(path.split('/')[1])}</a>
 <span class="nav-grow"></span>
@@ -139,8 +140,8 @@ export function renderGrid(cat, masters, opts = {}) {
   }
   const chip = (p, text, n) => `<a class="filt-b ${power === p ? 'is-on' : ''}" href="${href(p, 1)}">${text} <span>${n}</span></a>`
   const filt = `<div class="filt" role="tablist" aria-label="Power type">${chip('electric', 'Electric', counts.electric)}${chip('gas', 'Gas / Nitro', counts.gas)}${chip('all', 'All', counts.all)}</div>`
-  const sortB = (val, text) => `<a class="filt-b ${sort === val ? 'is-on' : ''}" href="${href(power, 1, val)}">${text}</a>`
-  const sortCtl = `<div class="filt sortbar" role="group" aria-label="Sort by" style="margin-left:auto">${sortB('price-desc', 'Price ↓')}${sortB('price-asc', 'Price ↑')}${sortB('span-desc', 'Wingspan ↓')}${sortB('span-asc', 'Wingspan ↑')}</div>`
+  const sortOpts = [['price-desc', 'Price: high to low'], ['price-asc', 'Price: low to high'], ['span-desc', 'Wingspan: large to small'], ['span-asc', 'Wingspan: small to large']]
+  const sortCtl = `<label class="sortsel"><span class="sortsel-lbl">Sort</span><select class="sortsel-in" aria-label="Sort products" onchange="if(this.value)location.href=this.value">${sortOpts.map(([v, t]) => `<option value="${href(power, 1, v)}"${sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>`
 
   const pageLink = (pg, text, cls = '') => (pg < 1 || pg > totalPages || pg === pageNo ? `<span class="pg ${cls} is-off">${text}</span>` : `<a class="pg ${cls}" href="${href(power, pg)}">${text}</a>`)
   const nums = []
