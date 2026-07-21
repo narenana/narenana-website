@@ -5,7 +5,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
-import { gridDataNext, renderGridNext } from './grid-next.mjs'
+import { gridDataNext, renderGridNext, resolveLanding } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
@@ -73,6 +73,18 @@ export async function handleCatalog(request, url, env, ctx) {
   }
 
   const slug = path.slice(cat.path_prefix.length + 1)
+  // SEO landing pages — flat slugs (warbirds, electric-warbirds, nitro, …).
+  // Checked before the master lookup; reserved slugs can't collide with product slugs.
+  if (slug && !slug.includes('/')) {
+    const L = resolveLanding(slug)
+    if (L) {
+      const [rows, counts] = await Promise.all([gridDataNext(env, cat, L.power), gridCounts(env, cat)])
+      const matched = L.roles.length
+        ? rows.filter((r) => { try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }).length
+        : rows.length
+      if (matched >= 1) return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug }, counts }))
+    }
+  }
   if (slug && !slug.includes('/')) {
     const m = await one(env, `SELECT * FROM master_model WHERE category_id=? AND slug=? AND status IN ('ready','retired')`, cat.id, slug)
     if (m) {

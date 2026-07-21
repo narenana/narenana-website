@@ -20,6 +20,40 @@ const sizeOf = (mm) => (!mm ? '' : mm < 1000 ? 'small' : mm <= 1500 ? 'medium' :
 const ri = (t) => ROLE_VOCAB.indexOf(t)
 // JSON embedded in an inline <script> must not let a '<' start a </script> break-out.
 const jsonSafe = (o) => JSON.stringify(o).replace(/</g, '\\u003c')
+const SITE = 'https://www.narenana.com'
+
+// ---- SEO landing pages: flat slugs → {power, roles} + page metadata ----
+const ROLE_SLUG = { warbirds: 'Warbird', jets: 'Jet / EDF', fpv: 'FPV / Flying Wing', trainers: 'Trainer', gliders: 'Glider / Sailplane', 'scale-planes': 'Scale Civilian', aerobatic: 'Aerobatic / 3D', 'sport-planes': 'Sport / Park Flyer', airliners: 'Airliner' }
+const SLUG_OF_ROLE = Object.fromEntries(Object.entries(ROLE_SLUG).map(([s, r]) => [r, s]))
+const ROLE_H1 = { Warbird: 'Warbird', 'Jet / EDF': 'Jet & EDF', 'FPV / Flying Wing': 'FPV & flying-wing', Trainer: 'Trainer', 'Glider / Sailplane': 'Glider & sailplane', 'Scale Civilian': 'Scale civilian', 'Aerobatic / 3D': 'Aerobatic & 3D', 'Sport / Park Flyer': 'Sport & park flyer', Airliner: 'Airliner' }
+const POWER_SLUG = { electric: 'electric', nitro: 'gas', gas: 'gas' }
+export const LANDING_ROLE_SLUGS = Object.keys(ROLE_SLUG)
+
+// slug → { power:'electric'|'gas'|'all', roles:[], roleSlug } | null
+export function resolveLanding(slug) {
+  if (ROLE_SLUG[slug]) return { power: 'all', roles: [ROLE_SLUG[slug]], roleSlug: slug }
+  if (POWER_SLUG[slug]) return { power: POWER_SLUG[slug], roles: [], roleSlug: '' }
+  for (const ps of ['electric', 'nitro', 'gas']) {
+    if (slug.startsWith(ps + '-')) {
+      const rest = slug.slice(ps.length + 1)
+      if (ROLE_SLUG[rest]) return { power: POWER_SLUG[ps], roles: [ROLE_SLUG[rest]], roleSlug: rest }
+    }
+  }
+  return null
+}
+
+// page metadata for a resolved landing (H1, title, desc, breadcrumbs, intro noun)
+function landingMeta(cat, L, slug) {
+  const pfx = L.power === 'all' ? '' : L.power === 'gas' ? 'Nitro / gas ' : 'Electric '
+  const rl = L.roles.length ? ROLE_H1[L.roles[0]] : ''
+  const core = L.roles.length ? pfx + rl : pfx.trim()
+  const h1 = (core + ' RC Planes in India').replace(/\s+/g, ' ').trim()
+  const noun = ((L.power === 'all' ? '' : (L.power === 'gas' ? 'nitro / gas ' : 'electric ')) + (rl ? rl.toLowerCase() + ' ' : '') + 'RC planes').replace(/\s+/g, ' ').trim()
+  const crumbs = [{ name: 'Home', url: '/' }, { name: cat.name, url: `${cat.path_prefix}/` }]
+  if (L.power !== 'all' && L.roles.length) crumbs.push({ name: L.power === 'gas' ? 'Nitro / gas' : 'Electric', url: `${cat.path_prefix}/${L.power === 'gas' ? 'nitro' : 'electric'}/` })
+  crumbs.push({ name: L.roles.length ? rl : (L.power === 'gas' ? 'Nitro / gas' : 'Electric'), url: `${cat.path_prefix}/${slug}/` })
+  return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare live prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
+}
 
 const specLine = (m) => {
   try {
@@ -46,10 +80,10 @@ export async function gridDataNext(env, cat, power) {
      FROM master_model m
      JOIN offer o ON o.master_model_id = m.id
      JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
-     WHERE m.category_id=? AND m.status='ready' AND COALESCE(m.power,'electric')=?
+     WHERE m.category_id=? AND m.status='ready' ${power === 'all' ? '' : "AND COALESCE(m.power,'electric')=?"}
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1`,
-    cat.id, power,
+    ...(power === 'all' ? [cat.id] : [cat.id, power]),
   )
 }
 
@@ -76,7 +110,9 @@ function cardNext(it, pref, hidden) {
 }
 
 export function renderGridNext(cat, rows, opts = {}) {
-  const power = opts.power === 'gas' ? 'gas' : 'electric'
+  const landing = opts.landing || null // { L, slug }
+  const Lmeta = landing ? landingMeta(cat, landing.L, landing.slug) : null
+  const power = opts.power === 'gas' ? 'gas' : opts.power === 'all' ? 'all' : 'electric'
   const sort = SORTS.includes(opts.sort) ? opts.sort : 'price-desc'
   const cond = ['new', 'pre-owned'].includes(opts.cond) ? opts.cond : 'all'
   const selRoles = (opts.roles || []).filter((t) => ROLE_VOCAB.includes(t))
@@ -118,6 +154,10 @@ export function renderGridNext(cat, rows, opts = {}) {
   const ordered = [...items].sort(cmp)
 
   const powerHref = (p) => {
+    if (landing) { // on a landing page, the tabs link to the sibling landing URLs
+      const ps = p === 'gas' ? 'nitro' : 'electric'
+      return `${pref}/${ps}${landing.L.roleSlug ? '-' + landing.L.roleSlug : ''}/`
+    }
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
     if (sort !== 'price-desc') qs.set('sort', sort)
@@ -141,11 +181,19 @@ export function renderGridNext(cat, rows, opts = {}) {
 
   const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price }))
 
+  // header: landing pages get their own H1 + breadcrumbs + intro; the main grid keeps the default.
+  const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
+  const subTxt = Lmeta ? `${resultN} ${Lmeta.noun} in stock · live prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · live prices from Indian sellers`
+  const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
+  const introHtml = Lmeta ? `<p class="fx-intro">Compare live prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
+  const crumbLd = Lmeta ? { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: Lmeta.crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, ...(i < Lmeta.crumbs.length - 1 ? { item: SITE + c.url } : {}) })) } : null
+
   const body = `
   <div class="shop-head"><div class="shop-head-in">
-    <p class="shop-kicker">narenana catalog</p>
-    <h1 class="shop-h1">${esc(cat.name)} in India</h1>
-    <p class="shop-sub" id="fx-sub">${power === 'electric' ? 'Electric' : 'Nitro / gas'} aircraft · live prices from Indian sellers</p>
+    ${crumbHtml || '<p class="shop-kicker">narenana catalog</p>'}
+    <h1 class="shop-h1">${esc(h1)}</h1>
+    <p class="shop-sub" id="fx-sub">${esc(subTxt)}</p>
+    ${introHtml}
     <div class="fx-bar">${powerSeg('fx-powmain')}<button class="fx-fbtn" id="fx-open" aria-haspopup="dialog" aria-expanded="false">Filter &amp; Sort<span class="fx-badge" id="fx-badge"${nActive ? '' : ' hidden'}>${nActive}</span></button></div>
   </div></div>
   <main class="shop">
@@ -172,19 +220,26 @@ export function renderGridNext(cat, rows, opts = {}) {
     </div>
   </main>
   <style>${FX_CSS}</style>
-  <script>var FX_DATA=${jsonSafe(fxData)},FX_POWER=${jsonSafe(power)},FX_SORT=${jsonSafe(sort)},FX_INIT=${jsonSafe({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${jsonSafe(pref)};</script>
+  <script>var FX_DATA=${jsonSafe(fxData)},FX_POWER=${jsonSafe(power)},FX_SORT=${jsonSafe(sort)},FX_INIT=${jsonSafe({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${jsonSafe(pref)},FX_NOURL=${landing ? 'true' : 'false'};</script>
   <script>${FX_JS}</script>`
 
   return page({
-    title: `${esc(cat.name)} in India — compare live prices | narenana`,
-    desc: `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
-    path: `${pref}/`,
+    title: Lmeta ? Lmeta.title : `${cat.name} in India — compare live prices | narenana`,
+    desc: Lmeta ? Lmeta.desc : `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
+    path: Lmeta ? Lmeta.path : `${pref}/`,
     body,
+    jsonld: crumbLd || undefined,
   })
 }
 
 // ---- namespaced styles (reuse catalog.css tokens; --line→--faint, --good→--green) ----
 const FX_CSS = `
+.fx-crumbs{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fx-crumbs a{color:var(--muted);text-decoration:none}
+.fx-crumbs a:hover{color:var(--ink);text-decoration:underline}
+.fx-crumbs i{font-style:normal;opacity:.5}
+.fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
+.fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
 .fx-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
 .fx-seg{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--card)}
 .fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
@@ -284,7 +339,7 @@ const FX_JS = `(function(){
     var nA=state.roles.size+state.sizes.size+(state.cond!=='all'?1:0);
     document.getElementById('fx-clear').hidden=!nA;
     var badge=document.getElementById('fx-badge'); badge.hidden=!nA; badge.textContent=nA;
-    try{var p=new URLSearchParams();if(FX_POWER!=='electric')p.set('power',FX_POWER);
+    if(!FX_NOURL)try{var p=new URLSearchParams();if(FX_POWER!=='electric')p.set('power',FX_POWER);
       if(state.roles.size)p.set('role',Array.from(state.roles).join(','));
       if(state.sizes.size)p.set('size',Array.from(state.sizes).join(','));
       if(state.cond!=='all')p.set('cond',state.cond);
