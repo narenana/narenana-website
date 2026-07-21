@@ -63,6 +63,14 @@ if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native'
 // markers — displacement, glow size, fuel) is DATA, living in seller titles.
 // gas/nitro when such a marker is present; electric is the common default
 // (foam, PNP, EDF, brushless).
+// Condition from a seller title. Pre-owned/used units are distinct listings the
+// buyer should see flagged; default is a new item. Deliberately does NOT match a
+// bare "used" (too many false hits like "unused" / "used for") — only explicit
+// second-hand phrasing sellers actually write.
+export function conditionOf(text = '') {
+  return /\b(pre[\s-]?owned|second[\s-]?hand|sparingly\s+used|gently\s+used|quality\s+pre\b|refurbished|\(used\))/i.test(String(text)) ? 'used' : 'new'
+}
+
 export function powerType(text = '') {
   const t = String(text).toLowerCase()
   if (/\b\d{2,3}\s*cc\b/.test(t)) return 'gas' // 35cc, 100cc, 60cc (covers 50-60cc)
@@ -87,6 +95,7 @@ function masterCard(m, prefix) {
         <div class="prod-img">
           ${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
           ${oos ? '<span class="prod-veil">Out of stock</span>' : ''}
+          ${m.preowned ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}
         </div>
         <div class="prod-body">
           <p class="prod-brand">${esc(m.brand)}</p>
@@ -112,22 +121,26 @@ const specLine = (m) => {
 export function renderGrid(cat, masters, opts = {}) {
   // Power + pageNo come from the server (SQL filters + paginates). Masters here
   // are already the current pageNo for the current power filter.
-  const { power = 'electric', page: pageNo = 1, counts = { electric: masters.length, gas: 0, all: masters.length, pageSize: 24 } } = opts
+  const { power = 'electric', page: pageNo = 1, sort = 'price-desc', counts = { electric: masters.length, gas: 0, all: masters.length, pageSize: 24 } } = opts
   const total = power === 'all' ? counts.all : counts[power] ?? masters.length
   const pageSize = counts.pageSize || 24
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const label = power === 'gas' ? 'gas / nitro' : power === 'all' ? '' : 'electric'
   const pref = cat.path_prefix
-  // URL for a (power,pageNo): default (electric, p1) is the bare category path.
-  const href = (p, pg) => {
+  // URL for a (power, pageNo, sort): defaults (electric, p1, price-desc) drop out
+  // so the base category path stays clean.
+  const href = (p, pg, srt = sort) => {
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
+    if (srt && srt !== 'price-desc') qs.set('sort', srt)
     if (pg > 1) qs.set('page', String(pg))
     const s = qs.toString()
     return `${pref}/${s ? '?' + s : ''}`
   }
   const chip = (p, text, n) => `<a class="filt-b ${power === p ? 'is-on' : ''}" href="${href(p, 1)}">${text} <span>${n}</span></a>`
   const filt = `<div class="filt" role="tablist" aria-label="Power type">${chip('electric', 'Electric', counts.electric)}${chip('gas', 'Gas / Nitro', counts.gas)}${chip('all', 'All', counts.all)}</div>`
+  const sortB = (val, text) => `<a class="filt-b ${sort === val ? 'is-on' : ''}" href="${href(power, 1, val)}">${text}</a>`
+  const sortCtl = `<div class="filt sortbar" role="group" aria-label="Sort by" style="margin-left:auto">${sortB('price-desc', 'Price ↓')}${sortB('price-asc', 'Price ↑')}${sortB('span-desc', 'Wingspan ↓')}${sortB('span-asc', 'Wingspan ↑')}</div>`
 
   const pageLink = (pg, text, cls = '') => (pg < 1 || pg > totalPages || pg === pageNo ? `<span class="pg ${cls} is-off">${text}</span>` : `<a class="pg ${cls}" href="${href(power, pg)}">${text}</a>`)
   const nums = []
@@ -145,24 +158,24 @@ export function renderGrid(cat, masters, opts = {}) {
     <h1 class="shop-h1">${esc(cat.name)} in India</h1>
     <p class="shop-sub">${total} ${label} in stock · live prices from Indian sellers${totalPages > 1 ? ` · page ${pageNo} of ${totalPages}` : ''}</p>
     <p class="shop-intro">Kits, PNP and ready-to-fly aircraft from Indian hobby shops, in one place. Prices and stock come from each seller's live listing and are re-checked through the day — every card opens a spec sheet, and every offer links straight to the seller.</p>
-    ${filt}
+    <div class="filt-row" style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center">${filt}${sortCtl}</div>
   </div></div>
   <main class="shop">
     <ul class="prods" id="grid">${masters.map((m) => masterCard(m, pref)).join('')}</ul>
     ${masters.length === 0 ? '<p class="empty">Nothing in this category right now.</p>' : ''}
-    <div id="grid-more" data-power="${power}" data-page="${pageNo}" data-pages="${totalPages}" data-prefix="${pref}"></div>
+    <div id="grid-more" data-power="${power}" data-sort="${sort}" data-page="${pageNo}" data-pages="${totalPages}" data-prefix="${pref}"></div>
     ${pager}
   </main>
   <script>(function(){
     var more=document.getElementById('grid-more'),grid=document.getElementById('grid');
     if(!more||!grid)return;
-    var page=+more.dataset.page,pages=+more.dataset.pages,power=more.dataset.power,prefix=more.dataset.prefix,loading=false,done=page>=pages;
+    var page=+more.dataset.page,pages=+more.dataset.pages,power=more.dataset.power,sort=more.dataset.sort,prefix=more.dataset.prefix,loading=false,done=page>=pages;
     var pgr=document.querySelector('.pager');if(pgr)pgr.style.display='none';
     var end=document.createElement('p');end.className='empty';end.hidden=true;
     end.textContent="That's every "+(power==='gas'?'gas / nitro ':power==='all'?'':'electric ')+"aircraft in stock.";
     more.after(end);
     var spin=document.createElement('p');spin.className='empty';spin.hidden=true;spin.textContent='Loading more…';more.after(spin);
-    function href(p){var qs=[];if(power!=='electric')qs.push('power='+power);qs.push('page='+p);return prefix+'/?'+qs.join('&')}
+    function href(p){var qs=[];if(power!=='electric')qs.push('power='+power);if(sort&&sort!=='price-desc')qs.push('sort='+sort);qs.push('page='+p);return prefix+'/?'+qs.join('&')}
     function near(){return more.getBoundingClientRect().top-window.innerHeight<700}
     function loadMore(){
       if(loading||done)return;loading=true;spin.hidden=false;
@@ -269,7 +282,7 @@ export function renderMaster(cat, m, offers, recipes = [], components = {}) {
   const seenMin = minOf(offers)
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
-      <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}</td>
+      <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
       <td>${esc(o.config)}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
       <td>${o.flagged ? `<span title="price under review">${o.price_inr ? inr(o.price_inr) : '—'}*</span>` : o.price_inr ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
       <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>

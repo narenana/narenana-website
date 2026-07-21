@@ -54,10 +54,11 @@ export async function handleCatalog(request, url, env, ctx) {
 
   if (path === cat.path_prefix) {
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
+    const sort = ['price-desc', 'price-asc', 'span-desc', 'span-asc'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'price-desc'
     const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
     const counts = await gridCounts(env, cat)
-    const masters = await gridMasters(env, cat, power, page)
-    return html(renderGrid(cat, masters, { power, page, counts }))
+    const masters = await gridMasters(env, cat, power, page, sort)
+    return html(renderGrid(cat, masters, { power, page, counts, sort }))
   }
 
   const slug = path.slice(cat.path_prefix.length + 1)
@@ -96,16 +97,27 @@ const GRID_PAGE = 24
 // One page of in-stock masters, filtered by power, cheapest-last (price
 // high→low). Power is a stored column (0006) so this filters + paginates in
 // SQL — no GROUP_CONCAT over the whole catalog per request.
-async function gridMasters(env, cat, power = 'electric', page = 1) {
+async function gridMasters(env, cat, power = 'electric', page = 1, sort = 'price-desc') {
   const powerClause = power === 'all' ? '' : `AND COALESCE(m.power,'electric')=?`
   const params = [cat.id]
   if (power !== 'all') params.push(power)
   params.push(GRID_PAGE, (page - 1) * GRID_PAGE)
+  // Whitelisted ORDER BY — never interpolate raw user input. No-price / no-span
+  // rows always sort last, then a stable price tiebreak.
+  const ORDER = {
+    'price-desc': '(min_price IS NULL) ASC, min_price DESC',
+    'price-asc': '(min_price IS NULL) ASC, min_price ASC',
+    'span-desc': '(span_mm IS NULL OR span_mm=0) ASC, span_mm DESC, (min_price IS NULL) ASC, min_price ASC',
+    'span-asc': '(span_mm IS NULL OR span_mm=0) ASC, span_mm ASC, (min_price IS NULL) ASC, min_price ASC',
+  }[sort] ?? '(min_price IS NULL) ASC, min_price DESC'
   return all(
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
             MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
+            MAX(CASE WHEN LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%'
+                  OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%' THEN 1 ELSE 0 END) AS preowned,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
      JOIN offer o ON o.master_model_id = m.id
@@ -113,7 +125,7 @@ async function gridMasters(env, cat, power = 'electric', page = 1) {
      WHERE m.category_id=? AND m.status='ready' ${powerClause}
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
-     ORDER BY (min_price IS NULL) ASC, min_price DESC
+     ORDER BY ${ORDER}
      LIMIT ? OFFSET ?`,
     ...params,
   )

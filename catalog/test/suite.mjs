@@ -8,7 +8,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
-import { powerType } from '../lib/public.mjs'
+import { powerType, conditionOf } from '../lib/public.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -166,6 +166,14 @@ test('powerType: gas markers vs electric default', () => {
   assert.equal(powerType('Extra 300 DA-50 Gasser'), 'gas')
   assert.equal(powerType('Saito FG-60 powered Cub'), 'gas')
   assert.equal(powerType('Freewing F-16 90mm EDF brushless motor'), 'electric', 'electric uses a motor, not an engine')
+})
+
+test('conditionOf: pre-owned vs new', () => {
+  assert.equal(conditionOf('Senior Telemaster (Pre-owned)'), 'used')
+  assert.equal(conditionOf('Havoc Raptor F22 RTF (Quality Pre Owned)'), 'used')
+  assert.equal(conditionOf('PT19 Sparingly used model like NEW'), 'used')
+  assert.equal(conditionOf('FMS 1500mm Cessna 182 PNP RC Airplane'), 'new')
+  assert.equal(conditionOf('Brand new unused EDF jet'), 'new', 'bare "unused" must not read as used')
 })
 
 // ---------------------------------------------------------------- public
