@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
+import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -193,6 +194,16 @@ test('roleTags: multi-tag role classification', () => {
   const d = roleTags('Guinea Pig 900mm foamy')
   assert.deepEqual(d.tags, ['Sport / Park Flyer'])
   assert.equal(d.confident, false, 'unknown name is not confident → AI fallback eligible')
+})
+
+// The admin SPA is a huge inline <script> inside a backtick template. A stray
+// escaping bug there (e.g. \' vs \\' inside a single-quoted string) is a syntax
+// error the browser hits at parse time — the whole panel dies, silently, and
+// node --check / SSR tests never see it. Parse every embedded script here.
+test('admin client script parses (no embedded-JS syntax errors)', () => {
+  const scripts = [...ADMIN_HTML.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])
+  assert.ok(scripts.length, 'ADMIN_HTML must contain an inline <script>')
+  for (const s of scripts) assert.doesNotThrow(() => new Function(s), 'inline admin script must parse')
 })
 
 // ---------------------------------------------------------------- public
