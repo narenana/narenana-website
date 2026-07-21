@@ -57,9 +57,23 @@ const inr=(n)=>'₹'+Number(n).toLocaleString('en-IN');
 // opened as http://user:pass@host/admin the document base carries credentials
 // and fetch() refuses to construct the request — the panel dies looking empty.
 const api=async(p,body)=>{const r=await fetch(new URL('/api/'+p,location.origin),body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
-let tab='review',F={status:'new',stock:'in',src:'',page:1},data=null;
+let tab='review',F={status:'new',stock:'in',src:'',page:1},data=null,reqSeq=0;
 
-document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{tab=b.dataset.tab;F.page=1;document.querySelectorAll('header button[data-tab]').forEach((x)=>x.classList.toggle('on',x===b));load()});
+// URL state: /admin?tab=&status=&stock=&src=&page= — filters are linkable and
+// survive refresh / back-button.
+function syncURL(){var p=new URLSearchParams();p.set('tab',tab);
+  if(tab==='review'){p.set('status',F.status);if(F.status==='new')p.set('stock',F.stock);if(F.src)p.set('src',F.src)}
+  if(F.page>1)p.set('page',F.page);
+  try{history.replaceState(null,'','/admin?'+p.toString())}catch(e){}}
+function readURL(){var p=new URLSearchParams(location.search);
+  if(p.get('tab'))tab=p.get('tab');
+  if(p.get('status'))F.status=p.get('status');
+  if(p.get('stock'))F.stock=p.get('stock');
+  if(p.get('src')!=null)F.src=p.get('src');
+  F.page=Math.max(1,parseInt(p.get('page')||'1',10)||1);}
+function markTab(){document.querySelectorAll('header button[data-tab]').forEach((x)=>x.classList.toggle('on',x.dataset.tab===tab))}
+document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{tab=b.dataset.tab;F.page=1;markTab();load()});
+window.addEventListener('popstate',()=>{readURL();markTab();load()});
 $('#run').onclick=async()=>{$('#log').hidden=false;$('#log').textContent='running slice…';try{const d=await api('run',{});$('#log').textContent=JSON.stringify(d,null,1)}catch(e){$('#log').textContent=e.message}load()};
 
 // SPA pager: total/pageSize/current → buttons that set F.page and reload.
@@ -73,24 +87,36 @@ function pager(total,pageSize,page){
 function wirePager(){document.querySelectorAll('button[data-page]').forEach((b)=>b.onclick=()=>{F.page=+b.dataset.page;load();window.scrollTo(0,0)})}
 
 async function load(){
+  const my=++reqSeq;               // stale responses from an old tab must not render
+  syncURL();
   $('#filters').style.display=tab==='review'?'flex':'none';
+  $('#view').setAttribute('aria-busy','1');
   try{
-    if(tab==='review'){data=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src)+'&page='+F.page);renderFilters();renderReview()}
-    if(tab==='sources'){data=await api('sources');renderSources()}
-    if(tab==='catalog'){data=await api('catalog?page='+F.page);renderCatalog()}
-    if(tab==='dupes'){data=await api('duplicates');renderDupes()}
-    if(tab==='system'){data=await api('system');renderSystem()}
-  }catch(e){$('#view').innerHTML='<p class="empty">'+esc(e.message)+'</p>'}
+    let d;
+    if(tab==='review')d=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src)+'&page='+F.page);
+    else if(tab==='sources')d=await api('sources');
+    else if(tab==='catalog')d=await api('catalog?page='+F.page);
+    else if(tab==='dupes')d=await api('duplicates');
+    else if(tab==='system')d=await api('system');
+    if(my!==reqSeq)return;          // a newer load() superseded this one
+    data=d;
+    if(tab==='review'){renderFilters();renderReview()}
+    else if(tab==='sources')renderSources();
+    else if(tab==='catalog')renderCatalog();
+    else if(tab==='dupes')renderDupes();
+    else if(tab==='system')renderSystem();
+  }catch(e){if(my===reqSeq)$('#view').innerHTML='<p class="empty">'+esc(e.message||'load error')+'</p>'}
 }
 
 // ------- Review -------
 function renderFilters(){
-  const c=data.counts;
+  const c=data.counts,sc=data.srcCounts||{},stc=data.stockCounts||{};
   const btn=(grp,val,label,count)=>'<button class="chip '+(F[grp]===val?'on':'')+'" data-g="'+grp+'" data-v="'+val+'">'+label+(count!=null?' <span>'+(count??0)+'</span>':'')+'</button>';
+  const srcTotal=Object.values(sc).reduce((a,b)=>a+b,0);
   $('#filters').innerHTML=
     btn('status','new','New',c.new)+btn('status','missing','Missing',c.missing)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)+btn('status','removed','Removed',c.removed)
-    +(F.status==='new'?'<span style="width:10px"></span>'+btn('stock','in','In stock')+btn('stock','out','Not in stock')+btn('stock','all','Any'):'')
-    +'<span style="width:10px"></span>'+btn('src','','All sellers')+data.sources.map((s)=>btn('src',s.id,s.id)).join('');
+    +(F.status==='new'?'<span style="width:10px"></span>'+btn('stock','in','In stock',stc.in)+btn('stock','out','Not in stock',stc.out)+btn('stock','all','Any',stc.all):'')
+    +'<span style="width:10px"></span>'+btn('src','','All sellers',srcTotal)+data.sources.map((s)=>btn('src',s.id,s.id,sc[s.id]||0)).join('');
   document.querySelectorAll('#filters .chip').forEach((b)=>b.onclick=()=>{F[b.dataset.g]=b.dataset.v;F.page=1;load()});
 }
 function skuRow(k){
@@ -229,5 +255,5 @@ function renderSystem(){
   document.querySelectorAll('button[data-set]').forEach((b)=>b.onclick=async()=>{await api('system',{k:b.dataset.set,v:b.dataset.v});load()});
 }
 
-load();
+readURL();markTab();load();
 </script></body></html>`

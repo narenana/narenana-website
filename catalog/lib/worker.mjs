@@ -205,24 +205,35 @@ async function api(request, url, env, ep, actor) {
     const status = url.searchParams.get('status') ?? 'new'
     const stock = url.searchParams.get('stock') ?? 'in'
     const src = url.searchParams.get('src') ?? ''
-    let where, params
+    // status-only base (dead/flag semantics); stock + seller layer on top so the
+    // pill counts can vary one dimension while respecting the others.
+    let statusWhere, statusParams
     if (status === 'flagged') {
-      where = `k.flagged IS NOT NULL AND json_extract(k.flagged,'$.kind')!='missing' AND k.dead=0`
-      params = []
+      statusWhere = `k.flagged IS NOT NULL AND json_extract(k.flagged,'$.kind')!='missing' AND k.dead=0`
+      statusParams = []
     } else if (status === 'missing') {
-      where = `json_extract(k.flagged,'$.kind')='missing' AND k.dead=0`
-      params = []
+      statusWhere = `json_extract(k.flagged,'$.kind')='missing' AND k.dead=0`
+      statusParams = []
     } else if (status === 'removed') {
-      where = `k.dead=1`
-      params = []
+      statusWhere = `k.dead=1`
+      statusParams = []
     } else {
-      where = `k.review_status=? AND k.flagged IS NULL AND k.dead=0`
-      params = [status]
-      if (status === 'new') {
-        if (stock === 'in') where += ' AND k.in_stock=1'
-        else if (stock === 'out') where += ' AND (k.in_stock IS NULL OR k.in_stock=0)'
-      }
+      statusWhere = `k.review_status=? AND k.flagged IS NULL AND k.dead=0`
+      statusParams = [status]
     }
+    const stockClause = status === 'new' ? (stock === 'in' ? ' AND k.in_stock=1' : stock === 'out' ? ' AND (k.in_stock IS NULL OR k.in_stock=0)' : '') : ''
+    // seller counts (respect status + stock, vary seller)
+    const srcCounts = {}
+    for (const r of await all(env, `SELECT k.source_id s, COUNT(*) n FROM sku k WHERE ${statusWhere}${stockClause} GROUP BY k.source_id`, ...statusParams)) srcCounts[r.s] = r.n
+    // stock counts (respect status + seller, vary stock) — only meaningful for 'new'
+    const stockCounts = {}
+    if (status === 'new') {
+      const sc = src ? ' AND k.source_id=?' : ''
+      for (const r of await all(env, `SELECT CASE WHEN k.in_stock=1 THEN 'in' ELSE 'out' END b, COUNT(*) n FROM sku k WHERE ${statusWhere}${sc} GROUP BY b`, ...statusParams, ...(src ? [src] : []))) stockCounts[r.b] = r.n
+      stockCounts.all = (stockCounts.in ?? 0) + (stockCounts.out ?? 0)
+    }
+    let where = statusWhere + stockClause
+    const params = [...statusParams]
     if (src) {
       where += ' AND k.source_id=?'
       params.push(src)
@@ -287,7 +298,7 @@ async function api(request, url, env, ep, actor) {
         .sort((a, b) => b.s - a.s)
         .slice(0, 3)
     }
-    return json({ counts, sources, skus, specFields, cat: { id: cat?.id, configs }, page: rpage, pageSize: RPAGE })
+    return json({ counts, srcCounts, stockCounts, sources, skus, specFields, cat: { id: cat?.id, configs }, page: rpage, pageSize: RPAGE })
   }
 
   if (ep === 'decide' && request.method === 'POST') {

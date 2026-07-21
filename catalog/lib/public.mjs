@@ -144,10 +144,34 @@ export function renderGrid(cat, masters, opts = {}) {
     ${filt}
   </div></div>
   <main class="shop">
-    <ul class="prods">${masters.map((m) => masterCard(m, pref)).join('')}</ul>
+    <ul class="prods" id="grid">${masters.map((m) => masterCard(m, pref)).join('')}</ul>
     ${masters.length === 0 ? '<p class="empty">Nothing in this category right now.</p>' : ''}
+    <div id="grid-more" data-power="${power}" data-page="${pageNo}" data-pages="${totalPages}" data-prefix="${pref}"></div>
     ${pager}
-  </main>`
+  </main>
+  <script>(function(){
+    var more=document.getElementById('grid-more'),grid=document.getElementById('grid');
+    if(!more||!grid||!('IntersectionObserver' in window))return;
+    var page=+more.dataset.page,pages=+more.dataset.pages,power=more.dataset.power,prefix=more.dataset.prefix,loading=false,done=page>=pages;
+    var pgr=document.querySelector('.pager');if(pgr)pgr.style.display='none';
+    var end=document.createElement('p');end.className='empty';end.hidden=true;
+    end.textContent="That's every "+(power==='gas'?'gas / nitro ':power==='all'?'':'electric ')+"aircraft in stock.";
+    more.after(end);
+    var spin=document.createElement('p');spin.className='empty';spin.hidden=true;spin.textContent='Loading more…';more.after(spin);
+    function href(p){var qs=[];if(power!=='electric')qs.push('power='+power);qs.push('page='+p);return prefix+'/?'+qs.join('&')}
+    function loadMore(){
+      if(loading||done)return;loading=true;spin.hidden=false;
+      fetch(href(page+1)).then(function(r){return r.text()}).then(function(t){
+        var doc=new DOMParser().parseFromString(t,'text/html');
+        doc.querySelectorAll('.prods .prod').forEach(function(c){grid.appendChild(document.importNode(c,true))});
+        page++;loading=false;spin.hidden=true;
+        try{history.replaceState(null,'',href(page).replace(/&?page=1$/,'').replace(/\\?$/,''))}catch(e){}
+        if(page>=pages){done=true;end.hidden=false;io.disconnect()}
+      }).catch(function(){loading=false;spin.hidden=true});
+    }
+    var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting)loadMore()})},{rootMargin:'700px'});
+    io.observe(more);
+  })()</script>`
   const jsonld = masters.length
     ? {
         '@context': 'https://schema.org',
