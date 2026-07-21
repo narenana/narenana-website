@@ -212,7 +212,7 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   const out = renderGridNext(cat, rows, base)
   assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
   assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
-  assert.ok(out.includes('name="robots" content="noindex"'), 'beta grid is noindexed')
+  assert.ok(!out.includes('name="robots" content="noindex"'), 'default grid must be indexable (not noindex)')
   assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
   assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
 

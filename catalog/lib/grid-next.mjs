@@ -117,7 +117,13 @@ export function renderGridNext(cat, rows, opts = {}) {
   }
   const ordered = [...items].sort(cmp)
 
-  const powerHref = (p) => `${pref}/?ui=next&power=${p}` + (sort !== 'price-desc' ? `&sort=${sort}` : '')
+  const powerHref = (p) => {
+    const qs = new URLSearchParams()
+    if (p !== 'electric') qs.set('power', p)
+    if (sort !== 'price-desc') qs.set('sort', sort)
+    const s = qs.toString()
+    return `${pref}/${s ? '?' + s : ''}`
+  }
   const powerSeg = (id) => `<div class="fx-seg" id="${id}" role="tablist" aria-label="Power category">` +
     `<a class="fx-seg-b ${power === 'electric' ? 'is-on' : ''}" href="${powerHref('electric')}">Electric <span>${counts.electric}</span></a>` +
     `<a class="fx-seg-b ${power === 'gas' ? 'is-on' : ''}" href="${powerHref('gas')}">Nitro / Gas <span>${counts.gas}</span></a></div>`
@@ -174,7 +180,6 @@ export function renderGridNext(cat, rows, opts = {}) {
     desc: `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
     path: `${pref}/`,
     body,
-    noindex: true, // beta preview — do not index
   })
 }
 
@@ -279,7 +284,7 @@ const FX_JS = `(function(){
     var nA=state.roles.size+state.sizes.size+(state.cond!=='all'?1:0);
     document.getElementById('fx-clear').hidden=!nA;
     var badge=document.getElementById('fx-badge'); badge.hidden=!nA; badge.textContent=nA;
-    try{var p=new URLSearchParams();p.set('ui','next');if(FX_POWER!=='electric')p.set('power',FX_POWER);
+    try{var p=new URLSearchParams();if(FX_POWER!=='electric')p.set('power',FX_POWER);
       if(state.roles.size)p.set('role',Array.from(state.roles).join(','));
       if(state.sizes.size)p.set('size',Array.from(state.sizes).join(','));
       if(state.cond!=='all')p.set('cond',state.cond);

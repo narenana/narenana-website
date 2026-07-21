@@ -56,8 +56,8 @@ export async function handleCatalog(request, url, env, ctx) {
   if (!cat || !cat.live) return null
 
   if (path === cat.path_prefix) {
-    // NEW faceted grid, behind ?ui=next — fully isolated from the live grid below.
-    if (url.searchParams.get('ui') === 'next') {
+    // Faceted grid is the DEFAULT UX; the classic grid stays reachable at ?ui=classic.
+    if (url.searchParams.get('ui') !== 'classic') {
       const p = url.searchParams.get('power') === 'gas' ? 'gas' : 'electric'
       const roles = (url.searchParams.get('role') || '').split(',').filter(Boolean)
       const sizes = (url.searchParams.get('size') || '').split(',').filter(Boolean)
