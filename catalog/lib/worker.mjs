@@ -529,15 +529,36 @@ async function api(request, url, env, ep, actor) {
 
   if (ep === 'duplicates' && request.method === 'GET') {
     const cats = await categories(env)
-    const rows = await all(env, `SELECT mc.*,
-        a.slug a_slug, a.brand a_brand, a.name a_name, a.status a_status, a.category_id a_cat, a.specs a_specs,
-        b.slug b_slug, b.brand b_brand, b.name b_name, b.status b_status, b.specs b_specs,
-        (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=mc.a_id) a_offers,
-        (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=mc.b_id) b_offers
+    const rows = await all(env, `SELECT mc.id, mc.a_id, mc.b_id, mc.score, mc.reason,
+        a.slug a_slug, a.brand a_brand, a.name a_name, a.status a_status, a.category_id a_cat, a.specs a_specs, a.power a_power,
+        b.slug b_slug, b.brand b_brand, b.name b_name, b.status b_status, b.specs b_specs, b.power b_power
       FROM merge_candidate mc
       JOIN master_model a ON a.id=mc.a_id JOIN master_model b ON b.id=mc.b_id
       WHERE mc.status='pending' ORDER BY mc.score DESC, mc.id`)
-    for (const r of rows) r.prefix = cats.find((c) => c.id === r.a_cat)?.path_prefix ?? ''
+    // Pull each involved master's actual offers (photo comes from /img/master/id)
+    // so the reviewer sees seller, price and title — not just a name + score.
+    const ids = [...new Set(rows.flatMap((r) => [r.a_id, r.b_id]))]
+    const byMaster = {}
+    for (let i = 0; i < ids.length; i += 80) {
+      const chunk = ids.slice(i, i + 80)
+      const offers = await all(env, `SELECT o.master_model_id mid, k.title, k.price_inr, k.in_stock, k.dead, k.url_canonical, s.name source_name
+        FROM offer o JOIN sku k ON k.id=o.sku_id JOIN source s ON s.id=k.source_id
+        WHERE o.master_model_id IN (${chunk.map(() => '?').join(',')})
+        ORDER BY k.dead ASC, k.price_inr ASC`, ...chunk)
+      for (const o of offers) (byMaster[o.mid] ??= []).push(o)
+    }
+    const hasSpan = (s) => { try { return JSON.parse(s || '{}').spanMM > 0 ? 0 : 1 } catch { return 1 } }
+    for (const r of rows) {
+      r.prefix = cats.find((c) => c.id === r.a_cat)?.path_prefix ?? ''
+      r.a_offers = byMaster[r.a_id] ?? []
+      r.b_offers = byMaster[r.b_id] ?? []
+      // Which side to KEEP: ready>draft, then more offers, then has-span, then lower id.
+      const ra = [r.a_status === 'ready' ? 0 : 1, -r.a_offers.length, hasSpan(r.a_specs), r.a_id]
+      const rb = [r.b_status === 'ready' ? 0 : 1, -r.b_offers.length, hasSpan(r.b_specs), r.b_id]
+      let keepA = true
+      for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) { keepA = ra[i] < rb[i]; break }
+      r.keepId = keepA ? r.a_id : r.b_id
+    }
     return json({ candidates: rows })
   }
 

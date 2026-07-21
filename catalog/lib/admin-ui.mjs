@@ -217,26 +217,40 @@ function renderCatalog(){
 }
 
 // ------- Duplicates -------
+const DD_CSS='<style>.dd-pair{border:1px solid var(--line,#e5ddc9);border-radius:10px;padding:12px;margin-bottom:14px;background:var(--card,#fcf9f1)}'
+  +'.dd-cols{display:flex;gap:10px;align-items:flex-start}.dd-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}'
+  +'.dd-side.keep{outline:2px solid #2e7d5b55;border-radius:8px;padding:6px;background:#f2f8f4}'
+  +'.dd-lbl{font-size:10px;letter-spacing:.06em;font-weight:700;color:var(--muted,#8a7f66)}'
+  +'.dd-img{width:100%;height:140px;object-fit:contain;background:#f3eee0;border-radius:6px}.dd-img.dd-noimg{visibility:hidden;height:0}'
+  +'.dd-nm{font-size:14px;font-weight:600;line-height:1.25}.dd-offers{display:flex;flex-direction:column;gap:4px;margin-top:3px}'
+  +'.dd-offer{font-size:12px;border-left:3px solid #e0d9c8;padding-left:7px}.dd-offer.dd-dead{opacity:.4}'
+  +'.dd-t{color:var(--muted,#8a7f66);font-size:11px;line-height:1.3}.dd-oos{color:#c63b2e;font-weight:600}'
+  +'.dd-arrow{align-self:center;text-align:center;color:var(--muted,#8a7f66);font-size:11px;white-space:nowrap;min-width:46px}'
+  +'.dd-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap}.dd-foot .acts{display:flex;gap:8px}</style>';
 function renderDupes(){
   const rows=data.candidates||[];
   const span=(sp)=>{try{const v=JSON.parse(sp||'{}').spanMM;return v?v+'mm':''}catch(e){return ''}};
-  const side=(r,pre)=>'<div style="flex:1"><span class="tag">'+esc(r[pre+'brand'])+'</span> <b>'+esc(r[pre+'name'])+'</b>'
-    +'<div class="meta"><span class="tag">'+esc(r[pre+'status'])+'</span> '+r[pre+'offers']+' offer(s) '+esc(span(r[pre+'specs']))
-    +' · <a href="'+esc(r.prefix)+'/'+esc(r[pre+'slug'])+'/" target="_blank" rel="noopener">'+esc(r[pre+'slug'])+' ↗</a></div></div>';
-  $('#view').innerHTML='<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><button id="ddrun" class="go">Scan for duplicates now</button>'
-    +'<span class="meta">'+rows.length+' possible duplicate pair(s) awaiting your call · obvious ones are merged automatically</span></div>'
-    +(rows.length?rows.map((r)=>'<div class="row" style="grid-template-columns:1fr auto;align-items:center" data-a-id="'+r.a_id+'" data-b-id="'+r.b_id+'">'
-      +'<div><div style="display:flex;gap:14px;align-items:center">'+side(r,'a_')+'<span style="color:var(--muted)">⇐ keep · merge ⇒</span>'+side(r,'b_')+'</div>'
-      +'<p class="meta" style="margin-top:8px">why flagged: '+esc(r.reason)+' · score '+Math.round(r.score*100)+'%</p></div>'
-      +'<div class="acts"><button class="ok" data-dd="merge" data-a-id="'+r.a_id+'" data-b-id="'+r.b_id+'">Merge into ←</button>'
-      +'<button class="no" data-dd="reject" data-a-id="'+r.a_id+'" data-b-id="'+r.b_id+'">Not duplicates</button></div></div>').join('')
-      :'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>');
-  $('#ddrun').onclick=async()=>{$('#ddrun').disabled=true;$('#ddrun').textContent='scanning…';try{const d=await api('dedup-run',{});alert('Auto-merged '+(d.merged||0)+', flagged '+(d.flagged||0)+' for review')}catch(e){alert(e.message)}load()};
+  const money=(n)=>n?'₹'+Number(n).toLocaleString('en-IN'):'—';
+  const offerLine=(o)=>'<div class="dd-offer'+(o.dead?' dd-dead':'')+'"><div><a href="'+esc(o.url_canonical)+'" target="_blank" rel="noopener nofollow">'+esc(o.source_name||'seller')+' ↗</a> · <b>'+money(o.price_inr)+'</b>'+(o.in_stock===0?' <span class="dd-oos">out</span>':'')+'</div><div class="dd-t">'+esc((o.title||'').slice(0,90))+'</div></div>';
+  const side=(r,pre,label,keep)=>'<div class="dd-side'+(keep?' keep':'')+'"><div class="dd-lbl">'+label+'</div>'
+    +'<img class="dd-img" src="/img/master/'+r[pre+'id']+'" loading="lazy" alt="" onerror="this.classList.add(\'dd-noimg\')"/>'
+    +'<div class="dd-nm"><span class="tag">'+esc(r[pre+'brand']||'—')+'</span> '+esc(r[pre+'name'])+'</div>'
+    +'<div class="meta">'+esc(r[pre+'status'])+' · '+esc(span(r[pre+'specs'])||'no span')+' · '+esc(r[pre+'power']||'?')+' · '+((r[pre+'offers']||[]).length)+' offer(s) · <a href="'+esc(r.prefix)+'/'+esc(r[pre+'slug'])+'/" target="_blank" rel="noopener">page ↗</a></div>'
+    +'<div class="dd-offers">'+(r[pre+'offers']||[]).map(offerLine).join('')+'</div></div>';
+  const card=(r)=>{const keepA=r.keepId===r.a_id;const K=keepA?'a_':'b_',M=keepA?'b_':'a_';const dropId=keepA?r.b_id:r.a_id;
+    return '<div class="dd-pair"><div class="dd-cols">'+side(r,K,'✔ KEEP',true)+'<div class="dd-arrow">◀ merge<br>into keep</div>'+side(r,M,'MERGE IN',false)
+      +'</div><div class="dd-foot"><span class="meta">'+esc(r.reason)+' · '+Math.round(r.score*100)+'%</span>'
+      +'<span class="acts"><button class="ok" data-dd="merge" data-keep="'+r.keepId+'" data-drop="'+dropId+'">✓ Same — merge</button>'
+      +'<button class="no" data-dd="reject" data-keep="'+r.a_id+'" data-drop="'+r.b_id+'">✕ Different</button></span></div></div>';};
+  $('#view').innerHTML=DD_CSS+'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><button id="ddrun" class="go">Scan for duplicates now</button>'
+    +'<span class="meta">'+rows.length+' possible pair(s) · obvious dupes already merged. Confirm only if the two are the SAME product from different sellers — photos + prices below.</span></div>'
+    +(rows.length?rows.map(card).join(''):'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>');
+  $('#ddrun').onclick=async()=>{$('#ddrun').disabled=true;$('#ddrun').textContent='scanning…';try{const d=await api('dedup-run',{});alert('Auto-merged '+(d.merged||0)+', flagged '+(d.flagged||0)+' for review, '+(d.anomalies||0)+' anomalies')}catch(e){alert(e.message)}load()};
   document.querySelectorAll('button[data-dd]').forEach((b)=>b.onclick=async()=>{
-    const aId=+b.dataset.aId,bId=+b.dataset.bId;
-    if(b.dataset.dd==='merge'&&!confirm('Merge these into one product page? The right one is absorbed into the left; its offers move over. (recorded in audit)'))return;
+    const keep=+b.dataset.keep,drop=+b.dataset.drop;
+    if(b.dataset.dd==='merge'&&!confirm('Merge these into ONE product page? The "MERGE IN" master is absorbed into the "KEEP" one; its offers move over. Recorded in audit.'))return;
     b.disabled=true;
-    try{await api(b.dataset.dd==='merge'?'merge':'reject-merge',{aId,bId});load()}catch(e){alert(e.message);b.disabled=false}
+    try{await api(b.dataset.dd==='merge'?'merge':'reject-merge',{aId:keep,bId:drop});load()}catch(e){alert(e.message);b.disabled=false}
   });
 }
 
