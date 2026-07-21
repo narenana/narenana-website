@@ -337,11 +337,21 @@ export async function dedupSlice(env, trigger, force = false) {
   if (!force && t - last < DEDUP_EVERY) return null // not due — let verify have the slice
   await setSetting(env, 'dedup_last', String(t))
 
-  const masters = await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status, m.category_id,
+  const masters = await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status, m.category_id, m.power,
       (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=m.id) AS offers,
       (SELECT GROUP_CONCAT(k.title, ' | ') FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=m.id) AS titles
      FROM master_model m WHERE m.status IN ('ready','draft')`)
   const { obviousClusters, candidatePairs, anomalies } = findDuplicates(masters)
+  // Power anomalies (only the electric-tagged direction, so a correctly-tagged
+  // gas plane whose title carries no marker never trips it): an explicit gas
+  // marker read as electric, or a large scale-fraction model likely to be gas.
+  const brandFlagged = new Set(anomalies.map((a) => a.id))
+  for (const m of masters) {
+    if (brandFlagged.has(m.id) || m.power !== 'electric') continue
+    const text = (m.name || '') + ' | ' + (m.titles || '')
+    if (powerType(text) === 'gas') anomalies.push({ id: m.id, kind: 'power-mismatch', detail: 'gas/nitro marker in the title but tagged electric' })
+    else if (/\b1\s*[/:]\s*[3-6]\b/.test(text)) anomalies.push({ id: m.id, kind: 'power-review', detail: 'scale model — likely gas, tagged electric' })
+  }
 
   // Rejected pairs must never be re-proposed (auto-merge or candidate).
   const rejected = new Set((await all(env, `SELECT a_id, b_id FROM merge_candidate WHERE status='rejected'`)).map((r) => `${r.a_id}:${r.b_id}`))
