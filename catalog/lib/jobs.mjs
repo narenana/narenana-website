@@ -19,6 +19,7 @@ import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpan
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
 import { powerType } from './public.mjs'
+import { storeSnapshot } from './snapshot.mjs'
 import { now } from './util.mjs'
 
 // Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
@@ -260,6 +261,7 @@ async function buildGuess(env, k) {
   const raw = (await getHtml(k.url_canonical, { tries: 2 })) ?? ''
   // A bot wall carries no product data — don't let it null out price/stock.
   const html = isChallenge(raw) ? '' : raw
+  if (html) await storeSnapshot(env, k.id, html) // archive the page we already paid to fetch
   // visible-ish text only: strip tags/scripts so regexes see prose, not markup
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 20000)
 
@@ -441,6 +443,10 @@ async function verifySlice(env, trigger) {
     }
   }
   for (const sku of rows) {
+    // Daily snapshot refresh: fetch the page, hash its product core, and re-store
+    // only if it changed (the owner's "checksum, replace if changed"). Guarded —
+    // a snapshot failure never affects the price/stock verify below.
+    try { const sh = await getHtml(sku.url_canonical, { tries: 1, timeoutMs: 7000 }); if (sh) await storeSnapshot(env, sku.id, sh, t) } catch {}
     // WooCommerce: trust the Store API (reliable price/stock) over HTML scraping.
     const res =
       sku.platform === 'woocommerce' && sku.platform_pid

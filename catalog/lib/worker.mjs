@@ -598,6 +598,28 @@ async function api(request, url, env, ep, actor) {
     return json({ ok: true, recomputed: ids.length })
   }
 
+  // Re-run classifiers over STORED snapshots — no seller fetch. The stored
+  // description is the chrome-free product core, so powerType is reliable on it
+  // (unlike a whole-page scrape). Corrects only the trustworthy direction: a
+  // product whose description reads gas but is tagged electric (a gas plane's
+  // copy may omit markers, so we never flip gas→electric here).
+  if (ep === 'rederive' && request.method === 'POST') {
+    const rows = await all(env, `SELECT m.id, m.name, m.power, GROUP_CONCAT(sn.description, ' ') AS descs
+      FROM master_model m JOIN offer o ON o.master_model_id=m.id JOIN sku_snapshot sn ON sn.sku_id=o.sku_id
+      WHERE m.status IN ('ready','draft') AND sn.description IS NOT NULL GROUP BY m.id`)
+    const t = now()
+    const changed = []
+    const stmts = []
+    for (const r of rows) {
+      if (r.power === 'electric' && powerType((r.name || '') + ' ' + (r.descs || '')) === 'gas') {
+        changed.push({ id: r.id, name: r.name })
+        stmts.push(q(env, `UPDATE master_model SET power='gas', updated_at=? WHERE id=?`, t, r.id))
+      }
+    }
+    if (stmts.length) { stmts.push(audit(env, actor, 'rederive-power', 'jobs', '', { changed: changed.length })); await batch(env, stmts) }
+    return json({ ok: true, snapshotsWithDesc: rows.length, changedToGas: changed.length, changed })
+  }
+
   if (ep === 'system' && request.method === 'GET') {
     const settings = {}
     for (const r of await all(env, 'SELECT k, v FROM setting')) settings[r.k] = r.v
