@@ -358,8 +358,14 @@ async function aiRoleTags(env, text) {
 // was seeded from a reviewed pass). Rules place the confident majority for free;
 // only the uncertain tail spends a Workers AI call (capped per slice). Returns null
 // when there's no backlog, so verify still gets the tick.
+const CLASSIFY_EVERY = 30 * 60e3
 async function classifySlice(env, trigger) {
+  // Time-gated so the one-time draft backlog (and future inbound) can't dominate
+  // the cron and starve verify — role tags are never as time-sensitive as stock.
+  const last = Number((await getSetting(env, 'classify_last')) ?? 0)
   const t = now()
+  if (t - last < CLASSIFY_EVERY) return null // not due — let verify have the slice
+  await setSetting(env, 'classify_last', String(t))
   const rows = await all(
     env,
     `SELECT m.id, m.brand, m.name, GROUP_CONCAT(k.title, ' ') AS titles
