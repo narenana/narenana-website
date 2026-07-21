@@ -37,7 +37,7 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v10</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v11</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
@@ -57,17 +57,27 @@ const inr=(n)=>'₹'+Number(n).toLocaleString('en-IN');
 // opened as http://user:pass@host/admin the document base carries credentials
 // and fetch() refuses to construct the request — the panel dies looking empty.
 const api=async(p,body)=>{const r=await fetch(new URL('/api/'+p,location.origin),body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
-let tab='review',F={status:'new',stock:'in',src:''},data=null;
+let tab='review',F={status:'new',stock:'in',src:'',page:1},data=null;
 
-document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{tab=b.dataset.tab;document.querySelectorAll('header button[data-tab]').forEach((x)=>x.classList.toggle('on',x===b));load()});
+document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{tab=b.dataset.tab;F.page=1;document.querySelectorAll('header button[data-tab]').forEach((x)=>x.classList.toggle('on',x===b));load()});
 $('#run').onclick=async()=>{$('#log').hidden=false;$('#log').textContent='running slice…';try{const d=await api('run',{});$('#log').textContent=JSON.stringify(d,null,1)}catch(e){$('#log').textContent=e.message}load()};
+
+// SPA pager: total/pageSize/current → buttons that set F.page and reload.
+function pager(total,pageSize,page){
+  const tp=Math.max(1,Math.ceil((total||0)/(pageSize||40)));
+  if(tp<=1)return '';
+  const b=(pg,txt,cur)=>cur?'<span class="chip on">'+txt+'</span>':(pg<1||pg>tp?'<span class="chip" style="opacity:.4">'+txt+'</span>':'<button class="chip" data-page="'+pg+'">'+txt+'</button>');
+  let out='<div class="bar" style="justify-content:center;border:none">'+b(page-1,'← Prev')+' <span class="meta" style="align-self:center">page '+page+' / '+tp+'</span> '+b(page+1,'Next →')+'</div>';
+  return out;
+}
+function wirePager(){document.querySelectorAll('button[data-page]').forEach((b)=>b.onclick=()=>{F.page=+b.dataset.page;load();window.scrollTo(0,0)})}
 
 async function load(){
   $('#filters').style.display=tab==='review'?'flex':'none';
   try{
-    if(tab==='review'){data=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src));renderFilters();renderReview()}
+    if(tab==='review'){data=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src)+'&page='+F.page);renderFilters();renderReview()}
     if(tab==='sources'){data=await api('sources');renderSources()}
-    if(tab==='catalog'){data=await api('catalog');renderCatalog()}
+    if(tab==='catalog'){data=await api('catalog?page='+F.page);renderCatalog()}
     if(tab==='dupes'){data=await api('duplicates');renderDupes()}
     if(tab==='system'){data=await api('system');renderSystem()}
   }catch(e){$('#view').innerHTML='<p class="empty">'+esc(e.message)+'</p>'}
@@ -81,7 +91,7 @@ function renderFilters(){
     btn('status','new','New',c.new)+btn('status','missing','Missing',c.missing)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)+btn('status','removed','Removed',c.removed)
     +(F.status==='new'?'<span style="width:10px"></span>'+btn('stock','in','In stock')+btn('stock','out','Not in stock')+btn('stock','all','Any'):'')
     +'<span style="width:10px"></span>'+btn('src','','All sellers')+data.sources.map((s)=>btn('src',s.id,s.id)).join('');
-  document.querySelectorAll('#filters .chip').forEach((b)=>b.onclick=()=>{F[b.dataset.g]=b.dataset.v;load()});
+  document.querySelectorAll('#filters .chip').forEach((b)=>b.onclick=()=>{F[b.dataset.g]=b.dataset.v;F.page=1;load()});
 }
 function skuRow(k){
   let flg=null;try{flg=k.flagged?JSON.parse(k.flagged):null}catch(e){}
@@ -107,7 +117,9 @@ function skuRow(k){
 }
 function renderReview(){
   const rows=data.skus;
-  $('#view').innerHTML=rows.length?rows.map(skuRow).join(''):'<p class="empty">Queue is clear.</p>';
+  const total=(data.counts&&(data.counts[F.status]!=null?data.counts[F.status]:0))||rows.length;
+  $('#view').innerHTML=(rows.length?rows.map(skuRow).join(''):'<p class="empty">Queue is clear.</p>')+pager(total,data.pageSize,data.page||1);
+  wirePager();
 }
 document.addEventListener('click',async(e)=>{
   const b=e.target.closest('button[data-a]');if(!b)return;
@@ -164,7 +176,8 @@ function renderCatalog(){
       +'<td style="min-width:280px">'+specIn+'<input class="inline" style="width:100%" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="one-line blurb"/></td>'
       +'<td style="white-space:nowrap"><button data-mm="'+m.id+'" data-st="'+(m.status==='ready'?'draft':'ready')+'">'+(m.status==='ready'?'Unpublish':'Publish')+'</button> '
       +'<a class="tag" href="'+esc(m.path)+'" target="_blank">view ↗</a></td></tr>'}).join('')
-    +'</tbody></table><p class="meta">Edit brand / name / wingspan / blurb inline — saves on blur. Publish requires the required specs (the API refuses otherwise).</p>';
+    +'</tbody></table><p class="meta">Edit brand / name / wingspan / blurb inline — saves on blur. Publish requires the required specs (the API refuses otherwise). '+(data.total||0)+' models total.</p>'+pager(data.total,data.pageSize,data.page||1);
+  wirePager();
   document.querySelectorAll('button[data-mm]').forEach((b)=>b.onclick=async()=>{try{await api('master',{id:+b.dataset.mm,status:b.dataset.st});load()}catch(e){alert(e.message)}});
   document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{
     const id=+i.dataset.m,f=i.dataset.f,body={id};

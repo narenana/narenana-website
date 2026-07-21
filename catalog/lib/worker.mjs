@@ -4,7 +4,7 @@
 import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
-import { renderGrid, renderMaster } from './public.mjs'
+import { renderGrid, renderMaster, powerType } from './public.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
@@ -52,7 +52,13 @@ export async function handleCatalog(request, url, env, ctx) {
   const cat = cats.find((c) => path === c.path_prefix || path.startsWith(c.path_prefix + '/'))
   if (!cat || !cat.live) return null
 
-  if (path === cat.path_prefix) return html(renderGrid(cat, await gridMasters(env, cat)))
+  if (path === cat.path_prefix) {
+    const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
+    const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
+    const counts = await gridCounts(env, cat)
+    const masters = await gridMasters(env, cat, power, page)
+    return html(renderGrid(cat, masters, { power, page, counts }))
+  }
 
   const slug = path.slice(cat.path_prefix.length + 1)
   if (slug && !slug.includes('/')) {
@@ -81,31 +87,64 @@ export async function handleCatalog(request, url, env, ctx) {
       return html(renderMaster(cat, m, offers, recipes, components))
     }
   }
-  // unknown slug → the REAL category grid with 404 status (a stub query here
-  // once veiled every card "Out of stock" on typo URLs)
-  return html(renderGrid(cat, await gridMasters(env, cat)), 404)
+  // unknown slug → the REAL category grid (page 1, electric) with 404 status
+  return html(renderGrid(cat, await gridMasters(env, cat, 'electric', 1), { power: 'electric', page: 1, counts: await gridCounts(env, cat) }), 404)
 }
 
-async function gridMasters(env, cat) {
-  // Grid policy (owner): in-stock only, price high→low (proper sort controls
-  // come later). Out-of-stock masters keep their PAGES (direct links / search
-  // stay alive with "last seen" pricing) — they just don't take up grid space.
+const GRID_PAGE = 24
+
+// One page of in-stock masters, filtered by power, cheapest-last (price
+// high→low). Power is a stored column (0006) so this filters + paginates in
+// SQL — no GROUP_CONCAT over the whole catalog per request.
+async function gridMasters(env, cat, power = 'electric', page = 1) {
+  const powerClause = power === 'all' ? '' : `AND COALESCE(m.power,'electric')=?`
+  const params = [cat.id]
+  if (power !== 'all') params.push(power)
+  params.push(GRID_PAGE, (page - 1) * GRID_PAGE)
   return all(
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            GROUP_CONCAT(k.title, ' ') AS titles,
             MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
      JOIN offer o ON o.master_model_id = m.id
      JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
-     WHERE m.category_id=? AND m.status='ready'
+     WHERE m.category_id=? AND m.status='ready' ${powerClause}
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
-     ORDER BY (min_price IS NULL) ASC, min_price DESC`,
+     ORDER BY (min_price IS NULL) ASC, min_price DESC
+     LIMIT ? OFFSET ?`,
+    ...params,
+  )
+}
+
+// In-stock master counts per power (for the filter chips + page total).
+async function gridCounts(env, cat) {
+  const rows = await all(
+    env,
+    `SELECT COALESCE(p,'electric') power, COUNT(*) n FROM (
+       SELECT m.id, m.power AS p
+       FROM master_model m JOIN offer o ON o.master_model_id=m.id
+       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       WHERE m.category_id=? AND m.status='ready'
+       GROUP BY m.id
+       HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1
+     ) GROUP BY power`,
     cat.id,
   )
+  const c = { electric: 0, gas: 0 }
+  for (const r of rows) c[r.power] = r.n
+  c.all = c.electric + c.gas
+  c.pageSize = GRID_PAGE
+  return c
+}
+
+// Recompute a master's power from all its offers' seller titles (gas if any
+// offer names an engine — cc / glow size / nitro). Called on approve/attach/merge.
+async function setMasterPower(env, masterId) {
+  const t = (await one(env, `SELECT GROUP_CONCAT(k.title, ' ') titles FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=?`, masterId))?.titles ?? ''
+  await run(env, `UPDATE master_model SET power=? WHERE id=?`, powerType(t), masterId)
 }
 
 // ---------------------------------------------------------------- img proxy
@@ -188,9 +227,11 @@ async function api(request, url, env, ep, actor) {
       where += ' AND k.source_id=?'
       params.push(src)
     }
+    const RPAGE = 40
+    const rpage = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
     const skus = await all(env, `SELECT k.*, mm.brand || ' ' || mm.name AS master FROM sku k
        LEFT JOIN offer o ON o.sku_id=k.id LEFT JOIN master_model mm ON mm.id=o.master_model_id
-       WHERE ${where} GROUP BY k.id ORDER BY k.first_seen DESC LIMIT 40`, ...params)
+       WHERE ${where} GROUP BY k.id ORDER BY k.first_seen DESC LIMIT ? OFFSET ?`, ...params, RPAGE, (rpage - 1) * RPAGE)
 
     const masters = await all(env, `SELECT id, brand, name, brand_norm, name_norm FROM master_model LIMIT 400`)
     const score = (t = '') => {
@@ -246,7 +287,7 @@ async function api(request, url, env, ep, actor) {
         .sort((a, b) => b.s - a.s)
         .slice(0, 3)
     }
-    return json({ counts, sources, skus, specFields, cat: { id: cat?.id, configs } })
+    return json({ counts, sources, skus, specFields, cat: { id: cat?.id, configs }, page: rpage, pageSize: RPAGE })
   }
 
   if (ep === 'decide' && request.method === 'POST') {
@@ -304,6 +345,7 @@ async function api(request, url, env, ep, actor) {
         q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`, k.id, t, null, k.price_inr, k.in_stock),
         audit(env, actor, 'approve-attach', 'sku', k.id, { master: mm.id }),
       ])
+      await setMasterPower(env, mm.id)
       return json({ ok: true })
     }
     if (body.action === 'approve') {
@@ -334,6 +376,8 @@ async function api(request, url, env, ep, actor) {
         if (/UNIQUE/.test(String(e))) return json({ error: 'a master with that slug or brand+name already exists — use its suggestion button instead' }, 409)
         throw e
       }
+      const created = await one(env, `SELECT id FROM master_model WHERE category_id=? AND slug=?`, catId, m.slug)
+      if (created) await setMasterPower(env, created.id)
       return json({ ok: true, note: 'master created as DRAFT — publish it from the Catalog tab once specs are complete' })
     }
     return json({ error: `unknown action "${body.action}"` }, 400)
@@ -405,13 +449,16 @@ async function api(request, url, env, ep, actor) {
 
   if (ep === 'catalog') {
     const cats = await categories(env)
+    const PAGE = 50
+    const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
+    const total = (await one(env, `SELECT COUNT(*) n FROM master_model`))?.n ?? 0
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
         SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
-      GROUP BY m.id ORDER BY m.updated_at DESC LIMIT 200`)
+      GROUP BY m.id ORDER BY m.updated_at DESC LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
     for (const m of masters) m.path = `${cats.find((c) => c.id === m.category_id)?.path_prefix ?? ''}/${m.slug}/`
-    return json({ masters })
+    return json({ masters, page, total, pageSize: PAGE })
   }
 
   if (ep === 'master' && request.method === 'POST') {
@@ -503,6 +550,13 @@ async function api(request, url, env, ep, actor) {
     const res = await dedupSlice(env, 'manual', true)
     await audit(env, actor, 'dedup-run', 'jobs', '', res ?? {}).run?.()
     return json(res ?? { note: 'no masters to compare' })
+  }
+
+  // One-time / maintenance: (re)derive power for every master from its offers.
+  if (ep === 'recompute-power' && request.method === 'POST') {
+    const ids = await all(env, `SELECT id FROM master_model`)
+    for (const r of ids) await setMasterPower(env, r.id)
+    return json({ ok: true, recomputed: ids.length })
   }
 
   if (ep === 'system' && request.method === 'GET') {

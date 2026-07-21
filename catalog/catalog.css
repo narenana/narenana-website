@@ -190,6 +190,20 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .filt-b:hover { color: var(--ink); }
 .filt-b.is-on { background: var(--orange); color: var(--ink-2); }
 .filt-b.is-on span { opacity: 0.75; }
+a.filt-b { text-decoration: none; }
+
+/* --- pagination ---------------------------------------------------------- */
+.pager { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 40px 0 8px; }
+.pg {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 38px; height: 38px; padding: 0 12px;
+  border: 2px solid var(--ink); border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 700;
+  color: var(--ink); text-decoration: none; background: var(--card);
+}
+.pg:hover { background: var(--orange); border-color: var(--orange); color: var(--ink-2); }
+.pg.is-cur { background: var(--ink); color: var(--card); }
+.pg.is-off { opacity: 0.4; border-color: var(--faint); background: transparent; pointer-events: none; }
 
 .shop { max-width: 1140px; margin: 0 auto; padding: 24px 24px 64px; }
 

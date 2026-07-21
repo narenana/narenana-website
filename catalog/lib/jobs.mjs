@@ -18,6 +18,7 @@
 import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
+import { powerType } from './public.mjs'
 import { now } from './util.mjs'
 
 // Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
@@ -389,6 +390,9 @@ export async function mergeMasters(env, aId, bId, actor, reason) {
     audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason }),
   ]
   await batch(env, stmts)
+  // Survivor absorbed B's offers — re-derive its power class from all titles.
+  const titles = (await one(env, `SELECT GROUP_CONCAT(k.title, ' ') t FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=?`, aId))?.t ?? ''
+  await run(env, `UPDATE master_model SET power=? WHERE id=?`, powerType(titles), aId)
 }
 
 // -------------------------------------------------------------- verify slice

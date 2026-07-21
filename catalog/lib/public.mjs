@@ -78,7 +78,7 @@ function masterCard(m, prefix) {
   const oos = !m.any_stock
   const hero = m.hero_any ?? m.hero_image // hero_any = offer-sku fallback (grid query)
   return `
-    <li class="prod" data-price="${price ?? 999999}" data-stock="${oos ? 0 : 1}" data-power="${m.power}"${m.power === 'gas' ? ' style="display:none"' : ''}>
+    <li class="prod" data-price="${price ?? 999999}" data-stock="${oos ? 0 : 1}" data-power="${m.power ?? 'electric'}">
       <a class="prod-link" href="${prefix}/${esc(m.slug)}/">
         <div class="prod-img">
           ${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
@@ -105,49 +105,50 @@ const specLine = (m) => {
   }
 }
 
-export function renderGrid(cat, masters) {
-  // Power class per master, derived from its offers' seller titles (engine
-  // markers). Electric is the default view; gas/nitro filtered in on demand.
-  const live = masters.map((m) => ({ ...m, power: powerType(m.titles ?? `${m.brand} ${m.name} ${m.specs ?? ''}`) }))
-  const nElec = live.filter((m) => m.power === 'electric').length
-  const nGas = live.filter((m) => m.power === 'gas').length
-  const filt = `
-    <div class="filt" role="tablist" aria-label="Power type">
-      <button class="filt-b is-on" data-power="electric">Electric <span>${nElec}</span></button>
-      <button class="filt-b" data-power="gas">Gas / Nitro <span>${nGas}</span></button>
-      <button class="filt-b" data-power="all">All <span>${live.length}</span></button>
-    </div>`
+export function renderGrid(cat, masters, opts = {}) {
+  // Power + pageNo come from the server (SQL filters + paginates). Masters here
+  // are already the current pageNo for the current power filter.
+  const { power = 'electric', page: pageNo = 1, counts = { electric: masters.length, gas: 0, all: masters.length, pageSize: 24 } } = opts
+  const total = power === 'all' ? counts.all : counts[power] ?? masters.length
+  const pageSize = counts.pageSize || 24
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const label = power === 'gas' ? 'gas / nitro' : power === 'all' ? '' : 'electric'
+  const pref = cat.path_prefix
+  // URL for a (power,pageNo): default (electric, p1) is the bare category path.
+  const href = (p, pg) => {
+    const qs = new URLSearchParams()
+    if (p !== 'electric') qs.set('power', p)
+    if (pg > 1) qs.set('page', String(pg))
+    const s = qs.toString()
+    return `${pref}/${s ? '?' + s : ''}`
+  }
+  const chip = (p, text, n) => `<a class="filt-b ${power === p ? 'is-on' : ''}" href="${href(p, 1)}">${text} <span>${n}</span></a>`
+  const filt = `<div class="filt" role="tablist" aria-label="Power type">${chip('electric', 'Electric', counts.electric)}${chip('gas', 'Gas / Nitro', counts.gas)}${chip('all', 'All', counts.all)}</div>`
+
+  const pageLink = (pg, text, cls = '') => (pg < 1 || pg > totalPages || pg === pageNo ? `<span class="pg ${cls} is-off">${text}</span>` : `<a class="pg ${cls}" href="${href(power, pg)}">${text}</a>`)
+  const nums = []
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - pageNo) <= 1) nums.push(p === pageNo ? `<span class="pg is-cur">${p}</span>` : `<a class="pg" href="${href(power, p)}">${p}</a>`)
+    else if (nums[nums.length - 1] !== '…') nums.push('…')
+  }
+  const pager = totalPages > 1
+    ? `<nav class="pager" aria-label="Pagination">${pageLink(pageNo - 1, '← Prev', 'pg-prev')}${nums.map((n) => (n === '…' ? '<span class="pg is-off">…</span>' : n)).join('')}${pageLink(pageNo + 1, 'Next →', 'pg-next')}</nav>`
+    : ''
+
   const body = `
   <div class="shop-head"><div class="shop-head-in">
     <p class="shop-kicker">narenana catalog</p>
     <h1 class="shop-h1">${esc(cat.name)} in India</h1>
-    <p class="shop-sub"><span id="shop-count">${nElec}</span> <span id="shop-count-label">electric</span> in stock · live prices from Indian sellers</p>
+    <p class="shop-sub">${total} ${label} in stock · live prices from Indian sellers${totalPages > 1 ? ` · page ${pageNo} of ${totalPages}` : ''}</p>
     <p class="shop-intro">Kits, PNP and ready-to-fly aircraft from Indian hobby shops, in one place. Prices and stock come from each seller's live listing and are re-checked through the day — every card opens a spec sheet, and every offer links straight to the seller.</p>
     ${filt}
   </div></div>
   <main class="shop">
-    <ul class="prods">${live.map((m) => masterCard(m, cat.path_prefix)).join('')}</ul>
-    ${live.length === 0 ? '<p class="empty">Nothing live yet.</p>' : ''}
-    <p class="empty" id="filt-empty" hidden>Nothing in this category right now.</p>
-  </main>
-  <script>(function(){
-    var btns=document.querySelectorAll('.filt-b');if(!btns.length)return;
-    var count=document.getElementById('shop-count'),label=document.getElementById('shop-count-label'),empty=document.getElementById('filt-empty');
-    var LBL={electric:'electric',gas:'gas / nitro',all:''};
-    function apply(p){
-      btns.forEach(function(b){b.classList.toggle('is-on',b.dataset.power===p)});
-      var shown=0;
-      document.querySelectorAll('.prods .prod').forEach(function(li){
-        var vis=(p==='all'||li.dataset.power===p);li.style.display=vis?'':'none';if(vis)shown++;
-      });
-      count.textContent=shown;label.textContent=LBL[p];empty.hidden=shown>0;
-      try{history.replaceState(null,'',p==='electric'?location.pathname:location.pathname+'?power='+p)}catch(e){}
-    }
-    btns.forEach(function(b){b.onclick=function(){apply(b.dataset.power)}});
-    var init=new URLSearchParams(location.search).get('power');
-    apply(init==='gas'||init==='all'?init:'electric');
-  })()</script>`
-  const jsonld = live.length
+    <ul class="prods">${masters.map((m) => masterCard(m, pref)).join('')}</ul>
+    ${masters.length === 0 ? '<p class="empty">Nothing in this category right now.</p>' : ''}
+    ${pager}
+  </main>`
+  const jsonld = masters.length
     ? {
         '@context': 'https://schema.org',
         '@graph': [
@@ -161,24 +162,26 @@ export function renderGrid(cat, masters) {
           {
             '@type': 'ItemList',
             name: `${cat.name} in India`,
-            numberOfItems: live.length,
-            itemListElement: live.slice(0, 24).map((m, i) => ({
+            numberOfItems: total,
+            itemListElement: masters.map((m, i) => ({
               '@type': 'ListItem',
-              position: i + 1,
+              position: (pageNo - 1) * pageSize + i + 1,
               name: `${m.brand} ${m.name}`,
-              url: `${SITE}${cat.path_prefix}/${m.slug}/`,
+              url: `${SITE}${pref}/${m.slug}/`,
             })),
           },
         ],
       }
     : null
+  // Page 2+ and non-default filters are noindex (canonical stays the base grid).
+  const canonicalDefault = power === 'electric' && pageNo === 1
   return page({
     title: `${cat.name} in India — compare live prices | narenana`,
-    desc: `Every ${cat.name.toLowerCase().replace(/^./, (c) => c)} you can buy in India — kits, PNP and RTF, with live prices and stock compared across Indian hobby shops.`,
-    path: `${cat.path_prefix}/`,
+    desc: `Every ${cat.name.toLowerCase()} you can buy in India — kits, PNP and RTF, with live prices and stock compared across Indian hobby shops.`,
+    path: `${pref}/`,
     body,
     jsonld,
-    noindex: live.length === 0, // an empty category must not get indexed
+    noindex: masters.length === 0 || !canonicalDefault,
   })
 }
 
