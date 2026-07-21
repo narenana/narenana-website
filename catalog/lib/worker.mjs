@@ -5,7 +5,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
-import { gridDataNext, renderGridNext, resolveLanding } from './grid-next.mjs'
+import { gridDataNext, renderGridNext, resolveLanding, validLandings } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
@@ -52,6 +52,7 @@ export async function handleCatalog(request, url, env, ctx) {
 
   // ---- public category routes ----
   const cats = await categories(env)
+  if (path === '/sitemap.xml') return sitemapResponse(env, cats)
   const cat = cats.find((c) => path === c.path_prefix || path.startsWith(c.path_prefix + '/'))
   if (!cat || !cat.live) return null
 
@@ -82,7 +83,10 @@ export async function handleCatalog(request, url, env, ctx) {
       const matched = L.roles.length
         ? rows.filter((r) => { try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }).length
         : rows.length
-      if (matched >= 1) return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug }, counts }))
+      if (matched >= 1) {
+        const lp = await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, slug)
+        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '' }, counts }))
+      }
     }
   }
   if (slug && !slug.includes('/')) {
@@ -214,6 +218,30 @@ async function setMasterPower(env, masterId) {
 }
 
 // ---------------------------------------------------------------- img proxy
+const SITE = 'https://www.narenana.com'
+
+// sitemap.xml: homepage + each live category + its valid landing pages (>=3
+// in-stock) + every ready product page.
+async function sitemapResponse(env, cats) {
+  const urls = [`${SITE}/`]
+  for (const cat of cats.filter((c) => c.live)) {
+    urls.push(`${SITE}${cat.path_prefix}/`)
+    const masters = await all(
+      env,
+      `SELECT m.slug, COALESCE(m.power,'electric') AS power, m.role_tags,
+              MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+       FROM master_model m JOIN offer o ON o.master_model_id=m.id
+       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
+      cat.id,
+    )
+    for (const s of validLandings(masters)) urls.push(`${SITE}${cat.path_prefix}/${s}/`)
+    for (const m of masters) urls.push(`${SITE}${cat.path_prefix}/${m.slug}/`)
+  }
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>`
+  return new Response(xml, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } })
+}
+
 // FNV-1a of the source URL → stable R2 key (dedups images shared across masters;
 // a changed source URL naturally gets a new key + re-fetch).
 const imgKey = (src) => { let h = 0x811c9dc5; for (let i = 0; i < src.length; i++) { h ^= src.charCodeAt(i); h = Math.imul(h, 0x01000193) } return 'i/' + (h >>> 0).toString(16) }

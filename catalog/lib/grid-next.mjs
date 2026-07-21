@@ -55,6 +55,20 @@ function landingMeta(cat, L, slug) {
   return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare live prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
 }
 
+// landing slugs with >= min in-stock masters (for the sitemap). masters rows
+// need: power, role_tags, any_stock.
+export function validLandings(masters, min = 3) {
+  const parse = (rt) => { try { return JSON.parse(rt || '[]') } catch { return [] } }
+  const live = masters.filter((m) => m.any_stock)
+  const out = []
+  for (const [slug, role] of Object.entries(ROLE_SLUG)) if (live.filter((m) => parse(m.role_tags).includes(role)).length >= min) out.push(slug)
+  for (const [pslug, pw] of [['electric', 'electric'], ['nitro', 'gas']]) {
+    if (live.filter((m) => (m.power || 'electric') === pw).length >= min) out.push(pslug)
+    for (const [rslug, role] of Object.entries(ROLE_SLUG)) if (live.filter((m) => (m.power || 'electric') === pw && parse(m.role_tags).includes(role)).length >= min) out.push(`${pslug}-${rslug}`)
+  }
+  return out
+}
+
 const specLine = (m) => {
   try {
     const s = JSON.parse(m.specs || '{}')
@@ -187,6 +201,8 @@ export function renderGridNext(cat, rows, opts = {}) {
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
   const introHtml = Lmeta ? `<p class="fx-intro">Compare live prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
   const crumbLd = Lmeta ? { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: Lmeta.crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, ...(i < Lmeta.crumbs.length - 1 ? { item: SITE + c.url } : {}) })) } : null
+  // crawlable internal links to every landing (helps discovery + PageRank flow)
+  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}<a href="${pref}/electric/">Electric</a><a href="${pref}/nitro/">Nitro / gas</a></nav>`
 
   const body = `
   <div class="shop-head"><div class="shop-head-in">
@@ -204,6 +220,8 @@ export function renderGridNext(cat, rows, opts = {}) {
     </div>
     <ul class="prods" id="fx-grid">${ordered.map((it) => cardNext(it, pref, !visible(it))).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
+    ${landing && landing.content ? `<section class="fx-content">${landing.content}</section>` : ''}
+    ${browseHtml}
 
     <div class="fx-backdrop" id="fx-backdrop" hidden>
       <div class="fx-modal" role="dialog" aria-modal="true" aria-labelledby="fx-mtitle">
@@ -240,6 +258,16 @@ const FX_CSS = `
 .fx-crumbs i{font-style:normal;opacity:.5}
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
 .fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
+.fx-content{margin:40px 0 0;max-width:72ch}
+.fx-content h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.3rem;font-weight:800;margin:1.4em 0 .4em;color:var(--ink)}
+.fx-content h3{font-weight:800;font-size:1.05rem;margin:1.2em 0 .3em;color:var(--ink)}
+.fx-content p,.fx-content li{color:var(--muted);line-height:1.65;margin:0 0 .9em}
+.fx-content a{color:var(--orange-deep);text-decoration:none;font-weight:700}
+.fx-content a:hover{text-decoration:underline}
+.fx-browse{margin:44px 0 0;padding-top:20px;border-top:1.5px solid var(--faint);display:flex;flex-wrap:wrap;gap:10px 16px;align-items:baseline;font-size:.9rem}
+.fx-browse>span{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
+.fx-browse a{color:var(--orange-deep);text-decoration:none;font-weight:700}
+.fx-browse a:hover{text-decoration:underline}
 .fx-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
 .fx-seg{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--card)}
 .fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
