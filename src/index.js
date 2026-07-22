@@ -80,10 +80,11 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // Dispatch on the cron expression — each schedule owns ONE job. Without
-    // this branch the hourly RSS refresh would re-fire on every */15 tick.
+    // Dispatch on the cron expression. Hourly: YouTube RSS refresh (here) +
+    // IndexNow push (in catalogScheduled). */15: the catalog pipeline slice.
+    // catalogScheduled dispatches internally on event.cron, so call it for both.
     if (event.cron === '0 * * * *') ctx.waitUntil(refreshFeed(env))
-    else catalogScheduled(event, env, ctx)
+    catalogScheduled(event, env, ctx)
   },
 }
 

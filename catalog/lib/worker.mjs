@@ -21,6 +21,10 @@ async function categories(env) {
 const html = (body, status = 200) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate' } })
 
+// IndexNow key — PUBLIC (served at /<key>.txt to prove ownership so Bing /
+// Yandex accept our URL submissions). Not a secret; safe in the repo.
+const INDEXNOW_KEY = '7f3e9a1c5b8d4260e94a1f7c3b0d8e62'
+
 export async function handleCatalog(request, url, env, ctx) {
   const path = url.pathname.replace(/\/+$/, '') || '/'
   if (!env.CATALOG_DB) return null
@@ -29,6 +33,10 @@ export async function handleCatalog(request, url, env, ctx) {
     // URL is versioned (?v=<hash> in the <link>), so the bytes are immutable:
     // a CSS change ships a new URL rather than mutating this one.
     return new Response(CSS, { headers: { 'content-type': 'text/css; charset=utf-8', 'cache-control': 'public, max-age=31536000, immutable' } })
+
+  // IndexNow ownership key, served at the site root.
+  if (path === `/${INDEXNOW_KEY}.txt`)
+    return new Response(INDEXNOW_KEY, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=86400' } })
 
   // ---- image proxy (public; host-allowlisted to registered sellers) ----
   if (path.startsWith('/img/')) return imgProxy(env, path, ctx)
@@ -252,6 +260,68 @@ async function sitemapResponse(env, cats) {
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>`
   return new Response(xml, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } })
+}
+
+// --- IndexNow: push changed in-stock URLs to Bing / Yandex / Seznam ---------
+// One POST notifies every IndexNow participant. Fire-and-forget from the hourly
+// cron. Fully guarded — a failure never touches anything else.
+async function indexNowSubmit(urlList) {
+  if (!urlList.length) return false
+  try {
+    const res = await fetch('https://api.indexnow.org/indexnow', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ host: 'www.narenana.com', key: INDEXNOW_KEY, keyLocation: `${SITE}/${INDEXNOW_KEY}.txt`, urlList: urlList.slice(0, 10000) }),
+    })
+    return res.status === 200 || res.status === 202
+  } catch {
+    return false
+  }
+}
+
+// Submit in-stock product URLs changed since the last run. First run (no cursor)
+// seeds the whole in-stock set + hubs + landings; after that only masters edited
+// since — updated_at is bumped on real edits (new / enriched / classified /
+// merged), NOT on verify ticks, so this stays changed-only and non-spammy.
+async function indexNowPing(env) {
+  if (!env.CATALOG_DB) return
+  const cursor = parseInt((await getSetting(env, 'indexnow_at')) || '0', 10)
+  const t = now()
+  const first = cursor === 0
+  const cats = (await categories(env)).filter((c) => c.live)
+  const urls = []
+  for (const cat of cats) {
+    const rows = await all(
+      env,
+      `SELECT m.slug FROM master_model m
+       JOIN offer o ON o.master_model_id=m.id
+       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       WHERE m.category_id=? AND m.status='ready' AND COALESCE(m.updated_at,0) > ?
+       GROUP BY m.id
+       HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
+       LIMIT 9000`,
+      cat.id,
+      cursor,
+    )
+    if (!rows.length && !first) continue
+    for (const r of rows) urls.push(`${SITE}${cat.path_prefix}/${r.slug}/`)
+    urls.push(`${SITE}${cat.path_prefix}/`, `${SITE}${cat.path_prefix}/browse/`)
+    if (first) {
+      urls.push(`${SITE}/`)
+      const ms = await all(
+        env,
+        `SELECT COALESCE(m.power,'electric') AS power, m.role_tags,
+                MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+         FROM master_model m JOIN offer o ON o.master_model_id=m.id
+         JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+         WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
+        cat.id,
+      )
+      for (const s of validLandings(ms)) urls.push(`${SITE}${cat.path_prefix}/${s}/`)
+    }
+  }
+  if (!urls.length) return void (await setSetting(env, 'indexnow_at', String(t)))
+  if (await indexNowSubmit(urls)) await setSetting(env, 'indexnow_at', String(t))
 }
 
 // imgKey (FNV-1a of the source URL → stable R2 key) lives in util.mjs so the
@@ -588,16 +658,31 @@ async function api(request, url, env, ep, actor) {
     const PAGE = 50
     const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
     const anomalyOnly = url.searchParams.get('anomaly') === '1'
+    const sort = url.searchParams.get('sort') === 'pop' ? 'pop' : 'updated'
     const where = anomalyOnly ? 'WHERE m.anomaly IS NOT NULL' : ''
+    // Popularity sort: highest pop_score first, never-polled (NULL) last — this
+    // is the ADMIN preview of the sort before it's exposed to customers.
+    const orderBy = sort === 'pop' ? 'ORDER BY m.pop_score IS NULL, m.pop_score DESC' : 'ORDER BY m.updated_at DESC'
     const total = (await one(env, `SELECT COUNT(*) n FROM master_model m ${where}`))?.n ?? 0
     const anomalyCount = (await one(env, `SELECT COUNT(*) n FROM master_model WHERE anomaly IS NOT NULL`))?.n ?? 0
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
         SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
-      ${where} GROUP BY m.id ORDER BY m.updated_at DESC LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
+      ${where} GROUP BY m.id ${orderBy} LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
     for (const m of masters) m.path = `${cats.find((c) => c.id === m.category_id)?.path_prefix ?? ''}/${m.slug}/`
-    return json({ masters, page, total, pageSize: PAGE, anomalyCount })
+    // Attach the matched YouTube videos for this page's masters (top by views;
+    // excluded ones last so admin can still see and reconsider them).
+    if (masters.length) {
+      const ids = masters.map((m) => m.id)
+      const vids = await all(env, `SELECT master_model_id, video_id, title, channel, views, published_at, pinned, excluded
+        FROM master_video WHERE master_model_id IN (${ids.map(() => '?').join(',')})
+        ORDER BY excluded ASC, views DESC`, ...ids)
+      const byMaster = {}
+      for (const v of vids) (byMaster[v.master_model_id] ??= []).push(v)
+      for (const m of masters) m.videos = (byMaster[m.id] || []).slice(0, 6)
+    }
+    return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort })
   }
 
   if (ep === 'master' && request.method === 'POST') {
@@ -770,7 +855,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich|dedup|classify|warm)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich|dedup|classify|warm|popularity)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })
@@ -792,4 +877,7 @@ const probeOk = async (u) => {
 
 export function catalogScheduled(event, env, ctx) {
   if (event.cron === '*/15 * * * *') ctx.waitUntil(runSlice(env, 'cron'))
+  // Hourly: push changed in-stock URLs to Bing/Yandex via IndexNow. Kept off the
+  // */15 tick so it never competes with the pipeline for the subrequest budget.
+  else if (event.cron === '0 * * * *') ctx.waitUntil(indexNowPing(env))
 }
