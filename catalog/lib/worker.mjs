@@ -668,6 +668,10 @@ async function api(request, url, env, ep, actor) {
       r.prefix = cats.find((c) => c.id === r.a_cat)?.path_prefix ?? ''
       r.a_offers = byMaster[r.a_id] ?? []
       r.b_offers = byMaster[r.b_id] ?? []
+      // A side is "in stock" if it has ≥1 live (non-dead, in_stock) offer.
+      r.a_in_stock = r.a_offers.some((o) => o.in_stock && !o.dead)
+      r.b_in_stock = r.b_offers.some((o) => o.in_stock && !o.dead)
+      r.both_in_stock = r.a_in_stock && r.b_in_stock
       // Which side to KEEP: ready>draft, then more offers, then has-span, then lower id.
       const ra = [r.a_status === 'ready' ? 0 : 1, -r.a_offers.length, hasSpan(r.a_specs), r.a_id]
       const rb = [r.b_status === 'ready' ? 0 : 1, -r.b_offers.length, hasSpan(r.b_specs), r.b_id]
@@ -675,6 +679,11 @@ async function api(request, url, env, ep, actor) {
       for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) { keepA = ra[i] < rb[i]; break }
       r.keepId = keepA ? r.a_id : r.b_id
     }
+    // Surface the merges that actually matter first: when BOTH masters are in
+    // stock, merging changes what a shopper sees; if one side is out of stock the
+    // dupe collapses to the in-stock side either way (cosmetic). Keep the finder's
+    // confidence order (score DESC, then id) within each tier.
+    rows.sort((x, y) => Number(y.both_in_stock) - Number(x.both_in_stock) || y.score - x.score || x.id - y.id)
     return json({ candidates: rows })
   }
 

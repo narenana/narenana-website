@@ -226,7 +226,10 @@ const DD_CSS='<style>.dd-pair{border:1px solid var(--line,#e5ddc9);border-radius
   +'.dd-offer{font-size:12px;border-left:3px solid #e0d9c8;padding-left:7px}.dd-offer.dd-dead{opacity:.4}'
   +'.dd-t{color:var(--muted,#8a7f66);font-size:11px;line-height:1.3}.dd-oos{color:#c63b2e;font-weight:600}'
   +'.dd-arrow{align-self:center;text-align:center;color:var(--muted,#8a7f66);font-size:11px;white-space:nowrap;min-width:46px}'
-  +'.dd-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap}.dd-foot .acts{display:flex;gap:8px}</style>';
+  +'.dd-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap}.dd-foot .acts{display:flex;gap:8px}'
+  +'.dd-prio{font-size:10px;font-weight:700;color:#2e7d5b;background:#e6f2ea;border-radius:4px;padding:2px 6px;letter-spacing:.04em;margin-right:6px}'
+  +'.dd-cosmetic{font-size:10px;font-weight:600;color:var(--muted,#8b949e);margin-right:6px}'
+  +'.dd-divider{font-size:11px;font-weight:600;color:var(--muted,#8b949e);text-align:center;margin:2px 0 14px;padding-top:12px;border-top:1px dashed var(--border,#30363d)}</style>';
 function renderDupes(){
   const rows=data.candidates||[];
   const span=(sp)=>{try{const v=JSON.parse(sp||'{}').spanMM;return v?v+'mm':''}catch(e){return ''}};
@@ -239,12 +242,15 @@ function renderDupes(){
     +'<div class="dd-offers">'+(r[pre+'offers']||[]).map(offerLine).join('')+'</div></div>';
   const card=(r)=>{const keepA=r.keepId===r.a_id;const K=keepA?'a_':'b_',M=keepA?'b_':'a_';const dropId=keepA?r.b_id:r.a_id;
     return '<div class="dd-pair"><div class="dd-cols">'+side(r,K,'✔ KEEP',true)+'<div class="dd-arrow">◀ merge<br>into keep</div>'+side(r,M,'MERGE IN',false)
-      +'</div><div class="dd-foot"><span class="meta">'+esc(r.reason)+' · '+Math.round(r.score*100)+'%</span>'
+      +'</div><div class="dd-foot"><span class="meta">'+(r.both_in_stock?'<span class="dd-prio">★ both in stock</span>':'<span class="dd-cosmetic">one side out · cosmetic</span>')+esc(r.reason)+' · '+Math.round(r.score*100)+'%</span>'
       +'<span class="acts"><button class="ok" data-dd="merge" data-keep="'+r.keepId+'" data-drop="'+dropId+'">✓ Same — merge</button>'
       +'<button class="no" data-dd="reject" data-keep="'+r.a_id+'" data-drop="'+r.b_id+'">✕ Different</button></span></div></div>';};
+  const prio=rows.filter((r)=>r.both_in_stock).length;
+  let divShown=false;
+  const listHtml=rows.map((r)=>{let pre='';if(!r.both_in_stock&&!divShown){divShown=true;pre='<div class="dd-divider">↓ below: one side is already out of stock — merging is cosmetic (does not change what shoppers see), safe to skip</div>';}return pre+card(r);}).join('');
   $('#view').innerHTML=DD_CSS+'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><button id="ddrun" class="go">Scan for duplicates now</button>'
-    +'<span class="meta">'+rows.length+' possible pair(s) · obvious dupes already merged. Confirm only if the two are the SAME product from different sellers — photos + prices below.</span></div>'
-    +(rows.length?rows.map(card).join(''):'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>');
+    +'<span class="meta">'+rows.length+' pair(s) · <b>'+prio+' with both sides in stock</b> (shown first — these are the ones that change what shoppers see). Confirm only if the two are the SAME product from different sellers.</span></div>'
+    +(rows.length?listHtml:'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>');
   $('#ddrun').onclick=async()=>{$('#ddrun').disabled=true;$('#ddrun').textContent='scanning…';try{const d=await api('dedup-run',{});alert('Auto-merged '+(d.merged||0)+', flagged '+(d.flagged||0)+' for review, '+(d.anomalies||0)+' anomalies')}catch(e){alert(e.message)}load()};
   document.querySelectorAll('button[data-dd]').forEach((b)=>b.onclick=async()=>{
     const keep=+b.dataset.keep,drop=+b.dataset.drop;
