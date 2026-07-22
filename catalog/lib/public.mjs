@@ -18,6 +18,7 @@ const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`
   const og = image ?? `${SITE}/assets/og.jpg`
+  const browsePath = '/' + (path.split('/')[1] || 'wings') + '/browse/'
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#F3EEE0" />
@@ -44,7 +45,7 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(
 </div></div></header>
 ${body}
 <footer class="foot"><p>Prices come from each seller's live listing and carry the date we last confirmed them — always check the seller's page before paying.</p>
-<p><a class="wordmark" href="/">narenana</a> &nbsp;·&nbsp; <a href="/log-viewer/">RC Log Viewer</a> · <a href="https://sim.narenana.com">Nanawing simulator</a> · <a href="https://www.youtube.com/@narenana" rel="noopener">YouTube</a></p></footer>
+<p><a class="wordmark" href="/">narenana</a> &nbsp;·&nbsp; <a href="${browsePath}">All models</a> · <a href="/log-viewer/">RC Log Viewer</a> · <a href="https://sim.narenana.com">Nanawing simulator</a> · <a href="https://www.youtube.com/@narenana" rel="noopener">YouTube</a></p></footer>
 <script>(function(){var b=document.getElementById('shr-btn'),m=document.getElementById('shr-menu');if(!b)return;
 function u(s){var x=new URL(location.origin+location.pathname);x.searchParams.set('utm_source',s);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign','wings');return x.toString()}
 var t=document.title.replace(/\\s*\\|[^|]*$/,'').trim();

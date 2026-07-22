@@ -69,6 +69,95 @@ export function validLandings(masters, min = 3) {
   return out
 }
 
+// Every ready master with >=1 approved offer — the exact set the XML sitemap
+// lists. Powers the /browse/ HTML sitemap so every product page has a crawlable
+// internal link (the XML sitemap lists URLs; this passes link equity to them).
+export async function browseData(env, cat) {
+  return all(
+    env,
+    `SELECT m.slug, m.brand, m.name, m.role_tags, COALESCE(m.power,'electric') AS power,
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+     FROM master_model m
+     JOIN offer o ON o.master_model_id=m.id
+     JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+     WHERE m.category_id=? AND m.status='ready'
+     GROUP BY m.id
+     ORDER BY m.brand COLLATE NOCASE, m.name COLLATE NOCASE`,
+    cat.id,
+  )
+}
+
+const BZ_CSS = `<style>
+.bz{max-width:1000px;margin:0 auto;padding:22px 20px 60px}
+.bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:14px}
+.bz-crumbs a{color:var(--muted);text-decoration:none}.bz-crumbs a:hover{text-decoration:underline}
+.bz-h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
+.bz-lede{color:var(--muted);max-width:66ch;margin:0 0 26px}
+.bz-sec{margin:0 0 30px}
+.bz-sec h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.15rem;font-weight:800;margin:0 0 12px;padding-bottom:6px;border-bottom:1.5px solid var(--faint);scroll-margin-top:70px}
+.bz-n{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--muted);font-weight:500;margin-left:5px}
+.bz-list,.bz-land{list-style:none;margin:0;padding:0;columns:2;column-gap:26px}
+@media(min-width:760px){.bz-list,.bz-land{columns:3}}
+.bz-list li,.bz-land li{break-inside:avoid;margin:0 0 7px;font-size:14px;line-height:1.32}
+.bz a{color:var(--ink);text-decoration:none}.bz a:hover{color:var(--orange-deep);text-decoration:underline}
+.bz-land a{color:var(--orange-deep);font-weight:600}
+.bz-oos{font-size:11px;color:var(--muted);white-space:nowrap}
+</style>`
+
+// HTML sitemap / "browse all" hub: every landing page + every product link,
+// grouped by primary type. A crawlable hub so no product page is orphaned —
+// the XML sitemap lists the URLs, this passes internal-link equity to them too.
+export function renderBrowse(cat, masters, landings) {
+  const pfx = cat.path_prefix
+  const parse = (rt) => { try { return JSON.parse(rt || '[]') } catch { return [] } }
+  const landingLabel = (slug) => {
+    const L = resolveLanding(slug)
+    if (!L) return slug
+    const pw = L.power === 'gas' ? 'Nitro / gas ' : L.power === 'electric' ? 'Electric ' : ''
+    const rl = L.roles.length ? ROLE_H1[L.roles[0]] : L.power === 'gas' ? 'Nitro / gas' : 'Electric'
+    return (L.roles.length ? pw + rl : rl || pw).trim()
+  }
+  const landingLinks = landings
+    .map((s) => ({ s, label: landingLabel(s) }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map(({ s, label }) => `<li><a href="${pfx}/${esc(s)}/">${esc(label)} RC planes</a></li>`)
+    .join('')
+
+  const groups = new Map()
+  for (const m of masters) {
+    const role = parse(m.role_tags)[0] || 'Other'
+    if (!groups.has(role)) groups.set(role, [])
+    groups.get(role).push(m)
+  }
+  const sections = [...ROLE_VOCAB, 'Other']
+    .filter((r) => groups.has(r))
+    .map((role) => {
+      const items = groups
+        .get(role)
+        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a>${m.any_stock ? '' : ' <span class="bz-oos">· out of stock</span>'}</li>`)
+        .join('')
+      return `<section class="bz-sec"><h2 id="${esc(SLUG_OF_ROLE[role] || 'other')}">${esc(ROLE_H1[role] || 'Other')}<span class="bz-n">${groups.get(role).length}</span></h2><ul class="bz-list">${items}</ul></section>`
+    })
+    .join('')
+
+  const total = masters.length
+  const body = `<main class="bz">
+<nav class="bz-crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="${pfx}/">${esc(cat.name)}</a> › All models</nav>
+<h1 class="bz-h1">All RC plane models</h1>
+<p class="bz-lede">Every model in the catalog — ${total} in all — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
+<section class="bz-sec"><h2>Browse by category</h2><ul class="bz-land">${landingLinks}</ul></section>
+${sections}
+</main>${BZ_CSS}`
+
+  return page({
+    title: `All RC plane models in India (${total}) | narenana`,
+    desc: `Complete index of every RC plane in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with live prices.`,
+    path: `${pfx}/browse/`,
+    body,
+    jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'All RC plane models', url: `${SITE}${pfx}/browse/` },
+  })
+}
+
 const specLine = (m) => {
   try {
     const s = JSON.parse(m.specs || '{}')

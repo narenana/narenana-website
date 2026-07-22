@@ -5,7 +5,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
-import { gridDataNext, renderGridNext, resolveLanding, validLandings } from './grid-next.mjs'
+import { gridDataNext, renderGridNext, resolveLanding, validLandings, browseData, renderBrowse } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
@@ -74,6 +74,12 @@ export async function handleCatalog(request, url, env, ctx) {
   }
 
   const slug = path.slice(cat.path_prefix.length + 1)
+  // HTML sitemap hub — a crawlable index of every product + landing link, so no
+  // product page is orphaned. Reserved slug, checked before the master lookup.
+  if (slug === 'browse') {
+    const rows = await browseData(env, cat)
+    return html(renderBrowse(cat, rows, validLandings(rows)))
+  }
   // SEO landing pages — flat slugs (warbirds, electric-warbirds, nitro, …).
   // Checked before the master lookup; reserved slugs can't collide with product slugs.
   if (slug && !slug.includes('/')) {
@@ -229,6 +235,7 @@ async function sitemapResponse(env, cats) {
   const urls = [`${SITE}/`, `${SITE}/log-viewer/`]
   for (const cat of cats.filter((c) => c.live)) {
     urls.push(`${SITE}${cat.path_prefix}/`)
+    urls.push(`${SITE}${cat.path_prefix}/browse/`)
     const masters = await all(
       env,
       `SELECT m.slug, COALESCE(m.power,'electric') AS power, m.role_tags,
