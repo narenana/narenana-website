@@ -69,9 +69,10 @@ export function validLandings(masters, min = 3) {
   return out
 }
 
-// Every ready master with >=1 approved offer — the exact set the XML sitemap
-// lists. Powers the /browse/ HTML sitemap so every product page has a crawlable
-// internal link (the XML sitemap lists URLs; this passes link equity to them).
+// Every IN-STOCK ready master (>=1 live approved offer). Powers the /browse/
+// HTML sitemap. In-stock only by design: we don't funnel crawl equity or
+// shoppers to products we can't currently sell. any_stock is kept for
+// validLandings (which filters on it) and is always 1 here.
 export async function browseData(env, cat) {
   return all(
     env,
@@ -82,6 +83,7 @@ export async function browseData(env, cat) {
      JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready'
      GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
      ORDER BY m.brand COLLATE NOCASE, m.name COLLATE NOCASE`,
     cat.id,
   )
@@ -101,7 +103,6 @@ const BZ_CSS = `<style>
 .bz-list li,.bz-land li{break-inside:avoid;margin:0 0 7px;font-size:14px;line-height:1.32}
 .bz a{color:var(--ink);text-decoration:none}.bz a:hover{color:var(--orange-deep);text-decoration:underline}
 .bz-land a{color:var(--orange-deep);font-weight:600}
-.bz-oos{font-size:11px;color:var(--muted);white-space:nowrap}
 </style>`
 
 // HTML sitemap / "browse all" hub: every landing page + every product link,
@@ -134,7 +135,7 @@ export function renderBrowse(cat, masters, landings) {
     .map((role) => {
       const items = groups
         .get(role)
-        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a>${m.any_stock ? '' : ' <span class="bz-oos">· out of stock</span>'}</li>`)
+        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a></li>`)
         .join('')
       return `<section class="bz-sec"><h2 id="${esc(SLUG_OF_ROLE[role] || 'other')}">${esc(ROLE_H1[role] || 'Other')}<span class="bz-n">${groups.get(role).length}</span></h2><ul class="bz-list">${items}</ul></section>`
     })
@@ -144,7 +145,7 @@ export function renderBrowse(cat, masters, landings) {
   const body = `<main class="bz">
 <nav class="bz-crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="${pfx}/">${esc(cat.name)}</a> › All models</nav>
 <h1 class="bz-h1">All RC plane models</h1>
-<p class="bz-lede">Every model in the catalog — ${total} in all — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
+<p class="bz-lede">Every RC plane currently in stock — ${total} models — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
 <section class="bz-sec"><h2>Browse by category</h2><ul class="bz-land">${landingLinks}</ul></section>
 ${sections}
 </main>${BZ_CSS}`
