@@ -246,7 +246,9 @@ async function sitemapResponse(env, cats) {
       cat.id,
     )
     for (const s of validLandings(masters)) urls.push(`${SITE}${cat.path_prefix}/${s}/`)
-    for (const m of masters) urls.push(`${SITE}${cat.path_prefix}/${m.slug}/`)
+    // In-stock only — don't feed Google product pages we can't currently sell.
+    // Regenerates live each request, so pages auto-drop/return with stock.
+    for (const m of masters) if (m.any_stock) urls.push(`${SITE}${cat.path_prefix}/${m.slug}/`)
   }
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>`
   return new Response(xml, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } })
