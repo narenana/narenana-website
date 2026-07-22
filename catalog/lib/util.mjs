@@ -13,6 +13,18 @@ export const inr = (n) => '₹' + Number(n).toLocaleString('en-IN')
 export const slugify = (s = '') => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
 export const normName = (s = '') => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
+// FNV-1a of the source URL → stable R2 object key. The /img proxy (serve path)
+// and the warm job (backfill path) MUST agree on this, so it lives here. A
+// changed source URL naturally maps to a new key and re-fetch.
+export const imgKey = (src) => {
+  let h = 0x811c9dc5
+  for (let i = 0; i < src.length; i++) {
+    h ^= src.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return 'i/' + (h >>> 0).toString(16)
+}
+
 // --- URL canonicalization -------------------------------------------------
 // THE identity rule for secondary matching (primary is platform_pid). Any
 // change to this function MUST bump NORM_VERSION and ship a merge migration —

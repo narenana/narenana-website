@@ -9,7 +9,7 @@ import { gridDataNext, renderGridNext, resolveLanding, validLandings } from './g
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
-import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge } from './util.mjs'
+import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge, imgKey } from './util.mjs'
 
 // --- categories cache (per-isolate, 60s) — saves a D1 query on most requests
 let catCache = { at: 0, rows: [] }
@@ -245,9 +245,9 @@ async function sitemapResponse(env, cats) {
   return new Response(xml, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } })
 }
 
-// FNV-1a of the source URL → stable R2 key (dedups images shared across masters;
-// a changed source URL naturally gets a new key + re-fetch).
-const imgKey = (src) => { let h = 0x811c9dc5; for (let i = 0; i < src.length; i++) { h ^= src.charCodeAt(i); h = Math.imul(h, 0x01000193) } return 'i/' + (h >>> 0).toString(16) }
+// imgKey (FNV-1a of the source URL → stable R2 key) lives in util.mjs so the
+// warm job agrees on the key. Dedups images shared across masters; a changed
+// source URL naturally gets a new key + re-fetch.
 const IMG_CDN = /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com|wixstatic\.com)$/
 const IMG_CACHE = { 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800', 'x-content-type-options': 'nosniff' }
 
@@ -752,7 +752,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich|dedup|classify)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich|dedup|classify|warm)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })

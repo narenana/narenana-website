@@ -20,7 +20,7 @@ import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } fr
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
 import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
 import { storeSnapshot } from './snapshot.mjs'
-import { now } from './util.mjs'
+import { now, imgKey } from './util.mjs'
 
 // Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
 // fetch attempts + ~3 D1 calls) under the ~50-subrequest invocation cap.
@@ -63,11 +63,86 @@ export async function runSlice(env, trigger = 'cron') {
       const cl = await classifySlice(env, trigger)
       if (cl) return cl
     }
+    // Proactively copy seller images into R2, before any view and before a
+    // seller can go down. Alternate 15-min slots so a large warm backlog can't
+    // starve verify (warm returns null when there's nothing left to back up, so
+    // in steady state verify still gets these ticks too).
+    if ((await getSetting(env, 'warm_paused')) !== '1' && Math.floor(t / 9e5) % 2 === 0) {
+      const w = await warmSlice(env, trigger)
+      if (w) return w
+    }
     if ((await getSetting(env, 'verify_paused')) !== '1') return await verifySlice(env, trigger)
     return { idle: true }
   } finally {
     await run(env, "UPDATE setting SET v='0' WHERE k='lease:jobs'")
   }
+}
+
+// ---------------------------------------------------------------- warm slice
+// Back up into R2 every seller image the /img proxy could serve, so a down /
+// slow / geo-blocked / WAF-guarded seller can't blank the catalog — and so it
+// happens BEFORE the first view rather than depending on one. Budget-safe:
+// WARM_SCAN R2 head-checks (cheap reconciliation of already-warmed images) and
+// at most WARM_FETCH origin fetches per tick. Images a datacenter fetch can't
+// retrieve (403/401/429 from a CDN/WAF) are recorded status='blocked' for a
+// local-browser pull; everything else is copied and recorded 'ok'.
+const WARM_SCAN = 8
+const WARM_FETCH = 5
+const WARM_RETRY = 3 * DAY // don't re-attempt a blocked/errored image more often than this
+
+async function warmSlice(env, trigger) {
+  if (!env.IMAGES) return null
+  const t = now()
+  // Every URL /img/master and /img/sku could resolve to, minus what's already
+  // OK or was tried within the retry window.
+  const rows = await all(
+    env,
+    `SELECT u FROM (
+        SELECT hero_image AS u FROM master_model WHERE hero_image IS NOT NULL AND status IN ('ready','retired')
+        UNION
+        SELECT image_url AS u FROM sku WHERE image_url IS NOT NULL AND dead=0
+     )
+     WHERE u NOT IN (SELECT src FROM image_cache WHERE status='ok' OR updated_at > ?)
+     LIMIT ?`,
+    t - WARM_RETRY,
+    WARM_SCAN,
+  )
+  if (!rows.length) return null // nothing to back up → yield the tick to verify
+
+  const stmts = []
+  const rec = (src, k, status, http, bytes) =>
+    stmts.push(
+      q(
+        env,
+        `INSERT INTO image_cache (src,k,status,http,bytes,updated_at) VALUES (?,?,?,?,?,?)
+         ON CONFLICT(src) DO UPDATE SET k=excluded.k, status=excluded.status, http=excluded.http, bytes=excluded.bytes, updated_at=excluded.updated_at`,
+        src, k, status, http, bytes, t,
+      ),
+    )
+  let ok = 0, blocked = 0, errored = 0, fetched = 0
+  for (const { u } of rows) {
+    const k = imgKey(u)
+    // Already durable in R2 (warmed earlier, or by the proxy on a prior view)?
+    // Just reconcile the ledger — no seller hit.
+    const head = await env.IMAGES.head(k)
+    if (head) { rec(u, k, 'ok', 200, head.size); ok++; continue }
+    if (fetched >= WARM_FETCH) continue // out of fetch budget; this one waits for next tick
+    fetched++
+    let res
+    try {
+      const host = new URL(u).host
+      res = await fetch(u, { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${host}/` } })
+    } catch { rec(u, k, 'error', 0, null); errored++; continue }
+    const ct = res.headers.get('content-type') || 'image/jpeg'
+    if (res.status === 401 || res.status === 403 || res.status === 429) { rec(u, k, 'blocked', res.status, null); blocked++; continue }
+    if (!res.ok || !/^image\//i.test(ct)) { rec(u, k, 'error', res.status, null); errored++; continue }
+    const buf = await res.arrayBuffer()
+    await env.IMAGES.put(k, buf, { httpMetadata: { contentType: ct } })
+    rec(u, k, 'ok', res.status, buf.byteLength)
+    ok++
+  }
+  if (stmts.length) await batch(env, stmts)
+  return { slice: 'warm', scanned: rows.length, ok, blocked, errored, fetched }
 }
 
 // ---------------------------------------------------------------- scan slice
