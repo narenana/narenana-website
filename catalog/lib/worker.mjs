@@ -223,7 +223,10 @@ const SITE = 'https://www.narenana.com'
 // sitemap.xml: homepage + each live category + its valid landing pages (>=3
 // in-stock) + every ready product page.
 async function sitemapResponse(env, cats) {
-  const urls = [`${SITE}/`]
+  // Main site + the /log-viewer/ tool (this route shadows the static
+  // site/sitemap.xml, so those entries must live here now). The FPV simulator
+  // is on its own subdomain and ships its own sitemap.
+  const urls = [`${SITE}/`, `${SITE}/log-viewer/`]
   for (const cat of cats.filter((c) => c.live)) {
     urls.push(`${SITE}${cat.path_prefix}/`)
     const masters = await all(

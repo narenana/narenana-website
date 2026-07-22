@@ -1,13 +1,22 @@
 # Crawl policy for narenana.com
 #
-# Allow everything by default — both the landing page and the
-# /log-viewer/ subpath (which is a separate Cloudflare Pages project
-# proxied through this Worker; that origin's own robots.txt is not
-# user-visible).
+# Open to crawlers by default. This covers three surfaces on this host:
+#   /            the landing page (main website)
+#   /log-viewer/ the EdgeTX / iNAV / Betaflight log viewer — a separate
+#                Cloudflare Pages app proxied through this Worker
+#   /wings/      the RC-plane catalog (category, landing and product pages)
+# The password-gated admin panel and its JSON API are disallowed — they carry
+# no crawl value and 401 anyway.
 #
-# The sitemap lists canonical URLs that should be indexed.
+# Sitemaps: the primary one lists the landing page, /log-viewer/ and every
+# /wings/ page. The Nanawing FPV simulator runs on its own subdomain
+# (sim.narenana.com) and ships its own sitemap, referenced below so this file
+# is a complete index of the property.
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /api/
 
 Sitemap: https://www.narenana.com/sitemap.xml
+Sitemap: https://sim.narenana.com/sitemap.xml
