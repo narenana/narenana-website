@@ -9,6 +9,7 @@ import assert from 'node:assert/strict'
 import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
+import { popScores, availabilityFactor } from '../lib/popularity.mjs'
 import { renderGridNext } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 
@@ -45,6 +46,48 @@ test('detectConfig: rtf > pnp > combo > kit', () => {
   assert.equal(detectConfig('Wing combo with motor and ESC'), 'combo')
   assert.equal(detectConfig('Balsa kit — laser cut'), 'kit')
   assert.equal(detectConfig('Plug and play version'), 'pnp')
+})
+
+// ------------------------------------------------------ popularity scoring
+test('popScores: more views + broader coverage ranks higher', () => {
+  const now = 1_750_000_000_000
+  const recent = now - 10 * 86400e3
+  const popular = popScores({ videos: [{ views: 500000, published_at: recent }, { views: 120000, published_at: recent }, { views: 40000, published_at: recent }], sellers: 3, anyStock: 1, nowMs: now })
+  const niche = popScores({ videos: [{ views: 800, published_at: recent }], sellers: 1, anyStock: 1, nowMs: now })
+  assert.ok(popular.raw > niche.raw, 'view sum + breadth lifts raw score')
+  assert.ok(popular.score > niche.score)
+})
+
+test('popScores: one viral video cannot dwarf broad coverage (log compression)', () => {
+  const now = 1_750_000_000_000
+  const at = now - 30 * 86400e3
+  const oneViral = popScores({ videos: [{ views: 5_000_000, published_at: at }], sellers: 1, anyStock: 1, nowMs: now })
+  const manyReviews = popScores({ videos: Array.from({ length: 12 }, () => ({ views: 60000, published_at: at })), sellers: 1, anyStock: 1, nowMs: now })
+  // both are "popular"; log-compression + breadth keep them within a factor of ~2, not 10x
+  assert.ok(manyReviews.raw > oneViral.raw * 0.6 && oneViral.raw > manyReviews.raw * 0.6)
+})
+
+test('popScores: empty coverage scores zero', () => {
+  const r = popScores({ videos: [], sellers: 2, anyStock: 1, nowMs: 1_750_000_000_000 })
+  assert.equal(r.raw, 0)
+  assert.equal(r.score, 0)
+})
+
+test('popScores: excluded videos do not count', () => {
+  const now = 1_750_000_000_000
+  const withExcluded = popScores({ videos: [{ views: 999999, published_at: now, excluded: 1 }, { views: 1000, published_at: now }], sellers: 1, anyStock: 1, nowMs: now })
+  const withoutIt = popScores({ videos: [{ views: 1000, published_at: now }], sellers: 1, anyStock: 1, nowMs: now })
+  assert.equal(withExcluded.raw, withoutIt.raw)
+})
+
+test('availabilityFactor: OOS is damped, in-stock + sellers is boosted', () => {
+  const now = 1_750_000_000_000
+  const vids = [{ views: 100000, published_at: now }, { views: 100000, published_at: now }]
+  const oos = popScores({ videos: vids, sellers: 0, anyStock: 0, nowMs: now })
+  const inStock = popScores({ videos: vids, sellers: 4, anyStock: 1, nowMs: now })
+  assert.equal(oos.raw, inStock.raw, 'raw interest is identical — availability only affects the buyable score')
+  assert.ok(inStock.score > oos.score, 'in-stock + multi-seller outranks OOS on the buyable grid')
+  assert.ok(availabilityFactor({ sellers: 0, anyStock: 0 }) < availabilityFactor({ sellers: 5, anyStock: 1 }))
 })
 
 test('isChallenge: bot walls are recognised, real pages are not', () => {

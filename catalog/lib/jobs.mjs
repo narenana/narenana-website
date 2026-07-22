@@ -19,6 +19,7 @@ import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpan
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
 import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
+import { popScores } from './popularity.mjs'
 import { storeSnapshot } from './snapshot.mjs'
 import { now, imgKey } from './util.mjs'
 
@@ -62,6 +63,10 @@ export async function runSlice(env, trigger = 'cron') {
     if ((await getSetting(env, 'classify_paused')) !== '1') {
       const cl = await classifySlice(env, trigger)
       if (cl) return cl
+    }
+    if ((await getSetting(env, 'popularity_paused')) !== '1') {
+      const p = await popularitySlice(env, trigger)
+      if (p) return p
     }
     // Proactively copy seller images into R2, before any view and before a
     // seller can go down. Alternate 15-min slots so a large warm backlog can't
@@ -469,6 +474,155 @@ async function classifySlice(env, trigger) {
   }
   await batch(env, stmts)
   return { job: 'classify', trigger, classified: rows.length, ai: aiCalls, log }
+}
+
+// ---------------------------------------------------------------- popularity slice
+// A sense of consumer interest per master, so the grid can default-sort by demand
+// and content investment can target the models people actually care about. Signal
+// = YouTube coverage (view sums + breadth + recency), folded with the seller/stock
+// signals already in D1. Dual output: pop_raw (content priority) and pop_score
+// (buyable-grid sort — an unobtainable model never tops the shop). The matched
+// videos persist in master_video: score inputs now, review embeds later.
+//
+// Free-plan discipline, exactly like the other slices: re-poll each master at most
+// weekly (oldest first), a few per slice, and never exceed the daily YouTube quota
+// (a persisted counter, reset at UTC midnight). Returns null when the key is unset,
+// nothing is due, or the day's quota is spent — so verify still gets the tick.
+const POP_REFRESH = 7 * DAY // re-poll each master no more often than weekly
+const POP_PER_SLICE = 3 // masters per slice (each ≈ 101 YouTube quota units)
+const YT_UNITS_PER_MASTER = 101 // search.list (100) + videos.list (1)
+const YT_DAILY_CAP = 9000 // headroom under the 10,000-units/day free quota
+
+async function popularitySlice(env, trigger) {
+  if (!env.YT_API_KEY) return null // no key → feature dormant, yield the tick to verify
+  const t = now()
+  // Daily quota budget, persisted; resets when the UTC day rolls over.
+  const dayStart = t - (t % DAY)
+  let quota = JSON.parse((await getSetting(env, 'yt_quota')) ?? '{}')
+  if (quota.day !== dayStart) quota = { day: dayStart, units: 0 }
+  if (quota.units >= YT_DAILY_CAP) return null // spent for today → let verify have the slice
+
+  // Masters due for a (re)poll: never polled, or older than POP_REFRESH. Only
+  // ready/draft masters WITH offers — one with no listings has nothing to rank
+  // and no seller signal. Oldest (or never) polled first.
+  const rows = await all(
+    env,
+    `SELECT m.id, m.brand, m.name, m.category_id, c.triage,
+            COUNT(DISTINCT k.source_id) AS sellers,
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+     FROM master_model m
+     JOIN offer o ON o.master_model_id=m.id
+     JOIN sku k ON k.id=o.sku_id
+     LEFT JOIN category c ON c.id=m.category_id
+     WHERE m.status IN ('ready','draft')
+       AND (m.pop_updated_at IS NULL OR m.pop_updated_at < ?)
+     GROUP BY m.id
+     ORDER BY m.pop_updated_at IS NOT NULL, COALESCE(m.pop_updated_at,0) ASC
+     LIMIT ?`,
+    t - POP_REFRESH,
+    POP_PER_SLICE,
+  )
+  if (!rows.length) return null // nothing due — let verify have the slice
+
+  const log = []
+  let unitsUsed = 0
+  for (const m of rows) {
+    if (quota.units + unitsUsed + YT_UNITS_PER_MASTER > YT_DAILY_CAP) break
+    const triage = (() => { try { return JSON.parse(m.triage ?? '{}') } catch { return {} } })()
+    // Query template is category DATA (never a hardcoded regex), so model-name
+    // disambiguation ("Interceptor" → games/cars) is per-category and re-tunable.
+    const tmpl = triage.popQuery || '{brand} {name} rc plane'
+    const query = tmpl.replace('{brand}', m.brand ?? '').replace('{name}', m.name ?? '').replace(/\s+/g, ' ').trim()
+
+    let videos
+    try {
+      videos = await ytSearchVideos(env, query)
+      unitsUsed += 100
+      if (videos.length) {
+        await ytFillStats(env, videos)
+        unitsUsed += 1
+      }
+    } catch (e) {
+      // Stamp pop_updated_at anyway so a persistently-failing model doesn't wedge
+      // the cursor and starve the rest of the queue.
+      await run(env, `UPDATE master_model SET pop_updated_at=? WHERE id=?`, t, m.id)
+      log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: YT error ${String(e.message || e).slice(0, 50)}`)
+      continue
+    }
+
+    // Preserve admin pin/exclude flags across re-polls (upsert never clobbers them).
+    const existing = await all(env, `SELECT video_id, pinned, excluded FROM master_video WHERE master_model_id=?`, m.id)
+    const flags = new Map(existing.map((r) => [r.video_id, r]))
+    const stmts = videos.map((v, i) =>
+      q(
+        env,
+        `INSERT INTO master_video (master_model_id, video_id, title, channel, views, published_at, rank, pinned, excluded, fetched_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?)
+         ON CONFLICT(master_model_id, video_id) DO UPDATE SET
+           title=excluded.title, channel=excluded.channel, views=excluded.views,
+           published_at=excluded.published_at, rank=excluded.rank, fetched_at=excluded.fetched_at`,
+        m.id, v.videoId, v.title, v.channel, v.views ?? null, v.publishedAt ?? null, i,
+        flags.get(v.videoId)?.pinned ?? 0, flags.get(v.videoId)?.excluded ?? 0, t,
+      ),
+    )
+    if (stmts.length) await batch(env, stmts)
+
+    // Score from the PERSISTED set — naturally includes admin-pinned videos a
+    // later search dropped, and excludes admin-excluded ones.
+    const scored = await all(env, `SELECT views, published_at FROM master_video WHERE master_model_id=? AND excluded=0`, m.id)
+    const { raw, score, signals } = popScores({ videos: scored, sellers: m.sellers, anyStock: m.any_stock, nowMs: t })
+    await run(
+      env,
+      `UPDATE master_model SET pop_raw=?, pop_score=?, pop_signals=?, pop_updated_at=? WHERE id=?`,
+      raw, score, JSON.stringify(signals), t, m.id,
+    )
+    log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: ${videos.length} vids Σ${signals.viewSum} → raw ${raw} / score ${score}`)
+  }
+  quota.units += unitsUsed
+  await setSetting(env, 'yt_quota', JSON.stringify(quota))
+  return { job: 'popularity', trigger, polled: rows.length, units: unitsUsed, log }
+}
+
+// YouTube Data API v3 — search for a model's videos (100 quota units). Returns
+// [{videoId, title, channel, publishedAt(ms), views:null}]; views filled by
+// ytFillStats. Region/language biased to the Indian, English-speaking audience.
+async function ytSearchVideos(env, query) {
+  const u = new URL('https://www.googleapis.com/youtube/v3/search')
+  u.searchParams.set('part', 'snippet')
+  u.searchParams.set('type', 'video')
+  u.searchParams.set('order', 'relevance')
+  u.searchParams.set('maxResults', '15')
+  u.searchParams.set('regionCode', 'IN')
+  u.searchParams.set('relevanceLanguage', 'en')
+  u.searchParams.set('q', query)
+  u.searchParams.set('key', env.YT_API_KEY)
+  const r = await fetch(u, { headers: { accept: 'application/json' } })
+  if (!r.ok) throw new Error(`search ${r.status}`)
+  const j = await r.json()
+  return (j.items || [])
+    .filter((it) => it.id?.videoId)
+    .map((it) => ({
+      videoId: it.id.videoId,
+      title: (it.snippet?.title ?? '').slice(0, 200),
+      channel: (it.snippet?.channelTitle ?? '').slice(0, 120),
+      publishedAt: it.snippet?.publishedAt ? Date.parse(it.snippet.publishedAt) || null : null,
+      views: null,
+    }))
+}
+
+// Fill viewCount for a batch of videos (≤50 ids, 1 quota unit). Mutates in place.
+async function ytFillStats(env, videos) {
+  const ids = videos.map((v) => v.videoId).slice(0, 50)
+  if (!ids.length) return
+  const u = new URL('https://www.googleapis.com/youtube/v3/videos')
+  u.searchParams.set('part', 'statistics')
+  u.searchParams.set('id', ids.join(','))
+  u.searchParams.set('key', env.YT_API_KEY)
+  const r = await fetch(u, { headers: { accept: 'application/json' } })
+  if (!r.ok) throw new Error(`videos ${r.status}`)
+  const j = await r.json()
+  const byId = new Map((j.items || []).map((it) => [it.id, Number(it.statistics?.viewCount ?? 0)]))
+  for (const v of videos) v.views = byId.get(v.videoId) ?? 0
 }
 
 // -------------------------------------------------------------- dedup slice

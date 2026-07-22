@@ -671,9 +671,10 @@ async function api(request, url, env, ep, actor) {
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
       ${where} GROUP BY m.id ${orderBy} LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
     for (const m of masters) m.path = `${cats.find((c) => c.id === m.category_id)?.path_prefix ?? ''}/${m.slug}/`
-    // Attach the matched YouTube videos for this page's masters (top by views;
-    // excluded ones last so admin can still see and reconsider them).
-    if (masters.length) {
+    // Attach the matched YouTube videos — only for the popularity view, so the
+    // ordinary Catalog tab never touches master_video (top by views; excluded
+    // ones last so admin can still see and reconsider them).
+    if (sort === 'pop' && masters.length) {
       const ids = masters.map((m) => m.id)
       const vids = await all(env, `SELECT master_model_id, video_id, title, channel, views, published_at, pinned, excluded
         FROM master_video WHERE master_model_id IN (${ids.map(() => '?').join(',')})

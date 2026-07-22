@@ -16,6 +16,10 @@ button.go{background:var(--accent-bright);border-color:var(--accent-bright);colo
 button span{opacity:.6;margin-left:4px;font-weight:500}
 .bar{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(22,27,34,.5)}
 .chip{font-size:.74rem;padding:5px 10px}
+.tsep{width:1px;align-self:stretch;background:var(--border);margin:2px 4px}
+.fgrp{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap}
+.flabel{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);opacity:.8;margin-right:1px}
+.fsep{width:1px;align-self:stretch;background:var(--border);margin:0 6px}
 .wrap{max-width:980px;margin:0 auto;padding:16px 16px 90px}
 .row{display:grid;grid-template-columns:110px 1fr auto;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;align-items:start}
 .row.gone{opacity:.35;transition:opacity .2s}
@@ -37,11 +41,13 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v11</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v12</span></h1>
   <button class="on" data-tab="review">Review</button>
-  <button data-tab="sources">Sources</button>
   <button data-tab="catalog">Catalog</button>
+  <button data-tab="popularity">Popularity</button>
   <button data-tab="dupes">Duplicates</button>
+  <span class="tsep"></span>
+  <button data-tab="sources">Sources</button>
   <button data-tab="system">System</button>
   <span class="grow"></span>
   <button id="run" class="go">Run job slice</button>
@@ -53,6 +59,8 @@ input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg)
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>(s??'').toString().replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const inr=(n)=>'₹'+Number(n).toLocaleString('en-IN');
+const ago=(ms)=>{if(!ms)return 'never';const h=Math.round((Date.now()-ms)/3.6e6);return h<1?'<1h ago':h<48?h+'h ago':Math.round(h/24)+'d ago'};
+const fmtViews=(n)=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.round(n/1e3)+'K':String(n);
 // Resolve against location.origin, NOT the document URL: if the page was
 // opened as http://user:pass@host/admin the document base carries credentials
 // and fetch() refuses to construct the request — the panel dies looking empty.
@@ -96,6 +104,7 @@ async function load(){
     if(tab==='review')d=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src)+'&page='+F.page);
     else if(tab==='sources')d=await api('sources');
     else if(tab==='catalog')d=await api('catalog?page='+F.page+(F.anomaly?'&anomaly=1':''));
+    else if(tab==='popularity')d=await api('catalog?sort=pop&page='+F.page);
     else if(tab==='dupes')d=await api('duplicates');
     else if(tab==='system')d=await api('system');
     if(my!==reqSeq)return;          // a newer load() superseded this one
@@ -103,6 +112,7 @@ async function load(){
     if(tab==='review'){renderFilters();renderReview()}
     else if(tab==='sources')renderSources();
     else if(tab==='catalog')renderCatalog();
+    else if(tab==='popularity')renderPopularity();
     else if(tab==='dupes')renderDupes();
     else if(tab==='system')renderSystem();
   }catch(e){if(my===reqSeq)$('#view').innerHTML='<p class="empty">'+esc(e.message||'load error')+'</p>'}
@@ -113,10 +123,14 @@ function renderFilters(){
   const c=data.counts,sc=data.srcCounts||{},stc=data.stockCounts||{};
   const btn=(grp,val,label,count)=>'<button class="chip '+(F[grp]===val?'on':'')+'" data-g="'+grp+'" data-v="'+val+'">'+label+(count!=null?' <span>'+(count??0)+'</span>':'')+'</button>';
   const srcTotal=Object.values(sc).reduce((a,b)=>a+b,0);
-  $('#filters').innerHTML=
-    btn('status','new','New',c.new)+btn('status','missing','Missing',c.missing)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)+btn('status','removed','Removed',c.removed)
-    +(F.status==='new'?'<span style="width:10px"></span>'+btn('stock','in','In stock',stc.in)+btn('stock','out','Not in stock',stc.out)+btn('stock','all','Any',stc.all):'')
-    +'<span style="width:10px"></span>'+btn('src','','All sellers',srcTotal)+data.sources.map((s)=>btn('src',s.id,s.id,sc[s.id]||0)).join('');
+  // Grouped + labelled so the row reads as Status / Stock / Seller, not one chip soup.
+  const grp=(label,inner)=>'<span class="fgrp"><span class="flabel">'+label+'</span>'+inner+'</span>';
+  const statusChips=btn('status','new','New',c.new)+btn('status','missing','Missing',c.missing)+btn('status','flagged','Flagged',c.flagged)+btn('status','approved','Approved',c.approved)+btn('status','rejected','Rejected',c.rejected)+btn('status','removed','Removed',c.removed);
+  const stockChips=btn('stock','in','In stock',stc.in)+btn('stock','out','Not in stock',stc.out)+btn('stock','all','Any',stc.all);
+  const sellerChips=btn('src','','All',srcTotal)+data.sources.map((s)=>btn('src',s.id,s.id,sc[s.id]||0)).join('');
+  $('#filters').innerHTML=grp('Status',statusChips)
+    +(F.status==='new'?'<span class="fsep"></span>'+grp('Stock',stockChips):'')
+    +'<span class="fsep"></span>'+grp('Seller',sellerChips);
   document.querySelectorAll('#filters .chip').forEach((b)=>b.onclick=()=>{F[b.dataset.g]=b.dataset.v;F.page=1;load()});
 }
 function skuRow(k){
@@ -216,6 +230,29 @@ function renderCatalog(){
   });
 }
 
+// ------- Popularity (admin preview — not yet exposed to customers) -------
+function renderPopularity(){
+  const rows=data.masters||[];
+  const start=((data.page||1)-1)*(data.pageSize||50);
+  const head='<div style="margin-bottom:14px"><p class="title" style="margin:0 0 2px">Popularity ranking <span class="tag w">admin preview</span></p>'
+    +'<p class="meta" style="max-width:640px"><b>Score</b> = YouTube interest (views · breadth of coverage · recency) × availability (in-stock &amp; sellers). <b>Raw</b> is interest alone — the content-priority signal (stays high for import-gap models). Not exposed to customers yet: validate the ordering and the matched videos here. Un-polled models sort last; the poll refreshes ~89 models/day (YouTube quota), so a full first pass takes a day or two.</p></div>';
+  if(!rows.length){$('#view').innerHTML=head+'<p class="empty">No models yet.</p>';return}
+  $('#view').innerHTML=head+'<table class="t"><thead><tr><th style="width:30px">#</th><th>Model</th><th style="width:118px">Score</th><th>Matched YouTube videos</th><th style="width:64px">Offers</th></tr></thead><tbody>'
+    +rows.map((m,i)=>{
+      const vids=(m.videos||[]).map((v)=>'<div class="meta" style="'+(v.excluded?'opacity:.4;text-decoration:line-through':'')+'">'+(v.pinned?'📌 ':'▸ ')
+        +'<a href="https://youtu.be/'+esc(v.video_id)+'" target="_blank" rel="noopener">'+esc((v.title||'(untitled)').slice(0,64))+'</a> · '+fmtViews(v.views)+' views'+(v.channel?' · '+esc(v.channel):'')+'</div>').join('')
+        ||'<span class="meta">'+(m.pop_updated_at?'no videos matched':'not polled yet')+'</span>';
+      const score=m.pop_score!=null
+        ? '<b style="font-size:1rem">'+(Math.round(m.pop_score*10)/10)+'</b><div class="meta">raw '+(Math.round((m.pop_raw||0)*10)/10)+' · '+ago(m.pop_updated_at)+'</div>'
+        : '<span class="tag">—</span>';
+      return '<tr><td class="meta">'+(m.pop_score!=null?start+i+1:'')+'</td>'
+        +'<td style="min-width:150px"><b>'+esc(m.brand||'')+'</b> '+esc(m.name||'')+'<div class="meta"><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span> · '+esc(m.status)+' · <a href="'+esc(m.path)+'" target="_blank">page ↗</a></div></td>'
+        +'<td>'+score+'</td><td style="min-width:260px">'+vids+'</td>'
+        +'<td class="meta">'+m.offers+' ('+m.live_offers+')</td></tr>'}).join('')
+    +'</tbody></table>'+pager(data.total,data.pageSize,data.page||1);
+  wirePager();
+}
+
 // ------- Duplicates -------
 const DD_CSS='<style>.dd-pair{border:1px solid var(--line,#e5ddc9);border-radius:10px;padding:12px;margin-bottom:14px;background:var(--card,#fcf9f1)}'
   +'.dd-cols{display:flex;gap:10px;align-items:flex-start}.dd-side{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}'
@@ -269,7 +306,7 @@ function renderSystem(){
   const healthTable='<h3>Source health</h3><table class="t"><thead><tr><th>Source</th><th>Last scan</th><th>Oldest verify</th><th>Live</th><th>Flagged</th><th>Removed</th></tr></thead><tbody>'
     +health.map((r)=>{const stale=r.last_scan&&(Date.now()-r.last_scan)>36*3.6e6;return '<tr><td>'+esc(r.source_id)+'</td><td'+(stale?' style="color:var(--bad)"':'')+'>'+ago(r.last_scan)+'</td><td>'+ago(r.oldest_verify)+'</td><td>'+(r.live||0)+'</td><td'+(r.flagged>0?' style="color:var(--warn)"':'')+'>'+(r.flagged||0)+'</td><td>'+(r.removed||0)+'</td></tr>'}).join('')
     +'</tbody></table>';
-  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('dedup_paused','Dedup')+' '+tog('verify_paused','Verify')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
+  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('dedup_paused','Dedup')+' '+tog('verify_paused','Verify')+' '+tog('popularity_paused','Popularity')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
     +'<p class="meta">scan cursor: <pre>'+esc(s.scan_cursor||'—')+'</pre></p>'
     +healthTable
     +'<h3>Recent audit</h3><table class="t"><tbody>'
