@@ -46,6 +46,7 @@ input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg)
   <button data-tab="catalog">Catalog</button>
   <button data-tab="popularity">Popularity</button>
   <button data-tab="dupes">Duplicates</button>
+  <button data-tab="mfr">Manufacturer</button>
   <span class="tsep"></span>
   <button data-tab="sources">Sources</button>
   <button data-tab="system">System</button>
@@ -106,6 +107,7 @@ async function load(){
     else if(tab==='catalog')d=await api('catalog?page='+F.page+(F.anomaly?'&anomaly=1':''));
     else if(tab==='popularity')d=await api('catalog?sort=pop&page='+F.page);
     else if(tab==='dupes')d=await api('duplicates');
+    else if(tab==='mfr')d=await api('mfr-matches?status='+(F.mfrStatus||'pending'));
     else if(tab==='system')d=await api('system');
     if(my!==reqSeq)return;          // a newer load() superseded this one
     data=d;
@@ -114,6 +116,7 @@ async function load(){
     else if(tab==='catalog')renderCatalog();
     else if(tab==='popularity')renderPopularity();
     else if(tab==='dupes')renderDupes();
+    else if(tab==='mfr')renderMfr();
     else if(tab==='system')renderSystem();
   }catch(e){if(my===reqSeq)$('#view').innerHTML='<p class="empty">'+esc(e.message||'load error')+'</p>'}
 }
@@ -295,6 +298,37 @@ function renderDupes(){
     b.disabled=true;
     try{await api(b.dataset.dd==='merge'?'merge':'reject-merge',{aId:keep,bId:drop});load()}catch(e){alert(e.message);b.disabled=false}
   });
+}
+
+// ------- Manufacturer matches (admin verify; no consumer surface) -------
+const MFR_CSS='<style>.mf-pair{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;background:var(--card)}'
+  +'.mf-top{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}'
+  +'.mf-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.03em}'
+  +'.mf-accept{background:#123d29;color:#3fb950}.mf-review{background:#3d3312;color:#d29922}.mf-conflict{background:#3d1212;color:#f85149}'
+  +'.mf-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mf-side{font-size:13px;min-width:0}'
+  +'.mf-lbl{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.05em}.mf-nm{font-weight:600;margin:2px 0}'
+  +'.mf-img{max-width:100%;max-height:110px;object-fit:contain;background:#fff;border-radius:6px;margin-top:6px}'
+  +'.mf-desc{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4;max-height:60px;overflow:hidden}'
+  +'.mf-foot{display:flex;gap:8px;margin-top:10px}.mf-ok{color:var(--ok)}.mf-bad{color:var(--bad);font-weight:700}</style>';
+function renderMfr(){
+  var rows=(data.matches||[]),c=(data.counts||{}),cur=(F.mfrStatus||'pending');
+  var span=function(sp){try{var v=JSON.parse(sp||'{}').spanMM;return v>0?v:null}catch(e){return null}};
+  var tab=function(k,l){return '<button class="chip'+(cur===k?' on':'')+'" data-mfrs="'+k+'">'+l+' '+(c[k]||0)+'</button>'};
+  var card=function(r){
+    var os=span(r.specs),ms=r.mfr_span;
+    var sc=os&&ms?(os===ms?'<span class="mf-ok">span '+os+' ✓</span>':'<span class="mf-bad">span '+os+' vs '+ms+' ⚠</span>'):'span '+(os||'?')+'/'+(ms||'?');
+    var img='';try{var im=JSON.parse(r.image_urls||'[]');if(im[0])img='<img class="mf-img" src="'+esc(im[0])+'" loading="lazy"/>'}catch(e){}
+    var bcls=r.tier==='accept'?'mf-accept':(r.span_agree===0?'mf-conflict':'mf-review');
+    return '<div class="mf-pair"><div class="mf-top"><span class="mf-badge '+bcls+'">'+esc(r.tier)+'</span><span class="meta">'+sc+' · '+Math.round(r.score*100)+'% · '+esc(r.mfr_brand||'')+' ('+esc(r.strategy||'')+')</span></div>'
+      +'<div class="mf-cols"><div class="mf-side"><div class="mf-lbl">OUR MODEL</div><div class="mf-nm">'+esc(r.brand)+' '+esc(r.name)+'</div><div class="meta">span '+(os||'—')+' · <a href="'+esc(r.path_prefix)+'/'+esc(r.slug)+'/" target="_blank">page ↗</a></div></div>'
+      +'<div class="mf-side"><div class="mf-lbl">MANUFACTURER</div><div class="mf-nm">'+esc(r.mfr_title||'—')+'</div><div class="meta">span '+(ms||'—')+' · <a href="'+esc(r.mfr_url||'#')+'" target="_blank" rel="noopener">official ↗</a> · '+(r.body_len||0)+'c</div>'+img+'<div class="mf-desc">'+esc((r.body_preview||'').slice(0,300))+'</div></div></div>'
+      +(cur==='pending'?'<div class="mf-foot"><button class="ok" data-mfr="accept" data-id="'+r.master_model_id+'">✓ Accept</button><button class="no" data-mfr="reject" data-id="'+r.master_model_id+'">✕ Reject</button></div>':'')
+      +'</div>';
+  };
+  $('#view').innerHTML=MFR_CSS+'<div class="bar" style="border:none">'+tab('pending','Pending')+' '+tab('accepted','Accepted')+' '+tab('rejected','Rejected')+'<span class="meta" style="align-self:center;margin-left:8px">manufacturer-sourced matches — accepting only marks eligibility; nothing renders on the consumer site yet.</span></div>'
+    +(rows.length?rows.map(card).join(''):'<p class="empty">No '+cur+' matches. Run the local batch + load to D1.</p>');
+  document.querySelectorAll('button[data-mfrs]').forEach(function(b){b.onclick=function(){F.mfrStatus=b.dataset.mfrs;load()}});
+  document.querySelectorAll('button[data-mfr]').forEach(function(b){b.onclick=async function(){b.disabled=true;try{await api('mfr-decide',{masterId:+b.dataset.id,decision:b.dataset.mfr});var p=b.closest('.mf-pair');if(p)p.style.opacity=.3}catch(e){alert(e.message);b.disabled=false}}});
 }
 
 // ------- System -------

@@ -837,6 +837,39 @@ async function api(request, url, env, ep, actor) {
     return json({ ok: true, snapshotsWithDesc: rows.length, changedToGas: changed.length, changed })
   }
 
+  // ---- manufacturer-match review (admin-only; no consumer surface) ----
+  if (ep === 'mfr-matches' && request.method === 'GET') {
+    const status = url.searchParams.get('status') || 'pending'
+    const rows = await all(
+      env,
+      `SELECT mm.master_model_id, mm.mfr_product_id, mm.score, mm.span_agree, mm.tier, mm.status,
+              m.brand, m.name, m.slug, m.specs, c.path_prefix,
+              p.title AS mfr_title, p.url AS mfr_url, p.span_mm AS mfr_span, p.image_urls,
+              substr(p.body_text,1,600) AS body_preview, length(p.body_text) AS body_len,
+              mf.brand AS mfr_brand, mf.domain, mf.strategy
+       FROM mfr_match mm
+       JOIN master_model m ON m.id=mm.master_model_id
+       JOIN category c ON c.id=m.category_id
+       LEFT JOIN mfr_product p ON p.id=mm.mfr_product_id
+       LEFT JOIN manufacturer mf ON mf.id=p.manufacturer_id
+       WHERE mm.status=?
+       ORDER BY CASE mm.tier WHEN 'review' THEN 0 WHEN 'accept' THEN 1 ELSE 2 END, mm.score DESC
+       LIMIT 500`,
+      status,
+    )
+    const counts = {}
+    for (const r of await all(env, `SELECT status, COUNT(*) n FROM mfr_match GROUP BY status`)) counts[r.status] = r.n
+    return json({ matches: rows, counts })
+  }
+
+  if (ep === 'mfr-decide' && request.method === 'POST') {
+    const s = body.decision === 'accept' ? 'accepted' : body.decision === 'reject' ? 'rejected' : null
+    if (!s || !body.masterId) return json({ error: 'need masterId + decision' }, 400)
+    await run(env, `UPDATE mfr_match SET status=?, decided_by=?, decided_at=? WHERE master_model_id=?`, s, actor, now(), body.masterId)
+    await audit(env, actor, 'mfr-' + body.decision, 'mfr_match', body.masterId, {}).run?.()
+    return json({ ok: true })
+  }
+
   if (ep === 'system' && request.method === 'GET') {
     const settings = {}
     for (const r of await all(env, 'SELECT k, v FROM setting')) settings[r.k] = r.v
