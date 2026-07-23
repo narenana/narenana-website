@@ -9,6 +9,7 @@
 //   jsonld  — sitemap → product pages → schema.org Product (+ og:description)
 //   todo    — needs a per-domain parser (site has no Shopify/JSON-LD)
 import { spanOf } from './mfr-match.mjs'
+import { HTML_PARSERS } from './mfr-html.mjs'
 
 const UA = { 'user-agent': 'Mozilla/5.0 (compatible; narenana-mfr/1.0)' }
 const F = (u) => fetch(u, { headers: UA, redirect: 'follow', signal: AbortSignal.timeout(15000) })
@@ -30,14 +31,15 @@ export const STRATEGIES = {
   // horizonhobby: JSON-LD carries brand+description; product URLs don't encode
   // brand, so scope by fetched JSON-LD brand. Carries E-flite/Hangar 9.
   'horizonhobby.com': { via: 'jsonld', sitemaps: ['/sitemap_0-product.xml', '/sitemap_1-product.xml'], urlIncludes: '/product/', scopeByBrandInLd: true, max: 400 },
-  // ---- researched but NOT yet parseable (own per-domain pass needed) ----
-  'seagullmodels.com': { via: 'todo', note: 'ASP.NET, no JSON-LD/sitemap-of-products; needs HTML selectors' },
-  'rc-factory.eu': { via: 'todo', note: 'custom; sitemap has no product URLs by default pattern' },
-  'multiplex-rc.de': { via: 'todo', note: 'custom; nested userdata sitemaps' },
-  'pilot-rc.com': { via: 'todo', note: 'WordPress (not Woo); products likely custom post type' },
-  'kyosho.com': { via: 'todo', note: 'custom; no sitemap found' },
-  'dwhobby.com': { via: 'todo', note: 'old PHP; custom HTML' },
-  'xflymodel.com': { via: 'todo', note: 'custom; sitemap.php' },
+  // ---- custom sites: dedicated per-domain HTML parsers (catalog/lib/mfr-domains/) ----
+  'seagullmodels.com': { via: 'html', note: 'ASP.NET Handler.ashx RPC → product grid → JSON-LD-less pages' },
+  'rc-factory.eu': { via: 'html' },
+  'multiplex-rc.de': { via: 'html' },
+  'pilot-rc.com': { via: 'html' },
+  'kyosho.com': { via: 'html' },
+  'xflymodel.com': { via: 'html' },
+  // still needs a parser (workflow build hit a transient auth error) — retry
+  'dwhobby.com': { via: 'todo', note: 'old PHP; custom HTML — parser pending' },
 }
 
 async function shopify(domain) {
@@ -97,10 +99,20 @@ async function jsonldSitemap(domain, cfg, brandHint) {
   return out
 }
 
+// Dedicated per-domain HTML parser; normalize its output to the common shape
+// (ensure image_urls + span, which the parsers may not compute).
+async function html(domain) {
+  const fn = HTML_PARSERS[domain]
+  if (!fn) return null
+  const raw = (await fn()) || []
+  return raw.map((p) => ({ ...p, image_urls: p.image_urls || [], span: p.span ?? spanOf(p.title) ?? spanOf(p.body_text) }))
+}
+
 export async function fetchStrategy(domain, brandHint) {
   const cfg = STRATEGIES[domain]
   if (!cfg || cfg.via === 'todo') return null
   if (cfg.via === 'shopify') return shopify(domain)
   if (cfg.via === 'jsonld') return jsonldSitemap(domain, cfg, brandHint)
+  if (cfg.via === 'html') return html(domain)
   return null
 }

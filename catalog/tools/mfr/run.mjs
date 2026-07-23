@@ -30,7 +30,10 @@ for (const b of pursue) {
   sql += `INSERT INTO manufacturer (id,brand,domain,platform,strategy,updated_at) VALUES (${mid},${sqlEsc(b.brand)},${sqlEsc(b.domain)},${sqlEsc(b.probed_platform)},${sqlEsc(via)},${t});\n`
   let products = []
   try { products = (await fetchStrategy(b.domain, b.brand)) || [] } catch (e) { console.log(`  ${b.brand}: ${e.message}`) }
-  const aircraft = products.filter((p) => isAircraft(p.title))
+  // Shopify/JSON-LD dump whole catalogues (parts included) → filter. HTML parsers
+  // already scope to plane categories → trust them (terse model names like
+  // "Crack Yak" would wrongly fail the keyword filter).
+  const aircraft = via === 'html' ? products : products.filter((p) => isAircraft(p.title))
   const idOf = new Map()
   for (const p of aircraft) { pid++; idOf.set(p, pid); sql += `INSERT INTO mfr_product (id,manufacturer_id,ext_id,url,title,is_aircraft,span_mm,body_text,image_urls,fetched_at) VALUES (${pid},${mid},${sqlEsc(p.ext_id)},${sqlEsc(p.url)},${sqlEsc(p.title)},1,${p.span || 'NULL'},${sqlEsc(p.body_text)},${sqlEsc(JSON.stringify(p.image_urls || []))},${t});\n` }
   const mine = masters.filter((m) => bkey(m.brand) === bkey(b.brand))
