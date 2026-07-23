@@ -18,6 +18,8 @@ const REGISTRY = {
   HEEWING: { domain: 'heewing.com', platform: 'shopify', aliases: ['heewing', 'hee wing'] },
   Volantex: { domain: 'volantexrc.com', platform: 'shopify', aliases: ['volantex', 'volantexrc'] },
   ATOMRC: { domain: 'atomrc.com', platform: 'shopify', aliases: ['atomrc'] },
+  Dynam: { domain: 'dynamrc.com', platform: 'shopify', aliases: ['dynam'] },
+  'Extreme Flight': { domain: 'extremeflightrc.com', platform: 'shopify', aliases: ['extreme flight', 'extremeflight'] },
 }
 
 // ---- helpers ----
@@ -71,7 +73,13 @@ function nameSim(ourName, theirTitle, aliases = []) {
 }
 const spanClose = (a, b) => a && b && Math.abs(a - b) / Math.max(a, b) <= 0.03
 
+// Cache per manufacturer (24h) — be polite, don't re-hammer their sites every
+// run (that gets you rate-limited/blocked) and mirror the eventual D1 store.
+const CACHE_DIR = process.env.MFR_CACHE || '.mfr-cache'
+const TTL = 86400e3
 async function shopify(domain) {
+  const cf = `${CACHE_DIR}/${domain.replace(/[^a-z0-9.]/gi, '_')}.json`
+  try { const c = JSON.parse(fs.readFileSync(cf, 'utf8')); if (Date.now() - c.at < TTL && c.products?.length) return c.products } catch {}
   const out = []
   for (let page = 1; page <= 12; page++) {
     let j
@@ -83,8 +91,11 @@ async function shopify(domain) {
     const ps = j.products || []
     out.push(...ps)
     if (ps.length < 250) break
+    await new Promise((r) => setTimeout(r, 400)) // gentle between pages
   }
-  return out.map((p) => { const body = plain(p.body_html); return { ext_id: String(p.id), title: p.title, url: `products/${p.handle}`, body_text: body, images: (p.images || []).length, span: spanOf(p.title) ?? spanOf(body), is_aircraft: isAircraft(p) } })
+  const products = out.map((p) => { const body = plain(p.body_html); return { ext_id: String(p.id), title: p.title, url: `products/${p.handle}`, body_text: body, images: (p.images || []).length, span: spanOf(p.title) ?? spanOf(body), is_aircraft: isAircraft(p) } })
+  if (products.length) { try { fs.mkdirSync(CACHE_DIR, { recursive: true }); fs.writeFileSync(cf, JSON.stringify({ at: Date.now(), products })) } catch {} } // don't cache an empty (rate-limited) pull
+  return products
 }
 
 // ---- load our masters (wrangler --json dump OR a plain array) ----

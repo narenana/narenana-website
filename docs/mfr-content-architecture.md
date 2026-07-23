@@ -176,3 +176,46 @@ matched until they're branded.
    only **flag** it for review? (Lean: flag first, auto-correct once trust is established.)
 5. Images: adopt manufacturer images or leave to the seller-image system?
 6. Where does the batch live — `catalog/tools/` scripts, or a proper cron slice from day one?
+
+## 11. Scope + decisions locked (2026-07-23)
+
+**Content =** (a) **factual copy of metrics** (specs verbatim — facts, not copyrightable) **+** (b)
+**LLM-rewritten descriptions** (manufacturer text as *source* → unique copy; never verbatim).
+Resolves decision #1 → rewrite.
+**NEW source — OCR image-text → HTML.** Manufacturers bury a lot of content (spec tables,
+feature copy) *inside product images*, invisible to search engines. OCR that text and render it
+as real HTML → big SEO lift. First-class content source alongside specs + descriptions.
+**No consumer UI** until content is human-verified — everything lands in admin/data first.
+**Admin verify screens** review (1) the matches we made and (2) the content we intend to add
+(specs / rewritten description / OCR'd text) before anything goes live.
+
+**Platform landscape (probed):**
+- **Shopify (free `/products.json`):** HEEWING, Volantex, ATOMRC, Dynam, Extreme Flight.
+- **Protected (Cloudflare challenge → browser rendering):** motionrc.com (mega-distributor —
+  Freewing/FMS/Arrows/Dynam/E-flite in one store), fmsmodel.com, store.flitetest.com,
+  arrowshobby.com, durafly.com.
+- **Custom HTML:** seagullmodels, zohd, sonicmodell, pilot-rc, dwhobby, freewingmodel — need
+  JSON-LD / WooCommerce (`/wp-json`) parsing.
+
+**Browser rendering:** the repo already binds `env.BROWSER` (Cloudflare Browser Rendering, used
+for WAF-blocked sellers) — a real headless Chrome passes the JS challenge. Adapter to render
+protected `products.json` / product pages (env.BROWSER worker job, or local Playwright in the
+batch). **motionrc alone unlocks a large slice of the catalog.**
+
+**Politeness/caching (learned):** re-fetching every run gets you rate-limited (saw 0-product
+pulls after hammering). Batch now caches per-manufacturer 24h in `.mfr-cache/` (gitignored) and
+paces requests. The D1 `mfr_product` store is the persistent version.
+
+**Build order (updated):**
+1. ✅ Shopify fetch + aircraft filter + containment match + wingspan audit (local batch).
+2. ✅ Caching + registry expansion (5 Shopify brands).
+3. **Browser-render adapter** — protected sites (motionrc, fms, flitetest, arrows, durafly).
+4. **Custom-site adapters** — JSON-LD / WooCommerce (seagull, zohd, sonicmodell, …).
+5. **OCR pipeline** — manufacturer product images → structured HTML text.
+6. **D1 schema + load** — `manufacturer`/`mfr_product`/`mfr_match` populated from the batch.
+7. **Admin verify screens** — review matches + intended content; accept/reject.
+8. **LLM description rewrite** — unique copy from manufacturer source, queued for review.
+9. **Consumer render** — ONLY after verification.
+
+**Open decisions now:** #2 wingspan conflicts → still **flag-first** in admin (auto-correct once
+trusted). #5 manufacturer image *adoption* (vs just OCR'ing their text) → still TBD.

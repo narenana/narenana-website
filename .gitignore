@@ -6,3 +6,6 @@ node_modules/
 *.log
 .DS_Store
 seed-data/
+
+# manufacturer fetch cache (audit tool) — never commit scraped data
+.mfr-cache/
