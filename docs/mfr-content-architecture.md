@@ -1,8 +1,10 @@
 # Manufacturer Truth & Content — design
 
-**Status:** draft for iteration. Nothing built yet beyond a throwaway HEEWING probe.
-**Branch:** `feat/product-content` (isolated worktree). Keep everything local until match
-quality is proven.
+**Status:** BUILT + DEPLOYED (2026-07). Schema on prod; matcher, per-domain strategy registry
+(Shopify + JSON-LD + 6 HTML parsers), and the admin verify screen are live; **73 accept-tier
+matches loaded** (see `CHANGELOG.md`). Remaining: candidate-picker, browser-render for
+protected sites, a production discovery cron, and the consumer render. **Admin-only — nothing
+renders on the consumer site yet.** The design below is retained as the reference rationale.
 
 ## 1. Goal
 
