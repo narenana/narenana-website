@@ -485,22 +485,31 @@ async function classifySlice(env, trigger) {
 // videos persist in master_video: score inputs now, review embeds later.
 //
 // Free-plan discipline, exactly like the other slices: re-poll each master at most
-// weekly (oldest first), a few per slice, and never exceed the daily YouTube quota
-// (a persisted counter, reset at UTC midnight). Returns null when the key is unset,
-// nothing is due, or the day's quota is spent — so verify still gets the tick.
+// weekly (oldest first), and never exceed the daily YouTube quota. The budget is a
+// 24h ROLLING window (persisted counter) — poll bursts through the day's allowance,
+// then pauses when spent and resumes ~24h later ("same time tomorrow"), instead of
+// resetting at a fixed UTC midnight. Returns null when the key is unset, nothing is
+// due, or the day's quota is spent — so verify still gets the tick.
 const POP_REFRESH = 7 * DAY // re-poll each master no more often than weekly
-const POP_PER_SLICE = 3 // masters per slice (each ≈ 101 YouTube quota units)
+// Burst hard so the day's quota drains fast: 12 masters/invocation = 24 subrequests
+// (safe under Free's ~50 cap) + a few ms CPU. The in-loop quota check stops earlier
+// when the day's budget is nearly spent. On Workers Paid this could go far higher.
+const POP_PER_SLICE = 12
 const YT_UNITS_PER_MASTER = 101 // search.list (100) + videos.list (1)
-const YT_DAILY_CAP = 9000 // headroom under the 10,000-units/day free quota
+const YT_DAILY_CAP = 9000 // headroom under YouTube's hard 10,000-units/day quota
 
 async function popularitySlice(env, trigger) {
   if (!env.YT_API_KEY) return null // no key → feature dormant, yield the tick to verify
   const t = now()
-  // Daily quota budget, persisted; resets when the UTC day rolls over.
-  const dayStart = t - (t % DAY)
+  // Daily YouTube-quota budget on a 24h ROLLING window anchored to when polling
+  // runs — bursts through the day's allowance, pauses when spent, and resumes
+  // ~24h later ("same time tomorrow"), not at a fixed UTC midnight. The 1,000-unit
+  // headroom under YouTube's 10k/Pacific-day reset absorbs the small overlap when
+  // a burst straddles the two windows' boundaries.
   let quota = JSON.parse((await getSetting(env, 'yt_quota')) ?? '{}')
-  if (quota.day !== dayStart) quota = { day: dayStart, units: 0 }
-  if (quota.units >= YT_DAILY_CAP) return null // spent for today → let verify have the slice
+  if (quota.start == null) quota = { start: t, units: quota.units ?? 0 } // migrate {day,units}→{start,units}, keep today's spend
+  if (t - quota.start >= DAY) quota = { start: t, units: 0 } // window rolled over → fresh budget
+  if (quota.units >= YT_DAILY_CAP) return null // today's budget spent → pause until the window rolls
 
   // Masters due for a (re)poll: never polled, or older than POP_REFRESH. Only
   // ready/draft masters WITH offers — one with no listings has nothing to rank
