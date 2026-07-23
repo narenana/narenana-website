@@ -509,7 +509,10 @@ async function popularitySlice(env, trigger) {
   let quota = JSON.parse((await getSetting(env, 'yt_quota')) ?? '{}')
   if (quota.start == null) quota = { start: t, units: quota.units ?? 0 } // migrate {day,units}→{start,units}, keep today's spend
   if (t - quota.start >= DAY) quota = { start: t, units: 0 } // window rolled over → fresh budget
-  if (quota.units >= YT_DAILY_CAP) return null // today's budget spent → pause until the window rolls
+  // Pause as soon as there isn't budget for even one more poll — a model costs
+  // ~101 units, so units never lands exactly on the cap; checking `>= cap` would
+  // let near-full slices keep entering (and starving verify) doing nothing.
+  if (quota.units + YT_UNITS_PER_MASTER > YT_DAILY_CAP) return null // budget spent → pause until the 24h window rolls
 
   // Masters due for a (re)poll: never polled, or older than POP_REFRESH. Only
   // ready/draft masters WITH offers — one with no listings has nothing to rank
