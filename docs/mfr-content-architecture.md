@@ -138,8 +138,9 @@ copyright problem. So:
   candidates while preserving every row with a human `decided_at`.
 - **Review.** The admin stores five ranked candidates per master. Automatic recommendations
   are one-to-one; shared or weak candidates are left unmapped for a human to choose. The
-  reviewer sees our photo/details beside the selected manufacturer photo/details, including
-  wingspan and kit-type comparisons; changing the picker updates the evidence and official link.
+  reviewer chooses from image-led candidate cards showing SKU, config, wingspan, name score,
+  and conflict signals, then sees our photo/details beside the selected manufacturer evidence.
+  Selecting a card updates only that comparison row and its official link.
 
 ## 7. Rollout order
 

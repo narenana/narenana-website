@@ -369,6 +369,13 @@ test('admin client script parses (no embedded-JS syntax errors)', () => {
 test('manufacturer admin binds details and safe links to the selected candidate', () => {
   assert.match(ADMIN_HTML, /mfrChoices/, 'selected SKU state must survive card rerenders')
   assert.match(ADMIN_HTML, /var active=cs\.find/, 'card facts must resolve an active candidate')
+  assert.match(ADMIN_HTML, /data-mfr-candidate/, 'candidate picker must use rich, clickable SKU cards')
+  assert.match(ADMIN_HTML, /mf-choice-img/, 'candidate cards must include manufacturer thumbnails')
+  assert.match(ADMIN_HTML, /aria-pressed/, 'candidate selection must be exposed to assistive technology')
+  assert.match(ADMIN_HTML, /root\.outerHTML=card\(row\)/, 'selection should rerender only its model card')
+  assert.match(ADMIN_HTML, /product=\+\(F\.mfrChoices\[master\]\|\|0\)/, 'accept must use selected-card state')
+  assert.doesNotMatch(ADMIN_HTML, /<select class="mf-pick"/, 'a native select cannot present photos and match evidence')
+  assert.doesNotMatch(ADMIN_HTML, /querySelector\('\[data-choice\]'\)/, 'save must not read the removed dropdown')
   assert.match(ADMIN_HTML, /safeUrl/, 'official URLs must pass protocol validation')
   assert.doesNotMatch(ADMIN_HTML, /mfr_url\|\|'#'/, 'missing official links must never navigate to #')
   assert.match(ADMIN_HTML, /\/img\/master\//)
