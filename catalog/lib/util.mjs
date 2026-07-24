@@ -25,6 +25,18 @@ export const imgKey = (src) => {
   return 'i/' + (h >>> 0).toString(16)
 }
 
+// Manufacturer images are admin review evidence. They still use the durable
+// R2 origin cache, but their HTTP response must never be reusable by a shared
+// cache after one authenticated request.
+export const imageCacheHeaders = (kind) => ({
+  'cache-control':
+    kind === 'mfr'
+      ? 'private, max-age=86400, stale-while-revalidate=604800'
+      : 'public, max-age=86400, stale-while-revalidate=604800',
+  'x-content-type-options': 'nosniff',
+  ...(kind === 'mfr' ? { vary: 'authorization' } : {}),
+})
+
 // --- URL canonicalization -------------------------------------------------
 // THE identity rule for secondary matching (primary is platform_pid). Any
 // change to this function MUST bump NORM_VERSION and ship a merge migration —

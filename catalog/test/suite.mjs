@@ -12,9 +12,10 @@ import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
 import { renderGridNext } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
-import { isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
+import { configAgreement as mfrConfigAgreement, configTypes as mfrConfigTypes, isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
 import { fetchStrategyPage } from '../lib/mfr-strategies.mjs'
 import { MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
+import { imageCacheHeaders } from '../lib/util.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -71,6 +72,28 @@ test('manufacturer matcher ranks exact SKU and reviews span conflicts', () => {
   assert.equal(conflict[0].tier, 'review', 'an exact name with conflicting span must be reviewed')
   assert.equal(isMfrAircraft('Dolphin PNP fixed wing'), true)
   assert.equal(isMfrAircraft('Dolphin replacement fuselage'), false)
+})
+
+test('manufacturer matcher uses kit/config type to rank exact variants', () => {
+  const candidates = [
+    { id: 1, title: 'Dolphin 845mm ARF', span: 845 },
+    { id: 2, title: 'Dolphin 845mm PNP', span: 845 },
+  ]
+  const ranked = rankCandidates({ name: 'Dolphin', span: 845, configs: ['pnp'] }, candidates, [], 2)
+  assert.equal(ranked[0].product.id, 2, 'the matching PNP SKU ranks above the ARF variant')
+  assert.equal(ranked[0].config_agree, 1)
+  assert.equal(ranked[1].config_agree, 0)
+  assert.equal(ranked[1].tier, 'review', 'a conflicting kit/config variant cannot auto-accept')
+  assert.deepEqual(mfrConfigTypes('Almost Ready-to-Fly (ARF)'), ['arf'])
+  assert.deepEqual(mfrConfigTypes('Plug-N-Play combo'), ['pnp', 'combo'])
+  assert.equal(mfrConfigAgreement(['kit'], ['arf']), 1, 'catalog kit includes seller listings classified as ARF')
+  assert.equal(mfrConfigAgreement(['pnp'], ['bnf']), null, 'unsupported BNF remains unknown, not a false conflict')
+  const titleWins = rankCandidates(
+    { name: 'Dolphin', span: 845, configs: ['pnp'] },
+    [{ id: 3, title: 'Dolphin PNP', body_text: 'The kit includes a motor and ESC.', span: 845 }],
+  )[0]
+  assert.deepEqual(titleWins.config_types, ['pnp'], 'description wording cannot override an explicit title config')
+  assert.equal(titleWins.config_agree, 1)
 })
 
 test('Shopify manufacturer harvesting is cursor-paged', async () => {
@@ -343,6 +366,15 @@ test('admin client script parses (no embedded-JS syntax errors)', () => {
   for (const s of scripts) assert.doesNotThrow(() => new Function(s), 'inline admin script must parse')
 })
 
+test('manufacturer admin binds details and safe links to the selected candidate', () => {
+  assert.match(ADMIN_HTML, /mfrChoices/, 'selected SKU state must survive card rerenders')
+  assert.match(ADMIN_HTML, /var active=cs\.find/, 'card facts must resolve an active candidate')
+  assert.match(ADMIN_HTML, /safeUrl/, 'official URLs must pass protocol validation')
+  assert.doesNotMatch(ADMIN_HTML, /mfr_url\|\|'#'/, 'missing official links must never navigate to #')
+  assert.match(ADMIN_HTML, /\/img\/master\//)
+  assert.match(ADMIN_HTML, /\/img\/mfr\//)
+})
+
 // ---------------------------------------------------------------- public
 test('category grid renders (SSR), stylesheet served', async () => {
   const res = await get('/wings/')
@@ -380,6 +412,31 @@ test('admin + api are Basic-auth gated; wrong creds 401 with challenge', async (
 test('img proxy: bad path 400, unknown id 404', async () => {
   assert.equal((await get('/img/whatever')).status, 400)
   assert.equal((await get('/img/sku/999999')).status, 404)
+  assert.equal((await get('/img/mfr/999999')).status, 401, 'manufacturer review images stay admin-only')
+  assert.equal((await get('/img/mfr/999999', { authorization: AUTH })).status, 404)
+})
+
+test('manufacturer images cannot be reused by a shared HTTP cache', () => {
+  assert.match(imageCacheHeaders('master')['cache-control'], /^public,/)
+  assert.match(imageCacheHeaders('mfr')['cache-control'], /^private,/)
+  assert.equal(imageCacheHeaders('mfr').vary, 'authorization')
+})
+
+test('manufacturer admin payload carries comparison and selected-candidate details', async () => {
+  const { status, body } = await api('mfr-matches?status=pending')
+  assert.equal(status, 200)
+  assert.ok(Array.isArray(body.matches))
+  for (const row of body.matches.slice(0, 10)) {
+    assert.ok('model_image' in row)
+    assert.ok('model_configs' in row)
+    assert.ok(Array.isArray(row.candidates))
+    for (const candidate of row.candidates) {
+      assert.ok('ext_id' in candidate)
+      assert.ok('body_preview' in candidate)
+      assert.ok(Array.isArray(candidate.config_types))
+      assert.ok(candidate.config_agree === null || candidate.config_agree === 0 || candidate.config_agree === 1)
+    }
+  }
 })
 
 // ---------------------------------------------------------------- review

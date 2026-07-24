@@ -82,14 +82,21 @@ table + audit report. Only **accepted** matches + derived content get promoted t
 
 ### 4.4 Match — `mfr_match` link table
 Per master (brand-scoped candidates only):
-`score = name_similarity  +  wingspan_agreement_bonus  −  parts_penalty`
+`score = name_similarity + wingspan_agreement_bonus + kit_type_tiebreak`
+
+- Wingspans agree within 3%: `+0.15`.
+- A compatible offer/manufacturer kit type (KIT/ARF, PNP, RTF, combo): `+0.08`.
+- A known kit-type conflict: `−0.05` and mandatory human review. BNF/RxR stay
+  unknown because the catalog's current four-value offer taxonomy has no exact equivalent.
+
 Tiers:
-- **auto-accept:** name ≥ 0.8 **AND** (wingspan agrees OR one side has no span).
-- **review:** 0.4–0.8, **or** name high but wingspan conflicts (the interesting audit cases).
+- **auto-accept:** strong name identity with no known wingspan or kit-type conflict.
+- **review:** partial/ambiguous name, or a strong name with conflicting wingspan/config.
 - **reject:** < 0.4.
 Row: `master_model_id, mfr_product_id, score, span_agree (null|0|1), status
 (auto|pending|accepted|rejected), decided_by, decided_at, flags_json`.
-- **Pro:** the span tiebreak makes accepts trustworthy and routes conflicts to humans.
+- **Pro:** span and kit-type tiebreaks distinguish same-name manufacturer variants and
+  route factual conflicts to humans.
   **Con:** the mid-tier needs a review UI + human time (bounded — ~400 models, most auto).
 
 ### 4.5 Audit (falls out of matching)
@@ -122,14 +129,17 @@ copyright problem. So:
 
 ## 6. Where it runs
 
-- **Production maintenance (live 2026-07-24).** A dedicated hourly cron runs one bounded
-  manufacturer page at a time, stores its cursor in D1, and refreshes each manufacturer
-  weekly. It upserts by stable external product id and never deletes review decisions.
+- **Production maintenance (live 2026-07-24).** One Sunday cron fans out a Queue job per
+  manufacturer. Each bounded page queues its continuation, so every site gets a fresh
+  Worker/subrequest budget without an hourly trigger. It upserts by stable external product
+  id and never deletes review decisions. Admin can queue an early harvest after adding models.
 - **Local recovery/backfill.** `catalog/tools/mfr/run.mjs` emits safe, idempotent upsert SQL
   from the committed manufacturer registry. `rebuild-remote.mjs --apply` rebuilds ranked
   candidates while preserving every row with a human `decided_at`.
 - **Review.** The admin stores five ranked candidates per master. Automatic recommendations
-  are one-to-one; shared or weak candidates are left unmapped for a human to choose.
+  are one-to-one; shared or weak candidates are left unmapped for a human to choose. The
+  reviewer sees our photo/details beside the selected manufacturer photo/details, including
+  wingspan and kit-type comparisons; changing the picker updates the evidence and official link.
 
 ## 7. Rollout order
 

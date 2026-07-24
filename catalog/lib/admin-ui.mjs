@@ -66,7 +66,7 @@ const fmtViews=(n)=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.roun
 // opened as http://user:pass@host/admin the document base carries credentials
 // and fetch() refuses to construct the request — the panel dies looking empty.
 const api=async(p,body)=>{const r=await fetch(new URL('/api/'+p,location.origin),body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
-let tab='review',F={status:'new',stock:'in',src:'',page:1},data=null,reqSeq=0;
+let tab='review',F={status:'new',stock:'in',src:'',page:1,mfrChoices:{}},data=null,reqSeq=0;
 
 // URL state: /admin?tab=&status=&stock=&src=&page= — filters are linkable and
 // survive refresh / back-button.
@@ -306,35 +306,77 @@ function renderDupes(){
 }
 
 // ------- Manufacturer matches (admin verify; no consumer surface) -------
-const MFR_CSS='<style>.mf-pair{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;background:var(--card)}'
-  +'.mf-top{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}'
-  +'.mf-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.03em}'
+const MFR_CSS='<style>.mf-pair{border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;background:var(--card)}'
+  +'.mf-top{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}.mf-top .meta{margin:0}'
+  +'.mf-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.03em;text-transform:uppercase}'
   +'.mf-accept{background:#123d29;color:#3fb950}.mf-review{background:#3d3312;color:#d29922}.mf-conflict{background:#3d1212;color:#f85149}'
-  +'.mf-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mf-side{font-size:13px;min-width:0}'
-  +'.mf-lbl{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.05em}.mf-nm{font-weight:600;margin:2px 0}'
-  +'.mf-img{max-width:100%;max-height:110px;object-fit:contain;background:#fff;border-radius:6px;margin-top:6px}'
-  +'.mf-desc{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4;max-height:60px;overflow:hidden}'
-  +'.mf-pick{width:100%;margin-top:8px;padding:7px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px}'
-  +'.mf-note{font-size:11px;color:var(--warn);margin-top:6px}.mf-foot{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}'
-  +'.mf-ok{color:var(--ok)}.mf-bad{color:var(--bad);font-weight:700}.mf-health{margin:8px 0 14px;font-size:11px;color:var(--muted)}</style>';
+  +'.mf-picker{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;margin-bottom:12px}.mf-picker label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase}'
+  +'.mf-pick{width:100%;padding:8px;background:var(--bg);color:var(--fg);border:1px solid var(--border);border-radius:6px}'
+  +'.mf-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.mf-side{font-size:13px;min-width:0;border:1px solid var(--border);border-radius:9px;padding:10px;background:rgba(14,17,23,.35)}'
+  +'.mf-lbl{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em}.mf-nm{font-weight:650;font-size:15px;margin:3px 0 8px}'
+  +'.mf-photo-wrap{height:190px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:10px}'
+  +'.mf-photo{width:100%;height:100%;object-fit:contain}.mf-noimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#777;background:#f0f2f4;font-size:12px}'
+  +'.mf-facts{display:grid;grid-template-columns:max-content 1fr;gap:4px 10px;margin:8px 0;font-size:12px}.mf-facts dt{color:var(--muted)}.mf-facts dd{margin:0;min-width:0;overflow-wrap:anywhere}'
+  +'.mf-link{display:inline-block;margin-top:5px;color:var(--accent-bright);font-weight:600}.mf-missing{display:inline-block;margin-top:5px;color:var(--bad)}'
+  +'.mf-desc{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.45;max-height:88px;overflow:auto;border-top:1px dashed var(--border);padding-top:8px}'
+  +'.mf-compare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.mf-stat{border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:11px}.mf-stat b{display:block;font-size:12px}.mf-stat.match{border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.08)}.mf-stat.conflict{border-color:rgba(248,81,73,.5);background:rgba(248,81,73,.08)}.mf-stat.unknown{color:var(--muted)}'
+  +'.mf-note{font-size:11px;color:var(--warn);margin-top:7px}.mf-foot{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}'
+  +'.mf-health{margin:8px 0 14px;font-size:11px;color:var(--muted)}'
+  +'@media(max-width:700px){.mf-picker{grid-template-columns:1fr}.mf-cols,.mf-compare{grid-template-columns:1fr}.mf-photo-wrap{height:165px}}</style>';
 function renderMfr(){
   var rows=(data.matches||[]),c=(data.counts||{}),cur=(F.mfrStatus||'pending');
   var span=function(sp){try{var v=JSON.parse(sp||'{}').spanMM;return v>0?v:null}catch(e){return null}};
+  var tags=function(v){if(Array.isArray(v))return v;try{var j=JSON.parse(v||'[]');if(Array.isArray(j))return j}catch(e){}return String(v||'').split(',').map(function(x){return x.trim()}).filter(Boolean)};
+  var configs=function(v){return String(v||'').split(',').map(function(x){return x.trim().toUpperCase()}).filter(Boolean)};
+  var hasImage=function(v){try{var j=Array.isArray(v)?v:JSON.parse(v||'[]');return !!(j&&j[0])}catch(e){return false}};
+  var safeUrl=function(v){try{var u=new URL(v);return (u.protocol==='http:'||u.protocol==='https:')?u.href:''}catch(e){return ''}};
+  var val=function(v,fallback){return v==null||v===''?(fallback||'—'):v};
+  var photo=function(src,alt,missing){return src?'<div class="mf-photo-wrap"><img class="mf-photo" src="'+esc(src)+'" alt="'+esc(alt)+'" loading="lazy"/><div class="mf-noimg" style="display:none">'+esc(missing)+'</div></div>':'<div class="mf-photo-wrap"><div class="mf-noimg">'+esc(missing)+'</div></div>'};
+  var facts=function(items){return '<dl class="mf-facts">'+items.map(function(x){return '<dt>'+esc(x[0])+'</dt><dd>'+esc(val(x[1]))+'</dd>'}).join('')+'</dl>'};
+  var stat=function(kind,title,detail){return '<div class="mf-stat '+kind+'"><b>'+esc(title)+'</b>'+esc(detail)+'</div>'};
   var tab=function(k,l){return '<button class="chip'+(cur===k?' on':'')+'" data-mfrs="'+k+'">'+l+' '+(c[k]||0)+'</button>'};
   var card=function(r){
-    var os=span(r.specs),ms=r.mfr_span,cs=(r.candidates||[]);
-    var sc=os&&ms?(os===ms?'<span class="mf-ok">span '+os+' ✓</span>':'<span class="mf-bad">span '+os+' vs '+ms+' ⚠</span>'):'span '+(os||'?')+'/'+(ms||'?');
-    var img='';try{var im=JSON.parse(r.image_urls||'[]');if(im[0])img='<img class="mf-img" src="'+esc(im[0])+'" loading="lazy"/>'}catch(e){}
-    var bcls=r.tier==='accept'?'mf-accept':(r.span_agree===0?'mf-conflict':'mf-review');
-    var opts=cs.map(function(x){var sel=+x.mfr_product_id===+r.mfr_product_id?' selected':'';return '<option value="'+x.mfr_product_id+'"'+sel+'>#'+x.rank+' / '+Math.round(x.score*100)+'% / '+esc(x.title)+' / span '+(x.span_mm||'?')+'</option>'}).join('');
+    var os=span(r.specs),cs=(r.candidates||[]),saved=+(F.mfrChoices[r.master_model_id]||0);
+    var active=cs.find(function(x){return +x.mfr_product_id===saved})
+      ||cs.find(function(x){return +x.mfr_product_id===+r.mfr_product_id})||cs[0]||null;
+    if(active)F.mfrChoices[r.master_model_id]=+active.mfr_product_id;
+    var ms=active&&active.span_mm,delta=os&&ms?Math.round(Math.abs(os-ms)/Math.max(os,ms)*1000)/10:null;
+    var spanKind=delta==null?'unknown':(delta<=3?'match':'conflict');
+    var spanTitle=spanKind==='match'?'Wingspan matches':spanKind==='conflict'?'Wingspan conflict':'Wingspan unknown';
+    var spanDetail='Our '+val(os,'?')+' mm / manufacturer '+val(ms,'?')+' mm'+(delta==null?'':' / '+delta+'% delta');
+    var ca=active&&active.config_agree,configKind=ca===1?'match':ca===0?'conflict':'unknown';
+    var configTitle=configKind==='match'?'Kit type matches':configKind==='conflict'?'Kit type conflict':'Kit type unknown';
+    var ourConfigs=configs(r.model_configs),theirConfigs=active&&active.config_types||[];
+    var configDetail='Our '+(ourConfigs.join(', ')||'?')+' / manufacturer '+(theirConfigs.map(function(x){return String(x).toUpperCase()}).join(', ')||'?');
+    var bcls=active&&active.tier==='accept'?'mf-accept':((active&&active.span_agree===0)||ca===0?'mf-conflict':'mf-review');
+    var opts=cs.map(function(x){
+      var sel=active&&+x.mfr_product_id===+active.mfr_product_id?' selected':'';
+      var rank=x.rank===0?'saved':'#'+x.rank;
+      var ns=x.name_score==null?'':(' / name '+Math.round(x.name_score*100)+'%');
+      var ct=(x.config_types||[]).map(function(t){return String(t).toUpperCase()}).join('+')||'?';
+      return '<option value="'+x.mfr_product_id+'"'+sel+'>'+rank+' / score '+Number(x.score||0).toFixed(2)+ns+' / '+ct+' / '+(x.span_mm||'?')+' mm / '+esc(x.title)+'</option>';
+    }).join('');
     var picker=opts?'<select class="mf-pick" data-choice>'+opts+'</select>':'<div class="mf-note">No credible SKU candidates harvested yet.</div>';
-    var controls='<div class="mf-foot"><button class="ok" data-mfr="accept" data-id="'+r.master_model_id+'"'+(opts?'':' disabled')+'>'+((cur==='accepted')?'Save mapping':'Map & accept')+'</button>'
+    var controls='<div class="mf-foot"><button class="ok" data-mfr="accept" data-id="'+r.master_model_id+'"'+(active?'':' disabled')+'>'+((cur==='accepted')?'Save mapping':'Map & accept')+'</button>'
       +(cur!=='rejected'?'<button class="no" data-mfr="reject" data-id="'+r.master_model_id+'">Reject</button>':'')
       +(cur!=='pending'?'<button data-mfr="reopen" data-id="'+r.master_model_id+'">Reopen</button>':'')+'</div>';
-    return '<div class="mf-pair"><div class="mf-top"><span class="mf-badge '+bcls+'">'+esc(r.tier)+'</span><span class="meta">'+sc+' · '+Math.round(r.score*100)+'% · '+esc(r.mfr_brand||'')+' ('+esc(r.strategy||'')+')</span></div>'
-      +'<div class="mf-cols"><div class="mf-side"><div class="mf-lbl">OUR MODEL</div><div class="mf-nm">'+esc(r.brand)+' '+esc(r.name)+'</div><div class="meta">span '+(os||'—')+' · <a href="'+esc(r.path_prefix)+'/'+esc(r.slug)+'/" target="_blank">page ↗</a></div></div>'
-      +'<div class="mf-side"><div class="mf-lbl">CURRENT / RECOMMENDED SKU</div><div class="mf-nm">'+esc(r.mfr_title||'—')+'</div><div class="meta">span '+(ms||'—')+' · <a href="'+esc(r.mfr_url||'#')+'" target="_blank" rel="noopener">official ↗</a> · '+(r.body_len||0)+'c</div>'+img+'<div class="mf-desc">'+esc((r.body_preview||'').slice(0,300))+'</div></div></div>'
-      +picker+(r.note?'<div class="mf-note">'+esc(r.note)+'</div>':'')+controls+'</div>';
+    var official=active&&safeUrl(active.url),roles=tags(r.role_tags);
+    var modelLink='<a class="mf-link" href="'+esc(r.path_prefix)+'/'+esc(r.slug)+'/" target="_blank" rel="noopener noreferrer">Open model page ↗</a>';
+    var officialLink=official?'<a class="mf-link" href="'+esc(official)+'" target="_blank" rel="noopener noreferrer">Open official product ↗</a>':'<span class="mf-missing">Official product link unavailable</span>';
+    var topTier=active&&active.tier||r.tier||'review';
+    var topMeta=active?('Candidate '+(active.rank===0?'saved':('#'+active.rank))+' · ranking score '+Number(active.score||0).toFixed(2)+' · '+val(active.mfr_brand,r.mfr_brand||'manufacturer')):'No candidate selected';
+    var rightPhoto=active&&hasImage(active.image_urls)?'/img/mfr/'+active.mfr_product_id:'';
+    return '<div class="mf-pair"><div class="mf-top"><span class="mf-badge '+bcls+'">'+esc(topTier)+'</span><span class="meta">'+esc(topMeta)+'</span></div>'
+      +'<div class="mf-picker"><label>Manufacturer SKU</label>'+picker+'</div>'
+      +'<div class="mf-cols"><section class="mf-side"><div class="mf-lbl">OUR MODEL</div><div class="mf-nm">'+esc(r.brand)+' '+esc(r.name)+'</div>'
+      +photo(r.model_image?'/img/master/'+r.master_model_id:'',r.brand+' '+r.name,'No model photo')
+      +facts([['Wingspan',os?os+' mm':'—'],['Offer kit type',ourConfigs.join(', ')||'—'],['Power',r.power],['Roles',roles.join(', ')||'—']])+modelLink+'</section>'
+      +'<section class="mf-side"><div class="mf-lbl">MANUFACTURER PRODUCT</div><div class="mf-nm">'+esc(active&&active.title||'No candidate')+'</div>'
+      +photo(rightPhoto,active&&active.title||'Manufacturer product','No manufacturer photo')
+      +facts([['Wingspan',ms?ms+' mm':'—'],['Kit / config',theirConfigs.map(function(x){return String(x).toUpperCase()}).join(', ')||'—'],['Manufacturer',active&&active.mfr_brand||r.mfr_brand],['Manufacturer SKU',active&&active.ext_id],['Source',active&&active.strategy||r.strategy]])+officialLink
+      +(active&&active.body_preview?'<div class="mf-desc">'+esc(active.body_preview.slice(0,500))+'</div>':'')+'</section></div>'
+      +'<div class="mf-compare">'+stat(spanKind,spanTitle,spanDetail)+stat(configKind,configTitle,configDetail)+'</div>'
+      +((active&&active.reason)||r.note?'<div class="mf-note">'+esc(active&&active.reason||r.note)+'</div>':'')+controls+'</div>';
   };
   var hs=(data.harvest||[]),bad=hs.filter(function(x){return x.last_harvest_status==='error'}).length;
   var health='<div class="mf-health">'+hs.length+' manufacturers on weekly queue-backed harvesting (Sunday 03:07 UTC)'+(bad?' · '+bad+' need attention':' · all last runs healthy')+'</div>';
@@ -342,7 +384,9 @@ function renderMfr(){
     +'<div class="bar" style="border:none"><button id="mfr-rebuild-all" class="go">Match newly added models</button><button id="mfr-harvest-now">Harvest now</button><span class="meta">Matching is fast and uses stored manufacturer products. Harvesting queues a fresh crawl of all official sites.</span></div>'
     +health+(rows.length?rows.map(card).join(''):'<p class="empty">No '+cur+' matches.</p>');
   document.querySelectorAll('button[data-mfrs]').forEach(function(b){b.onclick=function(){F.mfrStatus=b.dataset.mfrs;load()}});
-  document.querySelectorAll('button[data-mfr]').forEach(function(b){b.onclick=async function(){b.disabled=true;try{var p=b.closest('.mf-pair'),s=p&&p.querySelector('[data-choice]');await api('mfr-decide',{masterId:+b.dataset.id,decision:b.dataset.mfr,mfrProductId:s?+s.value:null});load()}catch(e){alert(e.message);b.disabled=false}}});
+  document.querySelectorAll('[data-choice]').forEach(function(s){s.onchange=function(){var p=s.closest('.mf-pair'),b=p&&p.querySelector('button[data-mfr]');if(b)F.mfrChoices[+b.dataset.id]=+s.value;renderMfr()}});
+  document.querySelectorAll('.mf-photo').forEach(function(img){img.onerror=function(){img.style.display='none';if(img.nextElementSibling)img.nextElementSibling.style.display='flex'}});
+  document.querySelectorAll('button[data-mfr]').forEach(function(b){b.onclick=async function(){b.disabled=true;try{var p=b.closest('.mf-pair'),s=p&&p.querySelector('[data-choice]');await api('mfr-decide',{masterId:+b.dataset.id,decision:b.dataset.mfr,mfrProductId:s?+s.value:null});delete F.mfrChoices[+b.dataset.id];load()}catch(e){alert(e.message);b.disabled=false}}});
   $('#mfr-rebuild-all').onclick=async function(){var b=this;b.disabled=true;b.textContent='matching…';try{var d=await api('mfr-rebuild-all',{});alert('Matched '+d.masters+' models against '+d.candidates+' ranked candidates.');load()}catch(e){alert(e.message);b.disabled=false;b.textContent='Match newly added models'}};
   $('#mfr-harvest-now').onclick=async function(){if(!confirm('Queue a fresh crawl of all manufacturer sites now?'))return;var b=this;b.disabled=true;b.textContent='queueing…';try{var d=await api('mfr-harvest',{});alert(d.paused?'Manufacturer harvesting is paused.':'Queued '+d.queued+' manufacturer harvests.');load()}catch(e){alert(e.message);b.disabled=false;b.textContent='Harvest now'}};
 }

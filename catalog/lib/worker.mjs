@@ -13,9 +13,10 @@ import {
   rebuildAllManufacturerMatches,
   rebuildManufacturerMatches,
 } from './mfr-jobs.mjs'
+import { configAgreement, configTypes } from './mfr-match.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
-import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge, imgKey } from './util.mjs'
+import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge, imgKey, imageCacheHeaders } from './util.mjs'
 
 // --- categories cache (per-isolate, 60s) — saves a D1 query on most requests
 let catCache = { at: 0, rows: [] }
@@ -44,7 +45,16 @@ export async function handleCatalog(request, url, env, ctx) {
   if (path === `/${INDEXNOW_KEY}.txt`)
     return new Response(INDEXNOW_KEY, { headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=86400' } })
 
-  // ---- image proxy (public; host-allowlisted to registered sellers) ----
+  // Manufacturer imagery is review evidence, not a consumer surface. Keep it
+  // behind the same Basic-auth gate as the admin while seller/master imagery
+  // remains public for catalog cards.
+  if (path.startsWith('/img/mfr/')) {
+    const auth = await basicAuth(request, env)
+    if (!auth.ok) return challenge(auth.reason)
+    return imgProxy(env, path, ctx)
+  }
+
+  // ---- public seller/master image proxy (host-allowlisted) ----
   if (path.startsWith('/img/')) return imgProxy(env, path, ctx)
 
   // ---- admin (HTTP Basic) ----
@@ -334,11 +344,11 @@ async function indexNowPing(env) {
 // warm job agrees on the key. Dedups images shared across masters; a changed
 // source URL naturally gets a new key + re-fetch.
 const IMG_CDN = /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com|wixstatic\.com)$/
-const IMG_CACHE = { 'cache-control': 'public, max-age=86400, stale-while-revalidate=604800', 'x-content-type-options': 'nosniff' }
 
 async function imgProxy(env, path, ctx) {
-  const m = path.match(/^\/img\/(master|sku)\/(\d+)$/)
+  const m = path.match(/^\/img\/(master|sku|mfr)\/(\d+)$/)
   if (!m) return new Response('bad path', { status: 400 })
+  const cacheHeaders = imageCacheHeaders(m[1])
   const src =
     m[1] === 'master'
       // Self-heal: a master approved from a data-poor sku gains an image the
@@ -347,7 +357,15 @@ async function imgProxy(env, path, ctx) {
             (SELECT k.image_url FROM offer o JOIN sku k ON k.id=o.sku_id
              WHERE o.master_model_id=mm.id AND k.image_url IS NOT NULL ORDER BY k.dead ASC LIMIT 1)) AS u
           FROM master_model mm WHERE mm.id=?`, m[2]))?.u
-      : (await one(env, 'SELECT image_url AS u FROM sku WHERE id=?', m[2]))?.u
+      : m[1] === 'sku'
+        ? (await one(env, 'SELECT image_url AS u FROM sku WHERE id=?', m[2]))?.u
+        : (await one(
+            env,
+            `SELECT CASE WHEN json_valid(image_urls)
+                         THEN json_extract(image_urls,'$[0]') END AS u
+             FROM mfr_product WHERE id=?`,
+            m[2],
+          ))?.u
   if (!src) return new Response('no image', { status: 404 })
 
   const key = imgKey(src)
@@ -355,26 +373,36 @@ async function imgProxy(env, path, ctx) {
   // down / slow / geo-blocked seller site can't blank the catalog.
   if (env.IMAGES) {
     const hit = await env.IMAGES.get(key)
-    if (hit) return new Response(hit.body, { headers: { ...IMG_CACHE, 'content-type': hit.httpMetadata?.contentType || 'image/jpeg', 'x-img': 'r2' } })
+    if (hit) return new Response(hit.body, { headers: { ...cacheHeaders, 'content-type': hit.httpMetadata?.contentType || 'image/jpeg', 'x-img': 'r2' } })
   }
 
   // Miss → fetch origin (host-allowlisted), relay, and stash in R2 for next time.
-  const hosts = (await all(env, 'SELECT home_url FROM source')).map((s) => hostOf(s.home_url))
+  const [hosts, manufacturerDomains] = await Promise.all([
+    all(env, 'SELECT home_url FROM source').then((rows) => rows.map((s) => hostOf(s.home_url)).filter(Boolean)),
+    all(env, `SELECT domain FROM manufacturer WHERE status='active'`).then((rows) =>
+      rows.map((r) => hostOf(r.domain) || hostOf(`https://${r.domain}`)).filter(Boolean),
+    ),
+  ])
+  const allowed = (host) =>
+    !!host &&
+    (hosts.includes(host) ||
+      manufacturerDomains.some((domain) => host === domain || host.endsWith(`.${domain}`)) ||
+      IMG_CDN.test(host))
   const h = hostOf(src)
-  if (!(h && (hosts.includes(h) || IMG_CDN.test(h)))) return new Response('host not allowed', { status: 403 })
+  if (!allowed(h)) return new Response('host not allowed', { status: 403 })
   let img
   try { img = await fetch(src, { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${h}/` } }) }
   catch { return new Response('origin unreachable', { status: 502 }) }
   // Re-check after redirects — a seller 30x'ing to an arbitrary host must not
   // turn this into an open proxy.
   const finalHost = hostOf(img.url)
-  if (!(finalHost && (hosts.includes(finalHost) || IMG_CDN.test(finalHost)))) return new Response('redirect off-allowlist', { status: 403 })
+  if (!allowed(finalHost)) return new Response('redirect off-allowlist', { status: 403 })
   const ct = img.headers.get('content-type') ?? 'image/jpeg'
   if (!img.ok) return new Response('origin error', { status: img.status })
   if (!/^image\//i.test(ct)) return new Response('not an image', { status: 502 })
   const buf = await img.arrayBuffer()
   if (env.IMAGES && ctx?.waitUntil) ctx.waitUntil(env.IMAGES.put(key, buf, { httpMetadata: { contentType: ct } }))
-  return new Response(buf, { headers: { ...IMG_CACHE, 'content-type': ct, 'x-img': 'origin' } })
+  return new Response(buf, { headers: { ...cacheHeaders, 'content-type': ct, 'x-img': 'origin' } })
 }
 
 // --------------------------------------------------------------------- API
@@ -871,9 +899,18 @@ async function api(request, url, env, ep, actor) {
       env,
       `SELECT mm.master_model_id, mm.mfr_product_id, mm.score, mm.span_agree, mm.tier, mm.status,
               mm.note,
-              m.brand, m.name, m.slug, m.specs, c.path_prefix,
-              p.title AS mfr_title, p.url AS mfr_url, p.span_mm AS mfr_span, p.image_urls,
-              substr(p.body_text,1,600) AS body_preview, length(p.body_text) AS body_len,
+              m.brand, m.name, m.slug, m.specs, m.power, m.role_tags, c.path_prefix,
+              COALESCE(m.hero_image,
+                (SELECT k.image_url FROM offer oi JOIN sku k ON k.id=oi.sku_id
+                 WHERE oi.master_model_id=m.id AND k.image_url IS NOT NULL
+                 ORDER BY k.dead ASC, k.in_stock DESC LIMIT 1)) AS model_image,
+              (SELECT GROUP_CONCAT(DISTINCT oc.config)
+               FROM offer oc JOIN sku kc ON kc.id=oc.sku_id
+               WHERE oc.master_model_id=m.id
+                 AND kc.review_status='approved' AND kc.dead=0) AS model_configs,
+              p.ext_id AS mfr_ext_id, p.title AS mfr_title, p.url AS mfr_url,
+              p.span_mm AS mfr_span, p.image_urls,
+              substr(p.body_text,1,800) AS body_preview, length(p.body_text) AS body_len,
               mf.brand AS mfr_brand, mf.domain, mf.strategy
        FROM mfr_match mm
        JOIN master_model m ON m.id=mm.master_model_id
@@ -889,7 +926,8 @@ async function api(request, url, env, ep, actor) {
       env,
       `SELECT mc.master_model_id,mc.mfr_product_id,mc.rank,mc.score,mc.name_score,
               mc.span_agree,mc.tier,mc.reason,
-              p.title,p.url,p.span_mm,p.image_urls,length(p.body_text) AS body_len,
+              p.ext_id,p.title,p.url,p.span_mm,p.image_urls,
+              substr(p.body_text,1,800) AS body_preview,length(p.body_text) AS body_len,
               mf.brand AS mfr_brand,mf.domain,mf.strategy
        FROM mfr_candidate mc
        JOIN mfr_match mm ON mm.master_model_id=mc.master_model_id
@@ -903,7 +941,53 @@ async function api(request, url, env, ep, actor) {
     const candidatesByMaster = {}
     for (const candidate of candidateRows)
       (candidatesByMaster[candidate.master_model_id] ??= []).push(candidate)
-    for (const row of rows) row.candidates = candidatesByMaster[row.master_model_id] ?? []
+    const configFacts = (title, bodyPreview, modelConfigs) => {
+      const fromTitle = configTypes(title)
+      const types = fromTitle.length ? fromTitle : configTypes(bodyPreview)
+      return { types, agree: configAgreement(modelConfigs, types) }
+    }
+    for (const row of rows) {
+      const candidates = candidatesByMaster[row.master_model_id] ?? []
+      for (const candidate of candidates) {
+        const facts = configFacts(candidate.title, candidate.body_preview, row.model_configs)
+        candidate.config_types = facts.types
+        candidate.config_agree = facts.agree
+      }
+      // A manual mapping is immutable, while the computed top-five candidates
+      // are replaceable. Keep that saved SKU visible even if it later falls out
+      // of the candidate set.
+      if (row.status === 'accepted' && row.mfr_product_id &&
+          !candidates.some((candidate) => +candidate.mfr_product_id === +row.mfr_product_id)) {
+        const facts = configFacts(row.mfr_title, row.body_preview, row.model_configs)
+        candidates.unshift({
+          master_model_id: row.master_model_id,
+          mfr_product_id: row.mfr_product_id,
+          rank: 0,
+          score: row.score,
+          name_score: null,
+          span_agree: row.span_agree,
+          tier: row.tier,
+          reason: 'currently saved mapping',
+          ext_id: row.mfr_ext_id,
+          title: row.mfr_title,
+          url: row.mfr_url,
+          span_mm: row.mfr_span,
+          image_urls: row.image_urls,
+          body_preview: row.body_preview,
+          body_len: row.body_len,
+          mfr_brand: row.mfr_brand,
+          domain: row.domain,
+          strategy: row.strategy,
+          config_types: facts.types,
+          config_agree: facts.agree,
+          is_current: 1,
+        })
+      }
+      const current = configFacts(row.mfr_title, row.body_preview, row.model_configs)
+      row.mfr_config_types = current.types
+      row.config_agree = current.agree
+      row.candidates = candidates
+    }
     const counts = {}
     for (const r of await all(env, `SELECT status, COUNT(*) n FROM mfr_match GROUP BY status`)) counts[r.status] = r.n
     const harvest = await all(
@@ -917,12 +1001,24 @@ async function api(request, url, env, ep, actor) {
   if (ep === 'mfr-decide' && request.method === 'POST') {
     if (!body.masterId) return json({ error: 'need masterId + decision' }, 400)
     if (body.decision === 'accept') {
-      const candidate = await one(
+      let candidate = await one(
         env,
         `SELECT * FROM mfr_candidate WHERE master_model_id=? AND mfr_product_id=?`,
         body.masterId,
         body.mfrProductId,
       )
+      // Re-saving an existing human decision is safe even when a later rebuild
+      // has dropped that product from the replaceable top-five candidate table.
+      if (!candidate)
+        candidate = await one(
+          env,
+          `SELECT mfr_product_id,score,span_agree,tier,note AS reason
+           FROM mfr_match
+           WHERE master_model_id=? AND mfr_product_id=?
+             AND status='accepted' AND decided_at IS NOT NULL`,
+          body.masterId,
+          body.mfrProductId,
+        )
       if (!candidate) return json({ error: 'manufacturer SKU is not a candidate for this model' }, 400)
       await run(
         env,

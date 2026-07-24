@@ -52,9 +52,51 @@ export function nameSim(ourName, theirTitle, aliases = []) {
 
 const spanClose = (a, b) => a && b && Math.abs(a - b) / Math.max(a, b) <= 0.03
 
+// Normalize common manufacturer build/package labels. Keep distinct variants
+// distinct: a PNP catalog offer should not silently auto-map to an ARF/RTF SKU.
+export function configTypes(text) {
+  const t = String(text ?? '').toLowerCase()
+  const out = []
+  const has = (type, pattern) => {
+    if (pattern.test(t)) out.push(type)
+  }
+  // "almost ready to fly" contains "ready to fly", so test it separately and
+  // suppress the broader RTF phrase in that case.
+  const arf = /\b(?:arf|almost[\s-]*ready[\s-]*to[\s-]*fly)\b/i.test(t)
+  if (arf) out.push('arf')
+  if (!arf) has('rtf', /\b(?:rtf|ready[\s-]*to[\s-]*fly)\b/i)
+  has('bnf', /\b(?:bnf|bind[\s-]*(?:and|n)[\s-]*fly)\b/i)
+  has('pnp', /\b(?:pnp|pnf|plug[\s-]*(?:and|n)?[\s-]*(?:play|fly))\b/i)
+  has('rxr', /\b(?:rxr|receiver[\s-]*ready)\b/i)
+  has('combo', /\b(?:combo|bundle)\b/i)
+  has('kit', /\bkit\b/i)
+  return [...new Set(out)]
+}
+
+// The catalog's current four-value taxonomy stores ARF seller listings as
+// "kit". BNF/RxR have no honest equivalent, so leave them unknown rather than
+// manufacturing a conflict from incomplete catalog data.
+export function configAgreement(ourValue, theirValue) {
+  const ours = configTypes(Array.isArray(ourValue) ? ourValue.join(' ') : ourValue)
+  const theirs = configTypes(Array.isArray(theirValue) ? theirValue.join(' ') : theirValue)
+  const known = new Set(['kit', 'pnp', 'rtf', 'combo'])
+  const ourComparable = ours.filter((type) => known.has(type))
+  const theirComparable = theirs
+    .map((type) => (type === 'arf' ? 'kit' : type))
+    .filter((type) => known.has(type))
+  if (!ourComparable.length || !theirComparable.length) return null
+  return ourComparable.some((type) => theirComparable.includes(type)) ? 1 : 0
+}
+
+const productConfigs = (product) => {
+  const title = configTypes(product?.title)
+  return title.length ? title : configTypes(product?.body_text)
+}
+
 export function tierCandidate(candidate, margin = 1) {
   if (!candidate || candidate.name < 0.35) return 'reject'
   if (candidate.span_agree === 0) return 'review'
+  if (candidate.config_agree === 0) return 'review'
   // Ambiguous variants belong in the picker. A complete token match can
   // auto-accept even if colour/config variants have the same score.
   if (candidate.name >= 0.75 && (candidate.name >= 0.999 || margin >= 0.1)) return 'accept'
@@ -66,15 +108,20 @@ export function tierCandidate(candidate, margin = 1) {
 export function rankCandidates(master, candidates, aliases = [], limit = 5) {
   if (!candidates.length) return []
   const oSpan = master.span || null
+  const ourConfigs = configTypes(Array.isArray(master.configs) ? master.configs.join(' ') : master.configs)
   const ranked = candidates
     .map((product) => {
       const name = nameSim(master.name, product.title, aliases)
       const agree = spanClose(oSpan, product.span)
+      const theirConfigs = productConfigs(product)
+      const configAgree = configAgreement(ourConfigs, theirConfigs)
       return {
         product,
         name,
         span_agree: oSpan && product.span ? (agree ? 1 : 0) : null,
-        score: name + (agree ? 0.15 : 0),
+        config_types: theirConfigs,
+        config_agree: configAgree,
+        score: name + (agree ? 0.15 : 0) + (configAgree === 1 ? 0.08 : configAgree === 0 ? -0.05 : 0),
       }
     })
     .sort((a, b) =>

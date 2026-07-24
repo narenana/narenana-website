@@ -70,6 +70,7 @@ const candidateReason = (candidate, claimed) => {
   if (claimed) return 'higher-ranked SKU was already recommended for another model'
   if (candidate.name < 0.35) return 'weak model-name match'
   if (candidate.span_agree === 0) return 'name resembles this model but wingspan conflicts'
+  if (candidate.config_agree === 0) return 'model name matches but the kit/config type conflicts'
   if (candidate.margin < 0.1 && candidate.name < 0.999) return 'two or more manufacturer SKUs score similarly'
   if (candidate.tier === 'review') return 'partial model-name match; verify the exact variant'
   return null
@@ -80,7 +81,12 @@ const candidateReason = (candidate, claimed) => {
 // cannot silently "verify" several catalog models.
 export async function rebuildManufacturerMatches(env, manufacturer, at = Date.now()) {
   const [masters, rawProducts, existing] = await Promise.all([
-    all(env, `SELECT id,brand,name,specs,status FROM master_model WHERE status IN ('ready','draft')`),
+    all(env, `SELECT m.id,m.brand,m.name,m.specs,m.status,
+                    (SELECT GROUP_CONCAT(DISTINCT o.config)
+                     FROM offer o JOIN sku k ON k.id=o.sku_id
+                     WHERE o.master_model_id=m.id
+                       AND k.review_status='approved' AND k.dead=0) AS configs
+              FROM master_model m WHERE m.status IN ('ready','draft')`),
     all(env, `SELECT id,ext_id,url,title,span_mm,body_text,image_urls
               FROM mfr_product WHERE manufacturer_id=? AND is_aircraft=1`, manufacturer.id),
     all(env, `SELECT master_model_id,mfr_product_id,status,decided_at FROM mfr_match`),
@@ -95,7 +101,11 @@ export async function rebuildManufacturerMatches(env, manufacturer, at = Date.no
   const candidateRows = []
 
   for (const master of mine) {
-    const ranked = rankCandidates({ name: master.name, span: masterSpan(master) }, products, aliases, 5)
+    const ranked = rankCandidates({
+      name: master.name,
+      span: masterSpan(master),
+      configs: (master.configs || '').split(',').filter(Boolean),
+    }, products, aliases, 5)
     rankedByMaster.set(master.id, ranked)
     ranked.forEach((c, index) => candidateRows.push({
       master_model_id: master.id,
