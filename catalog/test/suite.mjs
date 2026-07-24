@@ -12,6 +12,8 @@ import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
 import { renderGridNext } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
+import { isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
+import { fetchStrategyPage } from '../lib/mfr-strategies.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -46,6 +48,54 @@ test('detectConfig: rtf > pnp > combo > kit', () => {
   assert.equal(detectConfig('Wing combo with motor and ESC'), 'combo')
   assert.equal(detectConfig('Balsa kit — laser cut'), 'kit')
   assert.equal(detectConfig('Plug and play version'), 'pnp')
+})
+
+// ------------------------------------------------ manufacturer harvesting
+test('manufacturer matcher keeps numeric model identities distinct', () => {
+  assert.equal(mfrNameSim('Ranger 757-4', 'VOLANTEXRC Ranger 2000 75708 PNP', ['volantexrc']), 0.5)
+  assert.equal(mfrNameSim('Ranger 600', 'VolantexRC Ranger 600S RTF', ['volantexrc']), 1)
+})
+
+test('manufacturer matcher ranks exact SKU and reviews span conflicts', () => {
+  const candidates = [
+    { id: 1, title: 'Hunter H1 Humi PNP', span: 680 },
+    { id: 2, title: 'Hunter F22 PNP', span: 400 },
+    { id: 3, title: 'Hunter H1 Humi spare fuselage', span: 680 },
+  ]
+  const exact = rankCandidates({ name: 'Hunter F22', span: 400 }, candidates, ['heewing'], 3)
+  assert.equal(exact[0].product.id, 2)
+  assert.equal(exact[0].tier, 'accept')
+  const conflict = rankCandidates({ name: 'Hunter F22', span: 680 }, candidates, ['heewing'], 3)
+  assert.equal(conflict[0].product.id, 2, 'exact model identity still wins')
+  assert.equal(conflict[0].tier, 'review', 'an exact name with conflicting span must be reviewed')
+  assert.equal(isMfrAircraft('Dolphin PNP fixed wing'), true)
+  assert.equal(isMfrAircraft('Dolphin replacement fuselage'), false)
+})
+
+test('Shopify manufacturer harvesting is cursor-paged', async () => {
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async (url) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      products: String(url).includes('page=1')
+        ? [
+            { id: 1, title: 'Alpha Plane PNP', handle: 'alpha', body_html: 'Wingspan 900mm', images: [] },
+            { id: 2, title: 'Beta Plane PNP', handle: 'beta', body_html: 'Wingspan 1000mm', images: [] },
+            { id: 3, title: 'Gamma Plane PNP', handle: 'gamma', body_html: 'Wingspan 1100mm', images: [] },
+          ]
+        : [],
+    }),
+  })
+  try {
+    const page = await fetchStrategyPage('heewing.com', 'HEEWING', { offset: 1, limit: 1 })
+    assert.equal(page.total, 3)
+    assert.equal(page.products[0].title, 'Beta Plane PNP')
+    assert.equal(page.nextOffset, 2)
+    assert.equal(page.done, false)
+  } finally {
+    globalThis.fetch = realFetch
+  }
 })
 
 // ------------------------------------------------------ popularity scoring

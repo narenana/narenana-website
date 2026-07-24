@@ -122,13 +122,14 @@ copyright problem. So:
 
 ## 6. Where it runs
 
-- **Phase 1 (now): local batch.** Node scripts hit manufacturer sites, match against a local
-  copy of prod `master_model`, emit a match table + audit CSV/HTML for review. Matches your
-  "keep local, copy prod data" steer; zero prod risk.
-- **Phase 2: promote.** Accepted matches + derived content → prod D1 (bulk SQL, like the
-  landing-page content).
-- **Phase 3: maintain.** A cron slice re-fetches each manufacturer periodically (new products,
-  spec changes, restock) and re-runs matching for new/changed masters only.
+- **Production maintenance (live 2026-07-24).** A dedicated hourly cron runs one bounded
+  manufacturer page at a time, stores its cursor in D1, and refreshes each manufacturer
+  weekly. It upserts by stable external product id and never deletes review decisions.
+- **Local recovery/backfill.** `catalog/tools/mfr/run.mjs` emits safe, idempotent upsert SQL
+  from the committed manufacturer registry. `rebuild-remote.mjs --apply` rebuilds ranked
+  candidates while preserving every row with a human `decided_at`.
+- **Review.** The admin stores five ranked candidates per master. Automatic recommendations
+  are one-to-one; shared or weak candidates are left unmapped for a human to choose.
 
 ## 7. Rollout order
 
@@ -177,7 +178,8 @@ matched until they're branded.
 4. Do we auto-**correct** our wingspan from the manufacturer on a high-confidence match, or
    only **flag** it for review? (Lean: flag first, auto-correct once trust is established.)
 5. Images: adopt manufacturer images or leave to the seller-image system?
-6. Where does the batch live — `catalog/tools/` scripts, or a proper cron slice from day one?
+6. ~~Where does the batch live?~~ Resolved: bounded production cron plus safe local recovery
+   tooling.
 
 ## 11. Scope + decisions locked (2026-07-23)
 
@@ -208,16 +210,17 @@ batch). **motionrc alone unlocks a large slice of the catalog.**
 pulls after hammering). Batch now caches per-manufacturer 24h in `.mfr-cache/` (gitignored) and
 paces requests. The D1 `mfr_product` store is the persistent version.
 
-**Build order (updated):**
+**Build order (updated 2026-07-24):**
 1. ✅ Shopify fetch + aircraft filter + containment match + wingspan audit (local batch).
 2. ✅ Caching + registry expansion (5 Shopify brands).
-3. **Browser-render adapter** — protected sites (motionrc, fms, flitetest, arrows, durafly).
-4. **Custom-site adapters** — JSON-LD / WooCommerce (seagull, zohd, sonicmodell, …).
-5. **OCR pipeline** — manufacturer product images → structured HTML text.
-6. **D1 schema + load** — `manufacturer`/`mfr_product`/`mfr_match` populated from the batch.
-7. **Admin verify screens** — review matches + intended content; accept/reject.
-8. **LLM description rewrite** — unique copy from manufacturer source, queued for review.
-9. **Consumer render** — ONLY after verification.
+3. ✅ Custom-site adapters — JSON-LD plus six dedicated HTML parsers.
+4. ✅ D1 schema + production load.
+5. ✅ Ranked-candidate admin picker with decision-preserving rebuilds.
+6. ✅ Hourly bounded production harvesting cron; weekly manufacturer refresh.
+7. **Browser-render adapter** — protected sites (fms, flitetest, arrows, durafly).
+8. **OCR pipeline** — manufacturer product images → structured HTML text.
+9. **LLM description rewrite** — unique copy from manufacturer source, queued for review.
+10. **Consumer render** — ONLY after verification.
 
 **Open decisions now:** #2 wingspan conflicts → still **flag-first** in admin (auto-correct once
 trusted). #5 manufacturer image *adoption* (vs just OCR'ing their text) → still TBD.

@@ -1,52 +1,113 @@
-// Local batch: fetch registered manufacturers via the COMMITTED per-domain
-// strategy registry (catalog/lib/mfr-strategies.mjs — same code production uses),
-// match against a masters dump, and EMIT load-SQL for D1. Nothing here touches
-// prod directly — it writes a .sql file.
-//   node catalog/tools/mfr/run.mjs <seed_brands.json> <masters.json> <out.sql>
-import fs from 'fs'
-import { isAircraft, matchMaster } from '../../lib/mfr-match.mjs'
+// Safe local manufacturer batch. It fetches the committed registry, ranks five
+// candidates per master, and emits idempotent SQL. It never deletes products,
+// mappings, or human decisions.
+//
+//   node catalog/tools/mfr/run.mjs catalog/data/manufacturers.json masters.json out.sql
+
+import fs from 'node:fs'
+import { isAircraft, rankCandidates } from '../../lib/mfr-match.mjs'
 import { STRATEGIES, fetchStrategy } from '../../lib/mfr-strategies.mjs'
 
-const [seedPath, mastersPath, outPath] = process.argv.slice(2)
+const [seedPath = 'catalog/data/manufacturers.json', mastersPath, outPath = 'mfr-load.sql'] = process.argv.slice(2)
+if (!mastersPath) throw new Error('usage: run.mjs [manufacturer-seed.json] <masters.json> [out.sql]')
+
 const seed = JSON.parse(fs.readFileSync(seedPath, 'utf8'))
-const rawM = JSON.parse(fs.readFileSync(mastersPath, 'utf8'))
-const masters = (Array.isArray(rawM) ? rawM[0]?.results ?? rawM : rawM.results).filter((m) => m.status === 'ready')
-const ourSpan = (m) => { try { const v = JSON.parse(m.specs || '{}').spanMM; return v && +v > 0 ? +v : null } catch { return null } }
-const aliasesOf = (b) => [b.toLowerCase(), b.toLowerCase().replace(/\s+/g, ''), b.toLowerCase().replace(/[^a-z]/g, '')]
-const sqlEsc = (s) => "'" + String(s ?? '').replace(/'/g, "''").slice(0, 8000) + "'"
-const bkey = (s) => (s || '').toLowerCase().replace(/[^a-z]/g, '')
-
-// pursue brands whose domain has a working (non-todo) strategy in the registry
-const pursue = seed.filter((s) => s.pursue && s.domain && STRATEGIES[s.domain] && STRATEGIES[s.domain].via !== 'todo')
-console.log(`fetchable via registry: ${pursue.length} brands (${[...new Set(pursue.map((p) => STRATEGIES[p.domain].via))].join(', ')})`)
-
-let sql = '-- mfr load (generated via strategy registry). DELETE+INSERT full refresh.\nDELETE FROM manufacturer;\nDELETE FROM mfr_product;\nDELETE FROM mfr_match;\n'
-let mid = 0, pid = 0
-const t = 'strftime("%s","now")*1000'
-
-for (const b of pursue) {
-  mid++
-  const via = STRATEGIES[b.domain].via
-  sql += `INSERT INTO manufacturer (id,brand,domain,platform,strategy,updated_at) VALUES (${mid},${sqlEsc(b.brand)},${sqlEsc(b.domain)},${sqlEsc(b.probed_platform)},${sqlEsc(via)},${t});\n`
-  let products = []
-  try { products = (await fetchStrategy(b.domain, b.brand)) || [] } catch (e) { console.log(`  ${b.brand}: ${e.message}`) }
-  // Shopify/JSON-LD dump whole catalogues (parts included) → filter. HTML parsers
-  // already scope to plane categories → trust them (terse model names like
-  // "Crack Yak" would wrongly fail the keyword filter).
-  const aircraft = via === 'html' ? products : products.filter((p) => isAircraft(p.title))
-  const idOf = new Map()
-  for (const p of aircraft) { pid++; idOf.set(p, pid); sql += `INSERT INTO mfr_product (id,manufacturer_id,ext_id,url,title,is_aircraft,span_mm,body_text,image_urls,fetched_at) VALUES (${pid},${mid},${sqlEsc(p.ext_id)},${sqlEsc(p.url)},${sqlEsc(p.title)},1,${p.span || 'NULL'},${sqlEsc(p.body_text)},${sqlEsc(JSON.stringify(p.image_urls || []))},${t});\n` }
-  const mine = masters.filter((m) => bkey(m.brand) === bkey(b.brand))
-  let acc = 0
-  for (const m of mine) {
-    const best = matchMaster({ name: m.name, span: ourSpan(m) }, aircraft, aliasesOf(b.brand))
-    if (!best) continue
-    const status = best.tier === 'reject' ? 'rejected' : 'pending'
-    sql += `INSERT INTO mfr_match (master_model_id,mfr_product_id,score,span_agree,tier,status,updated_at) VALUES (${m.id},${idOf.get(best.product)},${best.score.toFixed(3)},${best.span_agree === null ? 'NULL' : best.span_agree},${sqlEsc(best.tier)},${sqlEsc(status)},${t});\n`
-    if (best.tier === 'accept') acc++
+const rawMasters = JSON.parse(fs.readFileSync(mastersPath, 'utf8'))
+const masters = (Array.isArray(rawMasters) ? rawMasters[0]?.results ?? rawMasters : rawMasters.results)
+  .filter((m) => m.status === 'ready' || m.status === 'draft')
+const ourSpan = (m) => {
+  try {
+    const n = +JSON.parse(m.specs || '{}').spanMM
+    return n > 0 ? n : null
+  } catch {
+    return null
   }
-  console.log(`  ${b.brand.padEnd(16)} ${via.padEnd(7)} ${String(products.length).padStart(3)}p → ${String(aircraft.length).padStart(3)} aircraft, ${mine.length} masters, ${acc} accept`)
+}
+const aliasesOf = (brand) => {
+  const b = brand.toLowerCase()
+  return [...new Set([b, b.replace(/\s+/g, ''), b.replace(/[^a-z0-9]/g, '')])]
+}
+const sqlEsc = (s) => "'" + String(s ?? '').replace(/'/g, "''").slice(0, 8000) + "'"
+const brandKey = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
+const nowSql = 'strftime("%s","now")*1000'
+
+const pursue = seed.filter((s) =>
+  s.pursue && s.domain && STRATEGIES[s.domain] && STRATEGIES[s.domain].via !== 'todo')
+let sql = '-- Safe manufacturer upsert generated by catalog/tools/mfr/run.mjs\n'
+
+for (const brand of pursue) {
+  const via = STRATEGIES[brand.domain].via
+  sql += `INSERT INTO manufacturer (brand,domain,platform,strategy,status,updated_at)
+VALUES (${sqlEsc(brand.brand)},${sqlEsc(brand.domain)},${sqlEsc(brand.probed_platform)},${sqlEsc(via)},'active',${nowSql})
+ON CONFLICT(brand) DO UPDATE SET domain=excluded.domain,platform=excluded.platform,
+strategy=excluded.strategy,status='active',updated_at=excluded.updated_at;\n`
+
+  let products = []
+  try { products = (await fetchStrategy(brand.domain, brand.brand)) || [] }
+  catch (error) { console.error(`${brand.brand}: ${error.message}`) }
+  const aircraft = via === 'html' ? products : products.filter((p) => isAircraft(p.title))
+
+  for (const product of aircraft) {
+    const extId = product.ext_id || product.url
+    sql += `INSERT INTO mfr_product
+(manufacturer_id,ext_id,url,title,is_aircraft,span_mm,body_text,image_urls,fetched_at,last_seen_at)
+VALUES ((SELECT id FROM manufacturer WHERE brand=${sqlEsc(brand.brand)}),${sqlEsc(extId)},
+${sqlEsc(product.url)},${sqlEsc(product.title)},1,${product.span || 'NULL'},
+${sqlEsc(product.body_text)},${sqlEsc(JSON.stringify((product.image_urls || []).slice(0,20)))},${nowSql},${nowSql})
+ON CONFLICT(manufacturer_id,ext_id) DO UPDATE SET url=excluded.url,title=excluded.title,
+is_aircraft=1,span_mm=excluded.span_mm,body_text=excluded.body_text,
+image_urls=excluded.image_urls,fetched_at=excluded.fetched_at,last_seen_at=excluded.last_seen_at;\n`
+  }
+
+  const mine = masters.filter((m) => brandKey(m.brand) === brandKey(brand.brand))
+  if (mine.length)
+    sql += `DELETE FROM mfr_candidate WHERE master_model_id IN (${mine.map((m) => +m.id).join(',')});\n`
+
+  const claimed = new Set()
+  const rows = mine.map((master) => ({
+    master,
+    ranked: rankCandidates(
+      { name: master.name, span: ourSpan(master) },
+      aircraft,
+      aliasesOf(brand.brand),
+      5,
+    ),
+  })).sort((a, b) => (b.ranked[0]?.score ?? 0) - (a.ranked[0]?.score ?? 0))
+
+  for (const { master, ranked } of rows) {
+    for (let i = 0; i < ranked.length; i++) {
+      const c = ranked[i]
+      sql += `INSERT INTO mfr_candidate
+(master_model_id,mfr_product_id,rank,score,name_score,span_agree,tier,reason,updated_at)
+SELECT ${+master.id},p.id,${i + 1},${c.score.toFixed(4)},${c.name.toFixed(4)},
+${c.span_agree === null ? 'NULL' : c.span_agree},${sqlEsc(c.tier)},NULL,${nowSql}
+FROM mfr_product p JOIN manufacturer mf ON mf.id=p.manufacturer_id
+WHERE mf.brand=${sqlEsc(brand.brand)} AND p.ext_id=${sqlEsc(c.product.ext_id || c.product.url)}
+ON CONFLICT(master_model_id,mfr_product_id) DO UPDATE SET rank=excluded.rank,
+score=excluded.score,name_score=excluded.name_score,span_agree=excluded.span_agree,
+tier=excluded.tier,reason=excluded.reason,updated_at=excluded.updated_at;\n`
+    }
+
+    const top = ranked[0]
+    const topKey = top && (top.product.ext_id || top.product.url)
+    const weak = !!top && top.name >= 0.35 && top.name < 0.6
+    const collision = !!top && top.name >= 0.6 && claimed.has(topKey)
+    const selected = top && top.name >= 0.6 && !collision ? top : null
+    if (selected) claimed.add(selected.product.ext_id || selected.product.url)
+    const tier = collision || weak ? 'review' : selected?.tier ?? 'reject'
+    const status = tier === 'reject' ? 'rejected' : 'pending'
+    sql += `INSERT INTO mfr_match
+(master_model_id,mfr_product_id,score,span_agree,tier,status,note,updated_at)
+VALUES (${+master.id},${selected ? `(SELECT p.id FROM mfr_product p JOIN manufacturer mf ON mf.id=p.manufacturer_id WHERE mf.brand=${sqlEsc(brand.brand)} AND p.ext_id=${sqlEsc(selected.product.ext_id || selected.product.url)})` : 'NULL'},
+${(selected?.score ?? top?.score ?? 0).toFixed(4)},${(selected?.span_agree ?? top?.span_agree) == null ? 'NULL' : (selected?.span_agree ?? top?.span_agree)},
+${sqlEsc(tier)},${sqlEsc(status)},${sqlEsc(collision ? 'top manufacturer SKU already recommended elsewhere; choose manually' : weak ? 'only a partial model-name match was found; choose manually' : selected ? null : 'no credible manufacturer SKU')},${nowSql})
+ON CONFLICT(master_model_id) DO UPDATE SET mfr_product_id=excluded.mfr_product_id,
+score=excluded.score,span_agree=excluded.span_agree,tier=excluded.tier,
+status=excluded.status,note=excluded.note,updated_at=excluded.updated_at
+WHERE mfr_match.decided_at IS NULL;\n`
+  }
+  console.log(`${brand.brand.padEnd(16)} ${aircraft.length} aircraft, ${mine.length} masters`)
 }
 
 fs.writeFileSync(outPath, sql)
-console.log(`\n→ ${outPath}`)
+console.log(`Wrote safe upsert SQL to ${outPath}`)

@@ -64,16 +64,20 @@ validates, disagreement flags. **Admin-only; zero consumer UI until content is r
 - **Admin verify screen + API** (`mfr-matches` review queue, `mfr-decide` accept/reject) —
   side-by-side, wingspan compare, description preview. Accepting only marks *eligibility*;
   renders nothing on the consumer site. (bfc99e2)
+- **Production-safe harvesting + SKU picker** (2026-07-24): additive `0014_mfr_harvest.sql`
+  migration, dedicated hourly cursor-sliced cron, weekly refresh, non-destructive product
+  upserts, five ranked candidates per model, one-to-one automatic recommendations, and an
+  admin selector for mapping the exact manufacturer SKU. Human decisions survive every
+  harvest/rebuild. The production candidate set was rebuilt and all automatic many-to-one
+  mappings were removed.
 - **Loaded to prod**: 12 manufacturers, 1,139 products, **131 matches — 73 accept / 37 review /
   21 reject** (Seagull 24, Volantex 11, RC-Factory 10, HEEWING 7, ATOMRC 6, Freewing 6,
   Multiplex 5, Kyosho 2, SIG 1, XFly 1).
 - **Audit already found real problems**: Mobula mis-tagged as ATOMRC (it's a Happymodel
   drone); a P-51D wingspan of 750 mm vs the manufacturer's 500 mm; 19 wingspan conflicts;
   Dynam/Extreme Flight models with garbage/mis-branded names.
-- **Not yet done** (deferred): the candidate-picker admin upgrade (fix "right manufacturer,
-  wrong SKU" with a product shortlist); browser-render for the ~42 Cloudflare-protected
-  models (FMS, Flite Test, …); a production discovery cron (initial data came from a local
-  batch); the content **render** on product pages — gated on two decisions (description
+- **Not yet done** (deferred): browser-render for the ~42 Cloudflare-protected models
+  (FMS, Flite Test, …); the content **render** on product pages — gated on two decisions (description
   rewrite-vs-link for copyright/duplicate-content; wingspan auto-correct-vs-flag).
 
 ### Popularity signal

@@ -1,4 +1,4 @@
-async function fetchProducts() {
+async function fetchProducts(options = {}) {
   // Kyosho RC store (rc.kyosho.com, English storefront) is Magento with clean
   // schema.org JSON-LD on every product page. There is no working XML sitemap
   // and no products.json / Woo Store API, so we crawl the airplane category
@@ -101,7 +101,10 @@ async function fetchProducts() {
   }
 
   // ---- 2. Fetch each product page, parse JSON-LD ----
-  const productUrls = Array.from(productSet).slice(0, 150);
+  const allProductUrls = Array.from(productSet).slice(0, 150);
+  const offset = Math.max(0, options.offset || 0);
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : allProductUrls.length;
+  const productUrls = allProductUrls.slice(offset, offset + limit);
   const out = [];
 
   for (const url of productUrls) {
@@ -182,6 +185,9 @@ async function fetchProducts() {
     });
   }
 
+  out.total = allProductUrls.length;
+  out.nextOffset = offset + productUrls.length;
+  out.done = out.nextOffset >= allProductUrls.length;
   return out;
 }
 export default fetchProducts

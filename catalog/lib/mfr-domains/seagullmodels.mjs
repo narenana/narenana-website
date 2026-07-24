@@ -1,4 +1,4 @@
-async function fetchProducts() {
+async function fetchProducts(options = {}) {
   const BASE = 'https://seagullmodels.com/';
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
   const MAX_FETCH = 250;          // safety cap on product-page fetches (current airplane count ~227)
@@ -127,9 +127,12 @@ async function fetchProducts() {
   }
 
   // ---- 2. Fetch each product page for full description + full-size images (bounded) ----
+  const offset = Math.max(0, options.offset || 0);
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : ordered.length;
+  const targets = ordered.slice(offset, offset + limit);
   const out = [];
   let fetches = 0;
-  for (const r of ordered) {
+  for (const r of targets) {
     const url = abs(r.href);
     const idm = r.href.match(/-(\d+)\.html$/);
     const ext_id = idm ? 'sea-' + idm[1] : r.href;
@@ -167,6 +170,9 @@ async function fetchProducts() {
       out.push({ ext_id, title, url, body_text, image_urls });
     }
   }
+  out.total = ordered.length;
+  out.nextOffset = offset + targets.length;
+  out.done = out.nextOffset >= ordered.length;
   return out;
 }
 export default fetchProducts

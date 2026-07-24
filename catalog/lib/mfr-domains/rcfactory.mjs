@@ -1,4 +1,4 @@
-async function fetchProducts() {
+async function fetchProducts(options = {}) {
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
   const ORIGIN = 'https://www.rc-factory.eu';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -86,7 +86,10 @@ async function fetchProducts() {
   }
 
   const MAX = 150;
-  const targets = planeUrls.slice(0, MAX);
+  const allTargets = planeUrls.slice(0, MAX);
+  const offset = Math.max(0, options.offset || 0);
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : allTargets.length;
+  const targets = allTargets.slice(offset, offset + limit);
   const products = [];
 
   for (let i = 0; i < targets.length; i++) {
@@ -147,6 +150,9 @@ async function fetchProducts() {
     await sleep(120);
   }
 
+  products.total = allTargets.length;
+  products.nextOffset = offset + targets.length;
+  products.done = products.nextOffset >= allTargets.length;
   return products;
 }
 export default fetchProducts

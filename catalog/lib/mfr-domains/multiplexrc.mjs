@@ -1,4 +1,4 @@
-async function fetchProducts() {
+async function fetchProducts(options = {}) {
   const ORIGIN = 'https://www.multiplex-rc.de';
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -72,7 +72,10 @@ async function fetchProducts() {
   //    JS-injected client-side and not present for a plain fetch, so image_urls
   //    is always empty for this site.
   const MAX = 150;
-  const targets = productUrls.slice(0, MAX);
+  const allTargets = productUrls.slice(0, MAX);
+  const offset = Math.max(0, options.offset || 0);
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : allTargets.length;
+  const targets = allTargets.slice(offset, offset + limit);
   const out = [];
   for (let i = 0; i < targets.length; i++) {
     const url = targets[i];
@@ -90,6 +93,9 @@ async function fetchProducts() {
     } catch (e) { /* skip individual page failure */ }
     if (i < targets.length - 1) await sleep(120);
   }
+  out.total = allTargets.length;
+  out.nextOffset = offset + targets.length;
+  out.done = out.nextOffset >= allTargets.length;
   return out;
 }
 export default fetchProducts

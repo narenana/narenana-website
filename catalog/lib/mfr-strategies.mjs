@@ -42,16 +42,29 @@ export const STRATEGIES = {
   'dwhobby.com': { via: 'todo', note: 'old PHP; custom HTML — parser pending' },
 }
 
-async function shopify(domain) {
+async function shopify(domain, options = {}) {
+  const offset = Math.max(0, options.offset || 0)
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : Infinity
   const out = []
   for (let page = 1; page <= 12; page++) {
     let j
-    try { const r = await F(`https://${domain}/products.json?limit=250&page=${page}`); if (!r.ok) break; j = await r.json() } catch { break }
+    try {
+      const r = await F(`https://${domain}/products.json?limit=250&page=${page}`)
+      if (!r.ok) {
+        if (page === 1) throw new Error(`Shopify HTTP ${r.status}`)
+        break
+      }
+      j = await r.json()
+    } catch (e) {
+      if (page === 1) throw e
+      break
+    }
     const ps = j.products || []
     out.push(...ps.map((p) => { const body = plain(p.body_html); return { ext_id: 'sh:' + p.id, title: p.title, url: `https://${domain}/products/${p.handle}`, body_text: body, image_urls: (p.images || []).map((i) => i.src), span: spanOf(p.title) ?? spanOf(body) } }))
     if (ps.length < 250) break
   }
-  return out
+  const products = out.slice(offset, offset + limit)
+  return { products, total: out.length, nextOffset: offset + products.length, done: offset + products.length >= out.length }
 }
 
 function extractJsonLdProduct(html, url) {
@@ -70,7 +83,9 @@ function extractJsonLdProduct(html, url) {
   return null
 }
 
-async function jsonldSitemap(domain, cfg, brandHint) {
+async function jsonldSitemap(domain, cfg, brandHint, options = {}) {
+  const offset = Math.max(0, options.offset || 0)
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : Infinity
   const urls = new Set()
   for (const sm of cfg.sitemaps || ['/sitemap.xml']) {
     try {
@@ -83,10 +98,10 @@ async function jsonldSitemap(domain, cfg, brandHint) {
       }
     } catch {}
   }
+  const allUrls = [...urls].slice(0, cfg.max || 120)
+  const targets = allUrls.slice(offset, offset + limit)
   const out = []
-  let n = 0
-  for (const u of urls) {
-    if (n++ >= (cfg.max || 120)) break
+  for (const u of targets) {
     try {
       const html = await (await F(u)).text()
       const p = extractJsonLdProduct(html, u)
@@ -96,23 +111,33 @@ async function jsonldSitemap(domain, cfg, brandHint) {
     } catch {}
     await new Promise((r) => setTimeout(r, 120))
   }
-  return out
+  return { products: out, total: allUrls.length, nextOffset: offset + targets.length, done: offset + targets.length >= allUrls.length }
 }
 
 // Dedicated per-domain HTML parser; normalize its output to the common shape
 // (ensure image_urls + span, which the parsers may not compute).
-async function html(domain) {
+async function html(domain, options = {}) {
   const fn = HTML_PARSERS[domain]
   if (!fn) return null
-  const raw = (await fn()) || []
-  return raw.map((p) => ({ ...p, image_urls: p.image_urls || [], span: p.span ?? spanOf(p.title) ?? spanOf(p.body_text) }))
+  const raw = (await fn(options)) || []
+  const products = raw.map((p) => ({ ...p, image_urls: p.image_urls || [], span: p.span ?? spanOf(p.title) ?? spanOf(p.body_text) }))
+  return {
+    products,
+    total: raw.total ?? products.length,
+    nextOffset: raw.nextOffset ?? (Math.max(0, options.offset || 0) + products.length),
+    done: raw.done ?? true,
+  }
+}
+
+export async function fetchStrategyPage(domain, brandHint, options = {}) {
+  const cfg = STRATEGIES[domain]
+  if (!cfg || cfg.via === 'todo') return null
+  if (cfg.via === 'shopify') return shopify(domain, options)
+  if (cfg.via === 'jsonld') return jsonldSitemap(domain, cfg, brandHint, options)
+  if (cfg.via === 'html') return html(domain, options)
+  return null
 }
 
 export async function fetchStrategy(domain, brandHint) {
-  const cfg = STRATEGIES[domain]
-  if (!cfg || cfg.via === 'todo') return null
-  if (cfg.via === 'shopify') return shopify(domain)
-  if (cfg.via === 'jsonld') return jsonldSitemap(domain, cfg, brandHint)
-  if (cfg.via === 'html') return html(domain)
-  return null
+  return (await fetchStrategyPage(domain, brandHint, { offset: 0, limit: Infinity }))?.products ?? null
 }

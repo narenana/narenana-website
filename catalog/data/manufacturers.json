@@ -1,0 +1,14 @@
+[
+  {"brand":"Seagull Models","domain":"seagullmodels.com","probed_platform":"html","pursue":true},
+  {"brand":"Volantex","domain":"volantexrc.com","probed_platform":"shopify","pursue":true},
+  {"brand":"RC Factory","domain":"rc-factory.eu","probed_platform":"html","pursue":true},
+  {"brand":"HEEWING","domain":"heewing.com","probed_platform":"shopify","pursue":true},
+  {"brand":"ATOMRC","domain":"atomrc.com","probed_platform":"shopify","pursue":true},
+  {"brand":"Freewing","domain":"motionrc.com","probed_platform":"html","pursue":true},
+  {"brand":"Dynam","domain":"dynamrc.com","probed_platform":"shopify","pursue":true},
+  {"brand":"Multiplex","domain":"multiplex-rc.de","probed_platform":"html","pursue":true},
+  {"brand":"Extreme Flight","domain":"extremeflightrc.com","probed_platform":"shopify","pursue":true},
+  {"brand":"Kyosho","domain":"kyosho.com","probed_platform":"html","pursue":true},
+  {"brand":"SIG","domain":"sigmfg.com","probed_platform":"shopify","pursue":true},
+  {"brand":"XFly","domain":"xflymodel.com","probed_platform":"html","pursue":true}
+]

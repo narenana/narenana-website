@@ -7,6 +7,7 @@ import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
 import { gridDataNext, renderGridNext, resolveLanding, validLandings, browseData, renderBrowse } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
+import { mfrHarvestSlice, rebuildManufacturerMatches } from './mfr-jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge, imgKey } from './util.mjs'
@@ -843,6 +844,7 @@ async function api(request, url, env, ep, actor) {
     const rows = await all(
       env,
       `SELECT mm.master_model_id, mm.mfr_product_id, mm.score, mm.span_agree, mm.tier, mm.status,
+              mm.note,
               m.brand, m.name, m.slug, m.specs, c.path_prefix,
               p.title AS mfr_title, p.url AS mfr_url, p.span_mm AS mfr_span, p.image_urls,
               substr(p.body_text,1,600) AS body_preview, length(p.body_text) AS body_len,
@@ -857,17 +859,90 @@ async function api(request, url, env, ep, actor) {
        LIMIT 500`,
       status,
     )
+    const candidateRows = await all(
+      env,
+      `SELECT mc.master_model_id,mc.mfr_product_id,mc.rank,mc.score,mc.name_score,
+              mc.span_agree,mc.tier,mc.reason,
+              p.title,p.url,p.span_mm,p.image_urls,length(p.body_text) AS body_len,
+              mf.brand AS mfr_brand,mf.domain,mf.strategy
+       FROM mfr_candidate mc
+       JOIN mfr_match mm ON mm.master_model_id=mc.master_model_id
+       JOIN mfr_product p ON p.id=mc.mfr_product_id
+       JOIN manufacturer mf ON mf.id=p.manufacturer_id
+       WHERE mm.status=?
+       ORDER BY mc.master_model_id,mc.rank
+       LIMIT 2500`,
+      status,
+    )
+    const candidatesByMaster = {}
+    for (const candidate of candidateRows)
+      (candidatesByMaster[candidate.master_model_id] ??= []).push(candidate)
+    for (const row of rows) row.candidates = candidatesByMaster[row.master_model_id] ?? []
     const counts = {}
     for (const r of await all(env, `SELECT status, COUNT(*) n FROM mfr_match GROUP BY status`)) counts[r.status] = r.n
-    return json({ matches: rows, counts })
+    const harvest = await all(
+      env,
+      `SELECT id,brand,domain,strategy,last_harvest_at,last_harvest_status,last_harvest_note
+       FROM manufacturer ORDER BY brand`,
+    )
+    return json({ matches: rows, counts, harvest })
   }
 
   if (ep === 'mfr-decide' && request.method === 'POST') {
-    const s = body.decision === 'accept' ? 'accepted' : body.decision === 'reject' ? 'rejected' : null
-    if (!s || !body.masterId) return json({ error: 'need masterId + decision' }, 400)
-    await run(env, `UPDATE mfr_match SET status=?, decided_by=?, decided_at=? WHERE master_model_id=?`, s, actor, now(), body.masterId)
+    if (!body.masterId) return json({ error: 'need masterId + decision' }, 400)
+    if (body.decision === 'accept') {
+      const candidate = await one(
+        env,
+        `SELECT * FROM mfr_candidate WHERE master_model_id=? AND mfr_product_id=?`,
+        body.masterId,
+        body.mfrProductId,
+      )
+      if (!candidate) return json({ error: 'manufacturer SKU is not a candidate for this model' }, 400)
+      await run(
+        env,
+        `UPDATE mfr_match
+         SET mfr_product_id=?,score=?,span_agree=?,tier=?,status='accepted',
+             note=?,decided_by=?,decided_at=?,updated_at=?
+         WHERE master_model_id=?`,
+        candidate.mfr_product_id,
+        candidate.score,
+        candidate.span_agree,
+        candidate.tier,
+        candidate.reason,
+        actor,
+        now(),
+        now(),
+        body.masterId,
+      )
+    } else if (body.decision === 'reject') {
+      await run(
+        env,
+        `UPDATE mfr_match SET status='rejected',decided_by=?,decided_at=?,updated_at=? WHERE master_model_id=?`,
+        actor,
+        now(),
+        now(),
+        body.masterId,
+      )
+    } else if (body.decision === 'reopen') {
+      await run(
+        env,
+        `UPDATE mfr_match SET status='pending',decided_by=NULL,decided_at=NULL,updated_at=? WHERE master_model_id=?`,
+        now(),
+        body.masterId,
+      )
+    } else {
+      return json({ error: 'decision must be accept, reject, or reopen' }, 400)
+    }
     await audit(env, actor, 'mfr-' + body.decision, 'mfr_match', body.masterId, {}).run?.()
     return json({ ok: true })
+  }
+
+  if (ep === 'mfr-rebuild' && request.method === 'POST') {
+    const manufacturer = await one(env, `SELECT * FROM manufacturer WHERE id=?`, body.manufacturerId)
+    if (!manufacturer) return json({ error: 'unknown manufacturer' }, 404)
+    const result = await rebuildManufacturerMatches(env, manufacturer, now())
+    await audit(env, actor, 'mfr-rebuild', 'manufacturer', manufacturer.id, result).run?.()
+    return json({ ok: true, manufacturer: manufacturer.brand, ...result })
   }
 
   if (ep === 'system' && request.method === 'GET') {
@@ -889,7 +964,7 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich|dedup|classify|warm|popularity)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    if (!/^(scan|verify|enrich|dedup|classify|warm|popularity|mfr)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })
@@ -911,6 +986,9 @@ const probeOk = async (u) => {
 
 export function catalogScheduled(event, env, ctx) {
   if (event.cron === '*/15 * * * *') ctx.waitUntil(runSlice(env, 'cron'))
+  // Dedicated hourly manufacturer slice. It has its own lease/cursor so slow
+  // official sites cannot block seller scanning or verification.
+  else if (event.cron === '7 * * * *') ctx.waitUntil(mfrHarvestSlice(env, 'cron'))
   // Hourly: push changed in-stock URLs to Bing/Yandex via IndexNow. Kept off the
   // */15 tick so it never competes with the pipeline for the subrequest budget.
   else if (event.cron === '0 * * * *') ctx.waitUntil(indexNowPing(env))

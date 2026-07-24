@@ -1,4 +1,4 @@
-async function fetchProducts() {
+async function fetchProducts(options = {}) {
   const BASE = 'https://pilot-rc.com';
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36';
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -128,6 +128,12 @@ async function fetchProducts() {
       image_urls,
     });
   }
-  return products;
+  const offset = Math.max(0, options.offset || 0);
+  const limit = Number.isFinite(options.limit) ? Math.max(1, options.limit) : products.length;
+  const page = products.slice(offset, offset + limit);
+  page.total = products.length;
+  page.nextOffset = offset + page.length;
+  page.done = page.nextOffset >= products.length;
+  return page;
 }
 export default fetchProducts
