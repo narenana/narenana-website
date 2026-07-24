@@ -10,7 +10,7 @@ import { fetchStrategyPage, STRATEGIES } from './mfr-strategies.mjs'
 import { isAircraft, rankCandidates } from './mfr-match.mjs'
 
 const PAGE = { shopify: 40, jsonld: 8, html: 8 }
-export const MFR_WEEKLY_CRON = '7 3 * * 0'
+export const MFR_WEEKLY_CRON = '7 3 * * SUN'
 
 const brandKey = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 const aliasesOf = (brand) => {

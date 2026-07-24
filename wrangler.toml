@@ -32,7 +32,7 @@ run_worker_first = true
 #             each invocation does one slice and persists a cursor in D1)
 #   Sunday 03:07 UTC → fan out the weekly manufacturer refresh through Queues
 [triggers]
-crons = ["0 * * * *", "*/15 * * * *", "7 3 * * 0"]
+crons = ["0 * * * *", "*/15 * * * *", "7 3 * * SUN"]
 
 # The weekly cron and the admin manual trigger publish one job per manufacturer.
 # A consumer invocation handles one bounded page and queues its continuation,

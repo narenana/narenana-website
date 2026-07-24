@@ -100,7 +100,7 @@ test('Shopify manufacturer harvesting is cursor-paged', async () => {
 })
 
 test('manufacturer harvesting uses one weekly production trigger', () => {
-  assert.equal(MFR_WEEKLY_CRON, '7 3 * * 0')
+  assert.equal(MFR_WEEKLY_CRON, '7 3 * * SUN')
 })
 
 // ------------------------------------------------------ popularity scoring
