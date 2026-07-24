@@ -14,6 +14,7 @@ import { renderGridNext } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 import { isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
 import { fetchStrategyPage } from '../lib/mfr-strategies.mjs'
+import { MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -96,6 +97,10 @@ test('Shopify manufacturer harvesting is cursor-paged', async () => {
   } finally {
     globalThis.fetch = realFetch
   }
+})
+
+test('manufacturer harvesting uses one weekly production trigger', () => {
+  assert.equal(MFR_WEEKLY_CRON, '7 3 * * 0')
 })
 
 // ------------------------------------------------------ popularity scoring

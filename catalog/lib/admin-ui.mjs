@@ -332,11 +332,14 @@ function renderMfr(){
       +picker+(r.note?'<div class="mf-note">'+esc(r.note)+'</div>':'')+controls+'</div>';
   };
   var hs=(data.harvest||[]),bad=hs.filter(function(x){return x.last_harvest_status==='error'}).length;
-  var health='<div class="mf-health">'+hs.length+' manufacturers on hourly sliced harvesting'+(bad?' · '+bad+' need attention':' · all last runs healthy')+'</div>';
+  var health='<div class="mf-health">'+hs.length+' manufacturers on weekly queue-backed harvesting (Sunday 03:07 UTC)'+(bad?' · '+bad+' need attention':' · all last runs healthy')+'</div>';
   $('#view').innerHTML=MFR_CSS+'<div class="bar" style="border:none">'+tab('pending','Pending')+' '+tab('accepted','Accepted')+' '+tab('rejected','Rejected')+'<span class="meta" style="align-self:center;margin-left:8px">choose the exact official SKU, then map it; accepted content remains private.</span></div>'
+    +'<div class="bar" style="border:none"><button id="mfr-rebuild-all" class="go">Match newly added models</button><button id="mfr-harvest-now">Harvest now</button><span class="meta">Matching is fast and uses stored manufacturer products. Harvesting queues a fresh crawl of all official sites.</span></div>'
     +health+(rows.length?rows.map(card).join(''):'<p class="empty">No '+cur+' matches.</p>');
   document.querySelectorAll('button[data-mfrs]').forEach(function(b){b.onclick=function(){F.mfrStatus=b.dataset.mfrs;load()}});
   document.querySelectorAll('button[data-mfr]').forEach(function(b){b.onclick=async function(){b.disabled=true;try{var p=b.closest('.mf-pair'),s=p&&p.querySelector('[data-choice]');await api('mfr-decide',{masterId:+b.dataset.id,decision:b.dataset.mfr,mfrProductId:s?+s.value:null});load()}catch(e){alert(e.message);b.disabled=false}}});
+  $('#mfr-rebuild-all').onclick=async function(){var b=this;b.disabled=true;b.textContent='matching…';try{var d=await api('mfr-rebuild-all',{});alert('Matched '+d.masters+' models against '+d.candidates+' ranked candidates.');load()}catch(e){alert(e.message);b.disabled=false;b.textContent='Match newly added models'}};
+  $('#mfr-harvest-now').onclick=async function(){if(!confirm('Queue a fresh crawl of all manufacturer sites now?'))return;var b=this;b.disabled=true;b.textContent='queueing…';try{var d=await api('mfr-harvest',{});alert(d.paused?'Manufacturer harvesting is paused.':'Queued '+d.queued+' manufacturer harvests.');load()}catch(e){alert(e.message);b.disabled=false;b.textContent='Harvest now'}};
 }
 
 // ------- System -------

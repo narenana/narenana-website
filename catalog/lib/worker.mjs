@@ -7,7 +7,12 @@ import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
 import { gridDataNext, renderGridNext, resolveLanding, validLandings, browseData, renderBrowse } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
-import { mfrHarvestSlice, rebuildManufacturerMatches } from './mfr-jobs.mjs'
+import {
+  MFR_WEEKLY_CRON,
+  enqueueManufacturerHarvests,
+  rebuildAllManufacturerMatches,
+  rebuildManufacturerMatches,
+} from './mfr-jobs.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
 import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge, imgKey } from './util.mjs'
@@ -945,6 +950,26 @@ async function api(request, url, env, ep, actor) {
     return json({ ok: true, manufacturer: manufacturer.brand, ...result })
   }
 
+  if (ep === 'mfr-rebuild-all' && request.method === 'POST') {
+    const result = await rebuildAllManufacturerMatches(env, now())
+    await audit(env, actor, 'mfr-rebuild-all', 'manufacturer', 'all', result).run?.()
+    return json({ ok: true, ...result })
+  }
+
+  if (ep === 'mfr-harvest' && request.method === 'POST') {
+    try {
+      const result = await enqueueManufacturerHarvests(env, {
+        manufacturerId: body.manufacturerId,
+        trigger: 'admin',
+      })
+      await audit(env, actor, 'mfr-harvest-queued', 'manufacturer', body.manufacturerId || 'all', result).run?.()
+      return json({ ok: true, ...result })
+    } catch (error) {
+      if (error?.message === 'unknown manufacturer') return json({ error: error.message }, 404)
+      throw error
+    }
+  }
+
   if (ep === 'system' && request.method === 'GET') {
     const settings = {}
     for (const r of await all(env, 'SELECT k, v FROM setting')) settings[r.k] = r.v
@@ -986,9 +1011,10 @@ const probeOk = async (u) => {
 
 export function catalogScheduled(event, env, ctx) {
   if (event.cron === '*/15 * * * *') ctx.waitUntil(runSlice(env, 'cron'))
-  // Dedicated hourly manufacturer slice. It has its own lease/cursor so slow
-  // official sites cannot block seller scanning or verification.
-  else if (event.cron === '7 * * * *') ctx.waitUntil(mfrHarvestSlice(env, 'cron'))
+  // One weekly trigger fans out bounded queue jobs. Each manufacturer page
+  // receives a fresh subrequest budget without waking this Worker hourly.
+  else if (event.cron === MFR_WEEKLY_CRON)
+    ctx.waitUntil(enqueueManufacturerHarvests(env, { trigger: 'cron' }))
   // Hourly: push changed in-stock URLs to Bing/Yandex via IndexNow. Kept off the
   // */15 tick so it never competes with the pipeline for the subrequest budget.
   else if (event.cron === '0 * * * *') ctx.waitUntil(indexNowPing(env))

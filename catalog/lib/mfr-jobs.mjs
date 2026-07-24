@@ -1,18 +1,16 @@
 // Incremental production manufacturer harvesting.
 //
-// One hourly cron invocation fetches a bounded page from one manufacturer.
-// When that manufacturer completes, candidates are rebuilt without touching
-// human decisions. Products are upserted by their stable external id; there is
-// no DELETE+INSERT refresh and therefore no review-state loss.
+// One weekly cron fans out one queue message per manufacturer. Each message
+// fetches a bounded page and enqueues its continuation, so expensive official
+// sites receive fresh Worker/subrequest budgets without an hourly cron.
+// Products are upserted by stable external id; human decisions are preserved.
 
-import { all, one, run, getSetting, setSetting, claimLease, audit } from './db.mjs'
+import { all, one, run, getSetting, audit } from './db.mjs'
 import { fetchStrategyPage, STRATEGIES } from './mfr-strategies.mjs'
 import { isAircraft, rankCandidates } from './mfr-match.mjs'
 
-const DAY = 86400e3
-const REFRESH = 7 * DAY
-const RETRY = DAY
 const PAGE = { shopify: 40, jsonld: 8, html: 8 }
+export const MFR_WEEKLY_CRON = '7 3 * * 0'
 
 const brandKey = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '')
 const aliasesOf = (brand) => {
@@ -205,108 +203,174 @@ export async function rebuildManufacturerMatches(env, manufacturer, at = Date.no
   return { masters: mine.length, candidates: candidateRows.length, automatic: matchRows.length }
 }
 
-export async function mfrHarvestSlice(env, trigger = 'cron') {
-  const at = Date.now()
-  if ((await getSetting(env, 'mfr_paused')) === '1') return { job: 'manufacturer', paused: true }
-  if (!(await claimLease(env, 'lease:mfr', 50 * 60e3, at))) return { job: 'manufacturer', skipped: 'lease held' }
+export async function rebuildAllManufacturerMatches(env, at = Date.now()) {
+  const manufacturers = await all(env, `SELECT * FROM manufacturer WHERE status='active' ORDER BY id`)
+  const total = { manufacturers: 0, masters: 0, candidates: 0, automatic: 0 }
+  for (const manufacturer of manufacturers) {
+    const result = await rebuildManufacturerMatches(env, manufacturer, at)
+    total.manufacturers++
+    total.masters += result.masters
+    total.candidates += result.candidates
+    total.automatic += result.automatic
+  }
+  return total
+}
+
+export async function enqueueManufacturerHarvests(env, options = {}) {
+  if ((await getSetting(env, 'mfr_paused')) === '1')
+    return { job: 'manufacturer', paused: true, queued: 0 }
+  if (!env.MFR_HARVEST_QUEUE) throw new Error('manufacturer harvest queue is not configured')
+
+  const manufacturerId = Number(options.manufacturerId) || null
+  const manufacturers = manufacturerId
+    ? await all(env, `SELECT * FROM manufacturer WHERE id=? AND status='active'`, manufacturerId)
+    : await all(env, `SELECT * FROM manufacturer WHERE status='active' ORDER BY id`)
+  if (manufacturerId && !manufacturers.length) throw new Error('unknown manufacturer')
+  if (!manufacturers.length) return { job: 'manufacturer', queued: 0 }
+
+  const queuedAt = Date.now()
+  const trigger = options.trigger || 'cron'
+  await env.MFR_HARVEST_QUEUE.sendBatch(
+    manufacturers.map((manufacturer) => ({
+      body: { manufacturerId: manufacturer.id, offset: 0, trigger, queuedAt },
+    })),
+  )
+  await run(
+    env,
+    `UPDATE manufacturer
+     SET last_harvest_status='queued',last_harvest_note=?
+     WHERE id IN (SELECT CAST(value AS INTEGER) FROM json_each(?))`,
+    `${trigger} refresh queued`,
+    JSON.stringify(manufacturers.map((manufacturer) => manufacturer.id)),
+  )
+  return { job: 'manufacturer', trigger, queued: manufacturers.length }
+}
+
+export async function harvestManufacturerPage(env, task, at = Date.now()) {
+  const manufacturerId = Number(task?.manufacturerId)
+  const offset = Math.max(0, Number(task?.offset) || 0)
+  const trigger = task?.trigger || 'queue'
+  const manufacturer = await one(
+    env,
+    `SELECT * FROM manufacturer WHERE id=? AND status='active'`,
+    manufacturerId,
+  )
+  if (!manufacturer) {
+    const error = new Error('unknown manufacturer')
+    error.permanent = true
+    throw error
+  }
+  const cfg = STRATEGIES[manufacturer.domain]
+  if (!cfg || cfg.via === 'todo') {
+    await run(
+      env,
+      `UPDATE manufacturer SET last_harvest_at=?,last_harvest_status='error',last_harvest_note=? WHERE id=?`,
+      at,
+      'No production harvesting strategy',
+      manufacturer.id,
+    )
+    const error = new Error('no production harvesting strategy')
+    error.permanent = true
+    throw error
+  }
 
   try {
-    let cursor = {}
-    try { cursor = JSON.parse((await getSetting(env, 'mfr_cursor')) || '{}') } catch {}
-    let manufacturer = cursor.manufacturerId
-      ? await one(env, `SELECT * FROM manufacturer WHERE id=? AND status='active'`, cursor.manufacturerId)
-      : null
+    await run(
+      env,
+      `UPDATE manufacturer SET last_harvest_status='running',last_harvest_note=? WHERE id=?`,
+      `fetching products ${offset + 1}+`,
+      manufacturer.id,
+    )
+    const page = await fetchStrategyPage(manufacturer.domain, manufacturer.brand, {
+      offset,
+      limit: PAGE[cfg.via] || 8,
+    })
+    if (!page || !Number.isFinite(page.total) || page.total <= 0)
+      throw new Error('strategy returned no discoverable products')
 
-    if (!manufacturer) {
-      manufacturer = await one(
-        env,
-        `SELECT * FROM manufacturer
-         WHERE status='active' AND (
-           last_harvest_at IS NULL OR
-           (last_harvest_status='error' AND last_harvest_at<?) OR
-           (COALESCE(last_harvest_status,'')<>'error' AND last_harvest_at<?)
-         )
-         ORDER BY COALESCE(last_harvest_at,0),id LIMIT 1`,
-        at - RETRY,
-        at - REFRESH,
-      )
-      cursor = manufacturer ? { manufacturerId: manufacturer.id, offset: 0, startedAt: at } : {}
-    }
-    if (!manufacturer) return { job: 'manufacturer', idle: true }
+    const aircraft = cfg.via === 'html'
+      ? page.products
+      : page.products.filter((product) => isAircraft(product.title))
+    await upsertProducts(env, manufacturer, aircraft, at)
 
-    const cfg = STRATEGIES[manufacturer.domain]
-    if (!cfg || cfg.via === 'todo') {
+    if (!page.done) {
       await run(
         env,
-        `UPDATE manufacturer SET last_harvest_at=?,last_harvest_status='error',last_harvest_note=? WHERE id=?`,
-        at,
-        'No production harvesting strategy',
+        `UPDATE manufacturer SET last_harvest_status='running',last_harvest_note=? WHERE id=?`,
+        `${page.nextOffset}/${page.total} products visited`,
         manufacturer.id,
       )
-      await setSetting(env, 'mfr_cursor', '{}')
-      return { job: 'manufacturer', brand: manufacturer.brand, error: 'no strategy' }
-    }
-
-    try {
-      const page = await fetchStrategyPage(manufacturer.domain, manufacturer.brand, {
-        offset: cursor.offset || 0,
-        limit: PAGE[cfg.via] || 8,
-      })
-      if (!page || !Number.isFinite(page.total) || page.total <= 0)
-        throw new Error('strategy returned no discoverable products')
-
-      const aircraft = cfg.via === 'html'
-        ? page.products
-        : page.products.filter((p) => isAircraft(p.title))
-      await upsertProducts(env, manufacturer, aircraft, at)
-
-      if (!page.done) {
-        await setSetting(env, 'mfr_cursor', JSON.stringify({
-          ...cursor,
-          manufacturerId: manufacturer.id,
-          offset: page.nextOffset,
-          total: page.total,
-        }))
-        return {
-          job: 'manufacturer',
-          trigger,
-          brand: manufacturer.brand,
-          offset: page.nextOffset,
-          total: page.total,
-          harvested: aircraft.length,
-        }
-      }
-
-      const rebuilt = await rebuildManufacturerMatches(env, manufacturer, at)
-      await run(
-        env,
-        `UPDATE manufacturer
-         SET updated_at=?,last_harvest_at=?,last_harvest_status='ok',last_harvest_note=?
-         WHERE id=?`,
-        at,
-        at,
-        `${page.total} discovered; ${rebuilt.candidates} ranked candidates`,
-        manufacturer.id,
-      )
-      await setSetting(env, 'mfr_cursor', '{}')
-      await audit(env, 'cron', 'mfr-harvest', 'manufacturer', manufacturer.id, {
+      return {
+        job: 'manufacturer',
+        trigger,
         brand: manufacturer.brand,
-        discovered: page.total,
-        ...rebuilt,
-      }).run()
-      return { job: 'manufacturer', trigger, brand: manufacturer.brand, done: true, total: page.total, ...rebuilt }
-    } catch (error) {
-      await run(
-        env,
-        `UPDATE manufacturer SET last_harvest_at=?,last_harvest_status='error',last_harvest_note=? WHERE id=?`,
-        at,
-        text(error?.message || error, 500),
-        manufacturer.id,
-      )
-      await setSetting(env, 'mfr_cursor', '{}')
-      return { job: 'manufacturer', brand: manufacturer.brand, error: text(error?.message || error, 500) }
+        manufacturerId: manufacturer.id,
+        done: false,
+        nextOffset: page.nextOffset,
+        total: page.total,
+        harvested: aircraft.length,
+      }
     }
-  } finally {
-    await run(env, "UPDATE setting SET v='0' WHERE k='lease:mfr'")
+
+    const rebuilt = await rebuildManufacturerMatches(env, manufacturer, at)
+    await run(
+      env,
+      `UPDATE manufacturer
+       SET updated_at=?,last_harvest_at=?,last_harvest_status='ok',last_harvest_note=?
+       WHERE id=?`,
+      at,
+      at,
+      `${page.total} discovered; ${rebuilt.candidates} ranked candidates`,
+      manufacturer.id,
+    )
+    await audit(env, trigger === 'cron' ? 'cron' : 'admin', 'mfr-harvest', 'manufacturer', manufacturer.id, {
+      brand: manufacturer.brand,
+      discovered: page.total,
+      ...rebuilt,
+    }).run()
+    return {
+      job: 'manufacturer',
+      trigger,
+      brand: manufacturer.brand,
+      manufacturerId: manufacturer.id,
+      done: true,
+      total: page.total,
+      ...rebuilt,
+    }
+  } catch (error) {
+    await run(
+      env,
+      `UPDATE manufacturer SET last_harvest_at=?,last_harvest_status='error',last_harvest_note=? WHERE id=?`,
+      at,
+      text(error?.message || error, 500),
+      manufacturer.id,
+    )
+    throw error
+  }
+}
+
+export async function consumeManufacturerHarvestQueue(batch, env) {
+  for (const message of batch.messages) {
+    try {
+      if ((await getSetting(env, 'mfr_paused')) === '1') {
+        message.ack()
+        continue
+      }
+      const result = await harvestManufacturerPage(env, message.body)
+      if (!result.done) {
+        await env.MFR_HARVEST_QUEUE.send({
+          ...message.body,
+          manufacturerId: result.manufacturerId,
+          offset: result.nextOffset,
+        })
+      }
+      message.ack()
+    } catch (error) {
+      if (error?.permanent || message.attempts >= 3) {
+        message.ack()
+      } else {
+        message.retry({ delaySeconds: Math.min(3600, 60 * message.attempts) })
+      }
+    }
   }
 }

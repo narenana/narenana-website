@@ -11,6 +11,7 @@
 // runs the Wings pipeline (availability refresh + discovery), gated internally.
 
 import { handleCatalog, catalogScheduled } from '../catalog/lib/worker.mjs'
+import { consumeManufacturerHarvestQueue } from '../catalog/lib/mfr-jobs.mjs'
 
 export default {
   async fetch(request, env, ctx) {
@@ -81,10 +82,13 @@ export default {
 
   async scheduled(event, env, ctx) {
     // Dispatch on the cron expression. Hourly: YouTube RSS refresh (here) +
-    // IndexNow push (in catalogScheduled). */15: the catalog pipeline slice.
-    // catalogScheduled dispatches internally on event.cron, so call it for both.
+    // IndexNow push. */15: catalog slice. Weekly: manufacturer queue fan-out.
     if (event.cron === '0 * * * *') ctx.waitUntil(refreshFeed(env))
     catalogScheduled(event, env, ctx)
+  },
+
+  async queue(batch, env) {
+    await consumeManufacturerHarvestQueue(batch, env)
   },
 }
 

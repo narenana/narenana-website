@@ -216,7 +216,8 @@ paces requests. The D1 `mfr_product` store is the persistent version.
 3. ✅ Custom-site adapters — JSON-LD plus six dedicated HTML parsers.
 4. ✅ D1 schema + production load.
 5. ✅ Ranked-candidate admin picker with decision-preserving rebuilds.
-6. ✅ Hourly bounded production harvesting cron; weekly manufacturer refresh.
+6. ✅ Weekly Sunday production cron backed by bounded Queue jobs; admin can
+   immediately rematch a newly added model or queue an early harvest.
 7. **Browser-render adapter** — protected sites (fms, flitetest, arrows, durafly).
 8. **OCR pipeline** — manufacturer product images → structured HTML text.
 9. **LLM description rewrite** — unique copy from manufacturer source, queued for review.
