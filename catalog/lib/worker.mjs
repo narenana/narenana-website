@@ -671,6 +671,27 @@ async function api(request, url, env, ep, actor) {
     const orderBy = sort === 'pop' ? 'ORDER BY m.pop_score IS NULL, m.pop_score DESC' : 'ORDER BY m.updated_at DESC'
     const total = (await one(env, `SELECT COUNT(*) n FROM master_model m ${where}`))?.n ?? 0
     const anomalyCount = (await one(env, `SELECT COUNT(*) n FROM master_model WHERE anomaly IS NOT NULL`))?.n ?? 0
+    const popCoverage = sort === 'pop'
+      ? await one(
+        env,
+        `WITH visible AS (
+           SELECT m.id,m.pop_score,m.pop_updated_at
+           FROM master_model m
+           JOIN offer o ON o.master_model_id=m.id
+           JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+           WHERE m.status='ready'
+           GROUP BY m.id
+           HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1
+         )
+         SELECT COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN pop_score IS NOT NULL THEN 1 ELSE 0 END),0) AS scored,
+                COALESCE(SUM(CASE WHEN pop_score>0 THEN 1 ELSE 0 END),0) AS nonzero,
+                COALESCE(SUM(CASE WHEN pop_score=0 THEN 1 ELSE 0 END),0) AS zero,
+                COALESCE(SUM(CASE WHEN pop_score IS NULL THEN 1 ELSE 0 END),0) AS unscored,
+                MAX(pop_updated_at) AS last_poll
+         FROM visible`,
+      )
+      : null
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
         SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
@@ -689,7 +710,7 @@ async function api(request, url, env, ep, actor) {
       for (const v of vids) (byMaster[v.master_model_id] ??= []).push(v)
       for (const m of masters) m.videos = (byMaster[m.id] || []).slice(0, 6)
     }
-    return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort })
+    return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort, popCoverage })
   }
 
   if (ep === 'master' && request.method === 'POST') {

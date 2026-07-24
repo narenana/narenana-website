@@ -396,6 +396,17 @@ test('review payload shape: counts, skus with guess + score + suggestions', asyn
   }
 })
 
+test('popularity admin reports consumer-visible score coverage', async () => {
+  const { status, body } = await api('catalog?sort=pop&page=1')
+  assert.equal(status, 200)
+  assert.equal(typeof body.popCoverage, 'object')
+  const coverage = body.popCoverage
+  for (const key of ['total', 'scored', 'nonzero', 'zero', 'unscored'])
+    assert.equal(typeof coverage[key], 'number', key)
+  assert.equal(coverage.scored + coverage.unscored, coverage.total)
+  assert.equal(coverage.nonzero + coverage.zero, coverage.scored)
+})
+
 test('strict stock filter: default review view only shows in_stock=1', async () => {
   const { body } = await api('review')
   for (const k of body.skus) assert.equal(k.in_stock, 1, `${k.id} not verified in-stock in default view`)

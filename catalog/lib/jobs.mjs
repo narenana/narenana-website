@@ -514,9 +514,23 @@ async function popularitySlice(env, trigger) {
   // let near-full slices keep entering (and starving verify) doing nothing.
   if (quota.units + YT_UNITS_PER_MASTER > YT_DAILY_CAP) return null // budget spent → pause until the 24h window rolls
 
-  // Masters due for a (re)poll: never polled, or older than POP_REFRESH. Only
-  // ready/draft masters WITH offers — one with no listings has nothing to rank
-  // and no seller signal. Oldest (or never) polled first.
+  // Backfill consumer-visible inventory before spending quota on refreshes.
+  // A numeric zero is already covered ("polled, no videos"), while NULL means
+  // the model still needs a first successful score. Once every live in-stock
+  // model has a score, return to weekly refreshes — still in-stock only.
+  const unscored = await one(
+    env,
+    `SELECT m.id
+     FROM master_model m
+     JOIN offer o ON o.master_model_id=m.id
+     JOIN sku k ON k.id=o.sku_id
+     WHERE m.status='ready' AND m.pop_score IS NULL
+       AND k.review_status='approved' AND k.in_stock=1 AND k.dead=0
+     LIMIT 1`,
+  )
+  const backfill = !!unscored
+  const due = backfill ? 'm.pop_score IS NULL' : 'm.pop_updated_at < ?'
+  const dueParams = backfill ? [] : [t - POP_REFRESH]
   const rows = await all(
     env,
     `SELECT m.id, m.brand, m.name, m.category_id, c.triage,
@@ -524,14 +538,14 @@ async function popularitySlice(env, trigger) {
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
      JOIN offer o ON o.master_model_id=m.id
-     JOIN sku k ON k.id=o.sku_id
+     JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
      LEFT JOIN category c ON c.id=m.category_id
-     WHERE m.status IN ('ready','draft')
-       AND (m.pop_updated_at IS NULL OR m.pop_updated_at < ?)
+     WHERE m.status='ready' AND ${due}
      GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1
      ORDER BY m.pop_updated_at IS NOT NULL, COALESCE(m.pop_updated_at,0) ASC
      LIMIT ?`,
-    t - POP_REFRESH,
+    ...dueParams,
     POP_PER_SLICE,
   )
   if (!rows.length) return null // nothing due — let verify have the slice
@@ -592,7 +606,7 @@ async function popularitySlice(env, trigger) {
   }
   quota.units += unitsUsed
   await setSetting(env, 'yt_quota', JSON.stringify(quota))
-  return { job: 'popularity', trigger, polled: rows.length, units: unitsUsed, log }
+  return { job: 'popularity', trigger, mode: backfill ? 'in-stock-backfill' : 'in-stock-refresh', polled: rows.length, units: unitsUsed, log }
 }
 
 // YouTube Data API v3 — search for a model's videos (100 quota units). Returns

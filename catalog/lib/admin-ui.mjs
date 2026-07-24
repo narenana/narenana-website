@@ -237,8 +237,13 @@ function renderCatalog(){
 function renderPopularity(){
   const rows=data.masters||[];
   const start=((data.page||1)-1)*(data.pageSize||50);
+  const pc=data.popCoverage||{};
+  const coverage=pc.total
+    ? '<p style="margin:6px 0"><b>'+pc.scored+'/'+pc.total+' in-stock models scored</b> · '+pc.unscored+' remaining · '+pc.nonzero+' non-zero · '+pc.zero+' checked with no match</p>'
+    : '';
   const head='<div style="margin-bottom:14px"><p class="title" style="margin:0 0 2px">Popularity ranking <span class="tag w">admin preview</span></p>'
-    +'<p class="meta" style="max-width:640px"><b>Score</b> = YouTube interest (views · breadth of coverage · recency) × availability (in-stock &amp; sellers). <b>Raw</b> is interest alone — the content-priority signal (stays high for import-gap models). Not exposed to customers yet: validate the ordering and the matched videos here. Un-polled models sort last; the poll refreshes ~89 models/day (YouTube quota), so a full first pass takes a day or two.</p></div>';
+    +coverage
+    +'<p class="meta" style="max-width:700px"><b>Score</b> = YouTube interest (views · breadth · recency) × availability. The poll spends quota only on published, approved, live in-stock models. It fills every NULL score first; numeric zero means checked with no matching videos. After full coverage, in-stock scores refresh weekly. Not exposed to customers yet.</p></div>';
   if(!rows.length){$('#view').innerHTML=head+'<p class="empty">No models yet.</p>';return}
   $('#view').innerHTML=head+'<table class="t"><thead><tr><th style="width:30px">#</th><th>Model</th><th style="width:118px">Score</th><th>Matched YouTube videos</th><th style="width:64px">Offers</th></tr></thead><tbody>'
     +rows.map((m,i)=>{

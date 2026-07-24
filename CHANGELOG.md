@@ -87,6 +87,10 @@ validates, disagreement flags. **Admin-only; zero consumer UI until content is r
 - YouTube-led model-popularity metric feeding default-sort + content prioritization, with an
   admin preview tab; the daily YouTube quota bursts with a 24-hour rolling reset. (7f5c702,
   4bc5338, 0d53c36)
+- In-stock-first coverage (2026-07-24): first-pass polling now spends quota only on published
+  models with approved, live stock and a NULL score. Numeric zero remains a completed poll.
+  After full in-stock coverage, only those models receive weekly refreshes. Admin shows the
+  scored/remaining/non-zero/zero coverage totals.
 
 ### Decisions / parked
 - The **Nanawing FPV simulator stays independent** on `sim.narenana.com`. A `narenana.com/sim`
