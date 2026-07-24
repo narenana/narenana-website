@@ -31,16 +31,26 @@ const bindSql = (sql, params) => {
   if (i !== params.length) throw new Error('too many SQL parameters')
   return bound
 }
-const execute = (sql) => {
-  const output = execFileSync(
-    process.execPath,
-    [wranglerBin, 'd1', 'execute', 'catalog', '--remote', '--json', '--command', sql],
-    { cwd: process.cwd(), encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 },
-  )
-  const parsed = JSON.parse(output)
-  const first = parsed[0]
-  if (!first?.success) throw new Error(output)
-  return first
+const execute = async (sql) => {
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      const output = execFileSync(
+        process.execPath,
+        [wranglerBin, 'd1', 'execute', 'catalog', '--remote', '--json', '--command', sql],
+        { cwd: process.cwd(), encoding: 'utf8', maxBuffer: 20 * 1024 * 1024 },
+      )
+      const parsed = JSON.parse(output)
+      const first = parsed[0]
+      if (!first?.success) throw new Error(output)
+      return first
+    } catch (error) {
+      const detail = String(error?.stdout || error?.message || error)
+      if (attempt === 5 || !/fetch failed|network|timed out|timeout/i.test(detail)) throw error
+      const delay = 1000 * 2 ** (attempt - 1)
+      console.warn(`Transient remote D1 failure; retrying in ${delay}ms (${attempt}/5)`)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
 }
 
 const db = {
@@ -50,27 +60,27 @@ const db = {
         const bound = bindSql(sql, params)
         return {
           async all() {
-            const result = execute(bound)
+            const result = await execute(bound)
             return { results: result.results || [], meta: result.meta }
           },
           async first() {
-            return (execute(bound).results || [])[0] ?? null
+            return ((await execute(bound)).results || [])[0] ?? null
           },
           async run() {
-            const result = execute(bound)
+            const result = await execute(bound)
             return { results: result.results || [], meta: result.meta }
           },
         }
       },
       async all() {
-        const result = execute(sql)
+        const result = await execute(sql)
         return { results: result.results || [], meta: result.meta }
       },
       async first() {
-        return (execute(sql).results || [])[0] ?? null
+        return ((await execute(sql)).results || [])[0] ?? null
       },
       async run() {
-        const result = execute(sql)
+        const result = await execute(sql)
         return { results: result.results || [], meta: result.meta }
       },
     }
@@ -78,9 +88,9 @@ const db = {
 }
 
 const env = { CATALOG_DB: db }
-const manufacturers = execute(
+const manufacturers = (await execute(
   `SELECT * FROM manufacturer WHERE status='active' ORDER BY id`,
-).results || []
+)).results || []
 
 for (const manufacturer of manufacturers) {
   const result = await rebuildManufacturerMatches(env, manufacturer, Date.now())
