@@ -41,6 +41,10 @@ A large session. Grouped by area; commit hashes in parentheses. Deeper design li
 - Wix CDN (`static.wixstatic.com`) added to the image host allowlist. (4c0780f)
 
 ### Admin
+- **Aircraft data tab** shows only published models with an accepted manufacturer mapping.
+  It pre-fills conservative, evidence-backed flight characteristics from official product
+  text, exposes every harvested manufacturer photo, and stores owner edits separately so
+  weekly harvesting cannot overwrite them. Unknown values remain explicit and editable.
 - **Duplicates tab** now floats **both-in-stock pairs to the top** — the only merges that
   change what a shopper sees — with a per-pair badge and a boundary divider so the cosmetic
   (one-side-out-of-stock) tail is easy to skip. (ff836e1)

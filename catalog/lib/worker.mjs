@@ -14,9 +14,29 @@ import {
   rebuildManufacturerMatches,
 } from './mfr-jobs.mjs'
 import { configAgreement, configTypes } from './mfr-match.mjs'
+import {
+  PROFILE_FIELDS,
+  extractManufacturerFacts,
+  mergeProfile,
+  normalizeProfilePatch,
+  validateProfileValues,
+} from './mfr-profile.mjs'
 import { getHtml, ogImageFrom, feedPage } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, audit } from './db.mjs'
-import { json, esc, now, canonicalUrl, hostOf, slugify, normName, basicAuth, challenge, imgKey, imageCacheHeaders } from './util.mjs'
+import {
+  json,
+  esc,
+  now,
+  canonicalUrl,
+  hostOf,
+  slugify,
+  normName,
+  basicAuth,
+  challenge,
+  imgKey,
+  imageCacheHeaders,
+  fetchWithAllowedRedirects,
+} from './util.mjs'
 
 // --- categories cache (per-isolate, 60s) — saves a D1 query on most requests
 let catCache = { at: 0, rows: [] }
@@ -346,8 +366,14 @@ async function indexNowPing(env) {
 const IMG_CDN = /(^|\.)(cdn\.shopify\.com|shopify\.com|zohocommercecdn\.com|wixstatic\.com)$/
 
 async function imgProxy(env, path, ctx) {
-  const m = path.match(/^\/img\/(master|sku|mfr)\/(\d+)$/)
+  const m = path.match(/^\/img\/(master|sku|mfr)\/(\d+)(?:\/(\d+))?$/)
   if (!m) return new Response('bad path', { status: 400 })
+  // Only manufacturer products have a gallery. Keep master/sku URLs strict so
+  // an accidental suffix does not silently resolve to a different image.
+  if (m[3] != null && m[1] !== 'mfr') return new Response('bad path', { status: 400 })
+  const imageIndex = m[3] == null ? 0 : Number(m[3])
+  if (!Number.isInteger(imageIndex) || imageIndex < 0 || imageIndex > 19)
+    return new Response('bad image index', { status: 400 })
   const cacheHeaders = imageCacheHeaders(m[1])
   const src =
     m[1] === 'master'
@@ -362,8 +388,9 @@ async function imgProxy(env, path, ctx) {
         : (await one(
             env,
             `SELECT CASE WHEN json_valid(image_urls)
-                         THEN json_extract(image_urls,'$[0]') END AS u
+                         THEN json_extract(image_urls,?) END AS u
              FROM mfr_product WHERE id=?`,
+            `$[${imageIndex}]`,
             m[2],
           ))?.u
   if (!src) return new Response('no image', { status: 404 })
@@ -390,13 +417,18 @@ async function imgProxy(env, path, ctx) {
       IMG_CDN.test(host))
   const h = hostOf(src)
   if (!allowed(h)) return new Response('host not allowed', { status: 403 })
-  let img
-  try { img = await fetch(src, { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${h}/` } }) }
-  catch { return new Response('origin unreachable', { status: 502 }) }
-  // Re-check after redirects — a seller 30x'ing to an arbitrary host must not
-  // turn this into an open proxy.
-  const finalHost = hostOf(img.url)
-  if (!allowed(finalHost)) return new Response('redirect off-allowlist', { status: 403 })
+  let followed
+  try {
+    followed = await fetchWithAllowedRedirects(src, {
+      allowed,
+      init: { headers: { 'user-agent': 'Mozilla/5.0', referer: `https://${h}/` } },
+    })
+  } catch {
+    return new Response('origin unreachable', { status: 502 })
+  }
+  // Every redirect target is checked before the next request is sent.
+  if (followed.blocked) return new Response('redirect off-allowlist', { status: 403 })
+  const img = followed.response
   const ct = img.headers.get('content-type') ?? 'image/jpeg'
   if (!img.ok) return new Response('origin error', { status: img.status })
   if (!/^image\//i.test(ct)) return new Response('not an image', { status: 502 })
@@ -405,9 +437,50 @@ async function imgProxy(env, path, ctx) {
   return new Response(buf, { headers: { ...cacheHeaders, 'content-type': ct, 'x-img': 'origin' } })
 }
 
+const jsonObject = (value) => {
+  try {
+    const parsed = JSON.parse(value || '{}')
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const manufacturerGallery = (value, productId) => {
+  let urls = []
+  try {
+    const parsed = JSON.parse(value || '[]')
+    if (Array.isArray(parsed)) urls = parsed
+  } catch {}
+  const seen = new Set()
+  const images = []
+  for (let index = 0; index < urls.length && index < 20; index++) {
+    const source = typeof urls[index] === 'string' ? urls[index].trim() : ''
+    if (!source || seen.has(source)) continue
+    seen.add(source)
+    // Do not expose manufacturer origin URLs to the browser. The authenticated
+    // proxy enforces the manufacturer allowlist and keeps its cache private.
+    images.push({ index, url: `/img/mfr/${productId}/${index}` })
+  }
+  return images
+}
+
 // --------------------------------------------------------------------- API
 async function api(request, url, env, ep, actor) {
-  const body = request.method === 'POST' ? await request.json().catch(() => ({})) : {}
+  let body = {}
+  if (request.method === 'POST') {
+    // HTTP Basic credentials may be reused by the browser on a cross-site
+    // request. Require a non-simple JSON request and reject foreign origins so
+    // an unrelated page cannot mutate curated admin data (or any other API
+    // state) with a credentialed form/text request.
+    const contentType = request.headers.get('content-type') || ''
+    if (!/^application\/json(?:\s*;|$)/i.test(contentType))
+      return json({ error: 'content-type must be application/json' }, 415)
+    const origin = request.headers.get('origin')
+    if ((origin && origin !== url.origin) || request.headers.get('sec-fetch-site') === 'cross-site')
+      return json({ error: 'cross-origin admin request rejected' }, 403)
+    body = await request.json().catch(() => ({}))
+  }
 
   if (ep === 'run' && request.method === 'POST') {
     const res = await runSlice(env, 'manual')
@@ -890,6 +963,191 @@ async function api(request, url, env, ep, actor) {
     }
     if (stmts.length) { stmts.push(audit(env, actor, 'rederive-power', 'jobs', '', { changed: changed.length })); await batch(env, stmts) }
     return json({ ok: true, snapshotsWithDesc: rows.length, changedToGas: changed.length, changed })
+  }
+
+  // ---- structured aircraft data for published + accepted mappings only ----
+  if (ep === 'mfr-profiles' && request.method === 'GET') {
+    const rows = await all(
+      env,
+      `SELECT m.id AS master_model_id,m.brand,m.name,m.slug,m.status AS model_status,
+              m.specs,m.power,m.role_tags,c.path_prefix,
+              COALESCE(m.hero_image,
+                (SELECT k.image_url FROM offer oi JOIN sku k ON k.id=oi.sku_id
+                 WHERE oi.master_model_id=m.id AND k.image_url IS NOT NULL
+                 ORDER BY k.dead ASC,k.in_stock DESC LIMIT 1)) AS model_image,
+              (SELECT GROUP_CONCAT(DISTINCT oc.config)
+               FROM offer oc JOIN sku kc ON kc.id=oc.sku_id
+               WHERE oc.master_model_id=m.id
+                 AND kc.review_status='approved' AND kc.dead=0) AS model_configs,
+              mm.status AS match_status,mm.mfr_product_id,
+              p.ext_id AS mfr_ext_id,p.title AS mfr_title,p.url AS mfr_url,
+              p.span_mm AS mfr_span,p.body_text,p.image_urls,p.fetched_at,
+              mf.brand AS mfr_brand,mf.domain,mf.strategy,
+              (SELECT COUNT(*)
+               FROM mfr_match smm JOIN master_model sm ON sm.id=smm.master_model_id
+               WHERE smm.mfr_product_id=mm.mfr_product_id
+                 AND smm.status='accepted' AND sm.status='ready') AS shared_mapping_count,
+              (SELECT COUNT(*) FROM mfr_profile old
+               WHERE old.master_model_id=m.id
+                 AND old.source_mfr_product_id<>mm.mfr_product_id) AS prior_profile_count,
+              pr.source_mfr_product_id AS profile_source_mfr_product_id,
+              pr.overrides_json,pr.updated_by,pr.updated_at
+       FROM master_model m
+       JOIN mfr_match mm ON mm.master_model_id=m.id
+       JOIN mfr_product p ON p.id=mm.mfr_product_id
+       JOIN manufacturer mf ON mf.id=p.manufacturer_id
+       JOIN category c ON c.id=m.category_id
+       LEFT JOIN mfr_profile pr
+         ON pr.master_model_id=m.id
+        AND pr.source_mfr_product_id=mm.mfr_product_id
+       WHERE m.status='ready' AND mm.status='accepted'
+         AND mm.mfr_product_id IS NOT NULL
+       ORDER BY m.brand COLLATE NOCASE,m.name COLLATE NOCASE,m.id`,
+    )
+    const profiles = rows.map((row) => {
+      const extracted = extractManufacturerFacts({
+        title: row.mfr_title,
+        bodyText: row.body_text,
+        spanMM: row.mfr_span,
+        specs: jsonObject(row.specs),
+      })
+      const sourceChanged = row.overrides_json == null && Number(row.prior_profile_count || 0) > 0
+      const overrides = jsonObject(row.overrides_json)
+      return {
+        master_model_id: row.master_model_id,
+        mfr_product_id: row.mfr_product_id,
+        model_status: row.model_status,
+        match_status: row.match_status,
+        brand: row.brand,
+        name: row.name,
+        slug: row.slug,
+        path_prefix: row.path_prefix,
+        model_image: row.model_image ? `/img/master/${row.master_model_id}` : null,
+        specs: jsonObject(row.specs),
+        power: row.power,
+        role_tags: row.role_tags,
+        model_configs: row.model_configs,
+        mfr_ext_id: row.mfr_ext_id,
+        mfr_title: row.mfr_title,
+        mfr_url: row.mfr_url,
+        mfr_span: row.mfr_span,
+        mfr_brand: row.mfr_brand,
+        manufacturer_domain: row.domain,
+        manufacturer_strategy: row.strategy,
+        fetched_at: row.fetched_at,
+        shared_mapping_count: Number(row.shared_mapping_count || 0),
+        images: manufacturerGallery(row.image_urls, row.mfr_product_id),
+        suggestions: extracted.suggestions,
+        evidence: extracted.evidence,
+        sources: extracted.sources,
+        overrides,
+        values: mergeProfile(extracted.suggestions, overrides),
+        source_changed: sourceChanged,
+        updated_by: sourceChanged ? null : row.updated_by,
+        updated_at: sourceChanged ? null : row.updated_at,
+      }
+    })
+    return json({ profiles, count: profiles.length, fields: PROFILE_FIELDS })
+  }
+
+  if (ep === 'mfr-profile' && request.method === 'POST') {
+    const masterId = Number(body.masterId)
+    const mfrProductId = Number(body.mfrProductId)
+    if (
+      body.masterId == null ||
+      body.mfrProductId == null ||
+      !Number.isSafeInteger(masterId) ||
+      !Number.isSafeInteger(mfrProductId) ||
+      masterId <= 0 ||
+      mfrProductId <= 0
+    )
+      return json({ error: 'need masterId + mfrProductId' }, 400)
+    const current = await one(
+      env,
+      `SELECT m.id,m.status AS model_status,m.specs,
+              mm.status AS match_status,mm.mfr_product_id,
+              p.title AS mfr_title,p.body_text,p.span_mm AS mfr_span
+       FROM master_model m LEFT JOIN mfr_match mm ON mm.master_model_id=m.id
+       LEFT JOIN mfr_product p ON p.id=mm.mfr_product_id
+       WHERE m.id=?`,
+      masterId,
+    )
+    if (!current) return json({ error: 'unknown model' }, 404)
+    if (
+      current.model_status !== 'ready' ||
+      current.match_status !== 'accepted' ||
+      !current.mfr_product_id
+    )
+      return json({ error: 'model is not published with an accepted manufacturer mapping' }, 409)
+    if (+current.mfr_product_id !== mfrProductId)
+      return json({ error: 'manufacturer mapping changed; reload before saving' }, 409)
+
+    let patch
+    try {
+      patch = normalizeProfilePatch(body.overrides)
+    } catch (error) {
+      return json({ error: String(error.message || error) }, 400)
+    }
+    if (!Object.keys(patch).length) return json({ error: 'profile patch is empty' }, 400)
+    const stored = await one(
+      env,
+      `SELECT overrides_json,updated_at FROM mfr_profile
+       WHERE master_model_id=? AND source_mfr_product_id=?`,
+      masterId,
+      mfrProductId,
+    )
+    const previous = jsonObject(stored?.overrides_json)
+    const overrides = { ...previous, ...patch }
+    try {
+      const extracted = extractManufacturerFacts({
+        title: current.mfr_title,
+        bodyText: current.body_text,
+        spanMM: current.mfr_span,
+        specs: jsonObject(current.specs),
+      })
+      validateProfileValues(mergeProfile(extracted.suggestions, overrides))
+    } catch (error) {
+      return json({ error: String(error.message || error) }, 400)
+    }
+    const expectedUpdatedAt = stored?.updated_at ?? null
+    const at = Math.max(now(), Number(expectedUpdatedAt || 0) + 1)
+    const auditDetail = JSON.stringify({
+      mfrProductId,
+      fields: Object.keys(patch),
+    }).slice(0, 2000)
+    const results = await batch(env, [
+      q(
+        env,
+        `INSERT INTO mfr_profile
+           (master_model_id,source_mfr_product_id,overrides_json,created_at,updated_at,updated_by)
+         VALUES (?,?,?,?,?,?)
+         ON CONFLICT(master_model_id,source_mfr_product_id) DO UPDATE SET
+           overrides_json=excluded.overrides_json,
+           updated_at=excluded.updated_at,updated_by=excluded.updated_by
+         WHERE mfr_profile.updated_at IS ?`,
+        masterId,
+        mfrProductId,
+        JSON.stringify(overrides),
+        at,
+        at,
+        actor,
+        expectedUpdatedAt,
+      ),
+      q(
+        env,
+        `INSERT INTO audit (at,actor,action,entity,entity_id,detail)
+         SELECT ?,?,?,?,?,? WHERE changes()>0`,
+        at,
+        actor,
+        'mfr-profile-update',
+        'master_model',
+        String(masterId),
+        auditDetail,
+      ),
+    ])
+    if ((results?.[0]?.meta?.changes ?? 0) === 0)
+      return json({ error: 'aircraft data changed while saving; reload and try again' }, 409)
+    return json({ ok: true, overrides, updated_at: at, updated_by: actor })
   }
 
   // ---- manufacturer-match review (admin-only; no consumer surface) ----

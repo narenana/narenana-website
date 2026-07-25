@@ -15,7 +15,8 @@ import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 import { configAgreement as mfrConfigAgreement, configTypes as mfrConfigTypes, isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
 import { fetchStrategyPage } from '../lib/mfr-strategies.mjs'
 import { MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
-import { imageCacheHeaders } from '../lib/util.mjs'
+import { extractManufacturerFacts, mergeProfile, normalizeProfilePatch, PROFILE_FIELDS, validateProfileValues } from '../lib/mfr-profile.mjs'
+import { fetchWithAllowedRedirects, imageCacheHeaders } from '../lib/util.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -124,6 +125,167 @@ test('Shopify manufacturer harvesting is cursor-paged', async () => {
 
 test('manufacturer harvesting uses one weekly production trigger', () => {
   assert.equal(MFR_WEEKLY_CRON, '7 3 * * SUN')
+})
+
+test('manufacturer profile schema has stable unique keys', () => {
+  const keys = PROFILE_FIELDS.map((field) => field.key)
+  assert.equal(new Set(keys).size, keys.length)
+  for (const key of [
+    'controlLayout', 'motorCount', 'propulsionPosition', 'difficulty',
+    'recommendedAuwMinG', 'maxAuwG', 'fpvReadiness', 'fcReadiness',
+    'lowSpeedBehavior', 'fieldRequirement',
+  ]) assert.ok(keys.includes(key), key)
+})
+
+test('manufacturer profile extracts only explicit controls, weights, FPV/FC and field facts', () => {
+  const fish = extractManufacturerFacts({
+    title: 'Flying Fish dual motor FPV aircraft',
+    bodyText: 'True 4-channel control over Aileron, Elevator, Throttle and Rudder. ' +
+      'Included FPV camera mounts. Suitable for beginners or intermediate users. ' +
+      'Recommend take off weight: 250g. Max. take off weight: 280g.',
+  })
+  assert.equal(fish.suggestions.controlLayout, 'conventional')
+  assert.deepEqual(fish.suggestions.controlSurfaces, ['aileron', 'elevator', 'rudder'])
+  assert.equal(fish.suggestions.channels, 4)
+  assert.equal(fish.suggestions.motorCount, 2)
+  assert.equal(fish.suggestions.difficulty, 'beginner')
+  assert.equal(fish.suggestions.recommendedAuwMinG, 250)
+  assert.equal(fish.suggestions.recommendedAuwMaxG, 250)
+  assert.equal(fish.suggestions.maxAuwG, 280)
+  assert.equal(fish.suggestions.fpvReadiness, 'purpose_built')
+  assert.match(fish.evidence.maxAuwG, /Max\. take off weight/i)
+  assert.deepEqual(fish.sources.difficulty, {
+    kind: 'manufacturer_text',
+    confidence: 'manufacturer_claim',
+  })
+
+  const whale = extractManufacturerFacts({
+    bodyText: 'Twin motor pusher. Exclusive installation positions for the flight controller, VTX and antenna. ' +
+      '3KG Payload Capacity. OFF-Road Landing Gear.',
+  })
+  assert.equal(whale.suggestions.motorCount, 2)
+  assert.equal(whale.suggestions.propulsionPosition, 'pusher')
+  assert.equal(whale.suggestions.fcReadiness, 'purpose_built')
+  assert.equal(whale.suggestions.fpvReadiness, 'purpose_built')
+  assert.equal(whale.suggestions.payloadG, 3000)
+  assert.equal(whale.suggestions.fieldRequirement, 'rough_grass_ok')
+  assert.deepEqual(whale.suggestions.landingMethods, ['wheels'])
+})
+
+test('manufacturer profile handles AUW ranges and does not promote package prose into facts', () => {
+  const range = extractManufacturerFacts({ bodyText: 'AUW: 350 - 420 g. Flying skill level intermediate/advanced.' })
+  assert.equal(range.suggestions.recommendedAuwMinG, 350)
+  assert.equal(range.suggestions.recommendedAuwMaxG, 420)
+  assert.equal(range.suggestions.difficulty, 'intermediate_advanced')
+
+  const maxOnly = extractManufacturerFacts({ bodyText: 'Max. take off weight: 2500g. Item weight: 1.76kg. Easy assembly.' })
+  assert.equal(maxOnly.suggestions.maxAuwG, 2500)
+  assert.equal('recommendedAuwMinG' in maxOnly.suggestions, false, 'max weight is not also a recommended AUW')
+  assert.equal('difficulty' in maxOnly.suggestions, false, 'easy assembly says nothing about flying difficulty')
+
+  const mentionsOnly = extractManufacturerFacts({
+    title: 'FPV fixed wing',
+    bodyText: 'Item weight: 1.6kg. Includes landing gear.',
+  })
+  assert.equal('fpvReadiness' in mentionsOnly.suggestions, false, 'a bare FPV label does not prove accommodation')
+  assert.equal('recommendedAuwMinG' in mentionsOnly.suggestions, false, 'item/package weight is not AUW')
+  assert.equal('fieldRequirement' in mentionsOnly.suggestions, false, 'landing gear alone does not prove grass suitability')
+  const genericSpace = extractManufacturerFacts({
+    bodyText: 'There is enough space for all necessary electronics inside the canopy.',
+  })
+  assert.equal('fpvReadiness' in genericSpace.suggestions, false, 'generic electronics space is not explicit FPV accommodation')
+  assert.equal('fcReadiness' in genericSpace.suggestions, false, 'generic electronics space is not explicit FC accommodation')
+  const fcOnly = extractManufacturerFacts({
+    bodyText: 'A dedicated mounting position is provided for the flight controller.',
+  })
+  assert.equal(fcOnly.suggestions.fcReadiness, 'purpose_built')
+  assert.equal('fpvReadiness' in fcOnly.suggestions, false, 'an FC mount alone does not prove FPV accommodation')
+
+  assert.equal(
+    'difficulty' in extractManufacturerFacts({
+      title: 'Advanced aerobatic plane',
+      bodyText: 'This aircraft is not for beginners.',
+    }).suggestions,
+    false,
+    'a negated beginner phrase is never a beginner recommendation',
+  )
+  assert.equal(
+    extractManufacturerFacts({ title: 'Beginner RC Airplane Trainer' }).suggestions.difficulty,
+    'beginner',
+    'an explicit manufacturer title claim is usable',
+  )
+  assert.equal(
+    extractManufacturerFacts({
+      title: 'Ranger 2400 PNP 5CH',
+      bodyText: 'Use a 5 channel or more than 5 channel receiver.',
+    }).suggestions.channels,
+    5,
+    'an exact title/spec count wins over later receiver-flexibility prose',
+  )
+  assert.equal(
+    extractManufacturerFacts({ bodyText: 'Requires more than 5 channels.' }).suggestions.channels,
+    6,
+    'a standalone more-than requirement still raises the minimum',
+  )
+})
+
+test('manufacturer profile patch normalization validates enums, numbers and explicit clears', () => {
+  assert.deepEqual(
+    normalizeProfilePatch({
+      controlLayout: 'V-tail',
+      channels: '4',
+      launchMethods: ['Hand launch', 'ground-roll', 'Hand launch'],
+      fieldNotes: '  Short grass tested manually.  ',
+      maxAuwG: null,
+    }),
+    {
+      controlLayout: 'v_tail',
+      channels: 4,
+      launchMethods: ['hand_launch', 'ground_roll'],
+      fieldNotes: 'Short grass tested manually.',
+      maxAuwG: null,
+    },
+  )
+  assert.throws(() => normalizeProfilePatch({ mystery: 1 }), /unknown profile field/)
+  assert.throws(() => normalizeProfilePatch({ constructor: null }), /unknown profile field/)
+  assert.throws(() => normalizeProfilePatch({ toString: null }), /unknown profile field/)
+  assert.throws(() => normalizeProfilePatch(JSON.parse('{"__proto__":null}')), /unknown profile field/)
+  assert.throws(() => normalizeProfilePatch({ channels: 0 }), /integer from 1 to 32/)
+  assert.throws(() => normalizeProfilePatch({ difficulty: 'very hard' }), /must be one of/)
+  assert.throws(() => normalizeProfilePatch({ landingMethods: ['parachute'] }), /unsupported value/)
+})
+
+test('manufacturer profile validates AUW relationships', () => {
+  const valid = { recommendedAuwMinG: 350, recommendedAuwMaxG: 420, maxAuwG: 500 }
+  assert.equal(validateProfileValues(valid), valid)
+  assert.throws(
+    () => validateProfileValues({ recommendedAuwMinG: 450, recommendedAuwMaxG: 400 }),
+    /minimum cannot exceed good AUW maximum/,
+  )
+  assert.throws(
+    () => validateProfileValues({ recommendedAuwMaxG: 600, maxAuwG: 500 }),
+    /Good AUW maximum cannot exceed maximum AUW/,
+  )
+  assert.throws(
+    () => validateProfileValues({ recommendedAuwMinG: 600, maxAuwG: 500 }),
+    /Good AUW minimum cannot exceed maximum AUW/,
+  )
+  assert.doesNotThrow(() => validateProfileValues({
+    recommendedAuwMinG: null,
+    recommendedAuwMaxG: null,
+    maxAuwG: 500,
+  }))
+})
+
+test('manual manufacturer profile overrides win, including explicit null', () => {
+  const suggestions = { channels: 4, difficulty: 'beginner', maxAuwG: 280 }
+  const overrides = { difficulty: 'intermediate', maxAuwG: null }
+  assert.deepEqual(mergeProfile(suggestions, overrides), {
+    channels: 4,
+    difficulty: 'intermediate',
+    maxAuwG: null,
+  })
+  assert.equal(suggestions.difficulty, 'beginner', 'merge does not mutate suggestions')
 })
 
 // ------------------------------------------------------ popularity scoring
@@ -382,6 +544,30 @@ test('manufacturer admin binds details and safe links to the selected candidate'
   assert.match(ADMIN_HTML, /\/img\/mfr\//)
 })
 
+test('aircraft-data admin exposes editable sourced facts and the full protected gallery', () => {
+  assert.match(ADMIN_HTML, /data-tab="mfrdata">Aircraft data/)
+  assert.match(ADMIN_HTML, /api\('mfr-profiles'\)/)
+  assert.match(ADMIN_HTML, /renderMfrProfiles/)
+  for (const label of [
+    'Control layout',
+    'Motor \\/ engine count',
+    'Pilot level',
+    'Good AUW minimum',
+    'Maximum AUW',
+    'FPV readiness',
+    'Flight-controller readiness',
+    'Low-speed behavior',
+    'Field requirement',
+  ]) assert.match(ADMIN_HTML, new RegExp(label))
+  assert.match(ADMIN_HTML, /Manufacturer text/)
+  assert.match(ADMIN_HTML, /Unknown \/ needs input/)
+  assert.match(ADMIN_HTML, /data-mp-save/)
+  assert.match(ADMIN_HTML, /mfrProductId:\+r\.mfr_product_id,overrides:over/)
+  assert.match(ADMIN_HTML, /\/img\/mfr\/'?\+r\.mfr_product_id\+'?\/'?\+i/)
+  assert.match(ADMIN_HTML, /Shared mapping:/)
+  assert.match(ADMIN_HTML, /Mapping changed:/)
+})
+
 // ---------------------------------------------------------------- public
 test('category grid renders (SSR), stylesheet served', async () => {
   const res = await get('/wings/')
@@ -415,18 +601,71 @@ test('admin + api are Basic-auth gated; wrong creds 401 with challenge', async (
   assert.equal(ok.status, 200)
 })
 
+test('authenticated admin mutations reject cross-site and non-JSON requests', async () => {
+  const crossSite = await fetch(BASE + '/api/mfr-profile', {
+    method: 'POST',
+    headers: {
+      authorization: AUTH,
+      'content-type': 'application/json',
+      origin: 'https://attacker.example',
+      'sec-fetch-site': 'cross-site',
+    },
+    body: '{}',
+  })
+  assert.equal(crossSite.status, 403)
+  const simple = await fetch(BASE + '/api/mfr-profile', {
+    method: 'POST',
+    headers: { authorization: AUTH, 'content-type': 'text/plain' },
+    body: '{}',
+  })
+  assert.equal(simple.status, 415)
+})
+
 // -------------------------------------------------------------- img proxy
 test('img proxy: bad path 400, unknown id 404', async () => {
   assert.equal((await get('/img/whatever')).status, 400)
   assert.equal((await get('/img/sku/999999')).status, 404)
   assert.equal((await get('/img/mfr/999999')).status, 401, 'manufacturer review images stay admin-only')
   assert.equal((await get('/img/mfr/999999', { authorization: AUTH })).status, 404)
+  assert.equal((await get('/img/mfr/999999/1')).status, 401, 'every gallery image stays admin-only')
+  assert.equal((await get('/img/mfr/999999/1', { authorization: AUTH })).status, 404)
+  assert.equal((await get('/img/mfr/999999/20', { authorization: AUTH })).status, 400, 'gallery index is bounded to the harvested cap')
 })
 
 test('manufacturer images cannot be reused by a shared HTTP cache', () => {
   assert.match(imageCacheHeaders('master')['cache-control'], /^public,/)
   assert.match(imageCacheHeaders('mfr')['cache-control'], /^private,/)
   assert.equal(imageCacheHeaders('mfr').vary, 'authorization')
+})
+
+test('image redirects are allowlisted before the redirected request is sent', async () => {
+  const calls = []
+  const blocked = await fetchWithAllowedRedirects('https://allowed.example/image.jpg', {
+    allowed: (host) => host === 'allowed.example',
+    fetcher: async (url, init) => {
+      calls.push({ url, redirect: init.redirect })
+      return new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } })
+    },
+  })
+  assert.equal(blocked.blocked, true)
+  assert.equal(calls.length, 1, 'the disallowed redirect target is never requested')
+  assert.equal(calls[0].redirect, 'manual')
+
+  const followedCalls = []
+  const followed = await fetchWithAllowedRedirects('https://allowed.example/start', {
+    allowed: (host) => host === 'allowed.example' || host === 'cdn.example',
+    fetcher: async (url) => {
+      followedCalls.push(url)
+      return followedCalls.length === 1
+        ? new Response(null, { status: 301, headers: { location: 'https://cdn.example/image.jpg' } })
+        : new Response('image', { status: 200, headers: { 'content-type': 'image/jpeg' } })
+    },
+  })
+  assert.equal(followed.response.status, 200)
+  assert.deepEqual(followedCalls, [
+    'https://allowed.example/start',
+    'https://cdn.example/image.jpg',
+  ])
 })
 
 test('manufacturer admin payload carries comparison and selected-candidate details', async () => {
@@ -444,6 +683,49 @@ test('manufacturer admin payload carries comparison and selected-candidate detai
       assert.ok(candidate.config_agree === null || candidate.config_agree === 0 || candidate.config_agree === 1)
     }
   }
+})
+
+test('aircraft-data payload contains only published accepted manufacturer mappings', async () => {
+  const { status, body } = await api('mfr-profiles')
+  assert.equal(status, 200)
+  assert.ok(Array.isArray(body.profiles))
+  assert.ok(Array.isArray(body.fields))
+  assert.equal(body.count, body.profiles.length)
+  for (const row of body.profiles) {
+    assert.equal(row.model_status, 'ready')
+    assert.equal(row.match_status, 'accepted')
+    assert.ok(Number.isInteger(row.master_model_id) && row.master_model_id > 0)
+    assert.ok(Number.isInteger(row.mfr_product_id) && row.mfr_product_id > 0)
+    assert.equal(typeof row.suggestions, 'object')
+    assert.equal(typeof row.evidence, 'object')
+    assert.equal(typeof row.overrides, 'object')
+    assert.equal(typeof row.values, 'object')
+    assert.ok(Array.isArray(row.images))
+    for (const image of row.images)
+      assert.match(image.url, /^\/img\/mfr\/\d+\/(?:[0-9]|1[0-9])$/)
+  }
+})
+
+test('aircraft-data save rejects invalid and stale requests without writing', async () => {
+  assert.equal((await api('mfr-profile', {})).status, 400)
+  const profiles = (await api('mfr-profiles')).body.profiles
+  if (!profiles.length) return
+  const row = profiles[0]
+  assert.equal((await api('mfr-profile', {
+    masterId: row.master_model_id,
+    mfrProductId: row.mfr_product_id,
+    overrides: {},
+  })).status, 400)
+  assert.equal((await api('mfr-profile', {
+    masterId: row.master_model_id,
+    mfrProductId: row.mfr_product_id,
+    overrides: { notARealField: 'x' },
+  })).status, 400)
+  assert.equal((await api('mfr-profile', {
+    masterId: row.master_model_id,
+    mfrProductId: row.mfr_product_id + 1,
+    overrides: { channels: 4 },
+  })).status, 409)
 })
 
 // ---------------------------------------------------------------- review

@@ -41,12 +41,13 @@ table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t 
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
 </style></head><body>
 <header>
-  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v12</span></h1>
+  <h1>Catalog <span style="opacity:.4;font-size:.7rem">v14</span></h1>
   <button class="on" data-tab="review">Review</button>
   <button data-tab="catalog">Catalog</button>
   <button data-tab="popularity">Popularity</button>
   <button data-tab="dupes">Duplicates</button>
   <button data-tab="mfr">Manufacturer</button>
+  <button data-tab="mfrdata">Aircraft data</button>
   <span class="tsep"></span>
   <button data-tab="sources">Sources</button>
   <button data-tab="system">System</button>
@@ -66,12 +67,13 @@ const fmtViews=(n)=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.roun
 // opened as http://user:pass@host/admin the document base carries credentials
 // and fetch() refuses to construct the request — the panel dies looking empty.
 const api=async(p,body)=>{const r=await fetch(new URL('/api/'+p,location.origin),body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
-let tab='review',F={status:'new',stock:'in',src:'',page:1,mfrChoices:{}},data=null,reqSeq=0;
+let tab='review',F={status:'new',stock:'in',src:'',page:1,mfrChoices:{},mfrDataFilter:'all',mfrProfileDrafts:{},mfrProfileSaved:{},mfrProfileSaving:{},mfrProfileNotice:''},data=null,reqSeq=0;
 
 // URL state: /admin?tab=&status=&stock=&src=&page= — filters are linkable and
 // survive refresh / back-button.
 function syncURL(){var p=new URLSearchParams();p.set('tab',tab);
   if(tab==='review'){p.set('status',F.status);if(F.status==='new')p.set('stock',F.stock);if(F.src)p.set('src',F.src)}
+  if(tab==='mfrdata'&&F.mfrDataFilter!=='all')p.set('view',F.mfrDataFilter);
   if(F.page>1)p.set('page',F.page);
   try{history.replaceState(null,'','/admin?'+p.toString())}catch(e){}}
 function readURL(){var p=new URLSearchParams(location.search);
@@ -79,11 +81,15 @@ function readURL(){var p=new URLSearchParams(location.search);
   if(p.get('status'))F.status=p.get('status');
   if(p.get('stock'))F.stock=p.get('stock');
   if(p.get('src')!=null)F.src=p.get('src');
+  if(['all','needs','complete'].includes(p.get('view')))F.mfrDataFilter=p.get('view');
   F.page=Math.max(1,parseInt(p.get('page')||'1',10)||1);}
 function markTab(){document.querySelectorAll('header button[data-tab]').forEach((x)=>x.classList.toggle('on',x.dataset.tab===tab))}
-document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{tab=b.dataset.tab;F.page=1;markTab();load()});
-window.addEventListener('popstate',()=>{readURL();markTab();load()});
-$('#run').onclick=async()=>{$('#log').hidden=false;$('#log').textContent='running slice…';try{const d=await api('run',{});$('#log').textContent=JSON.stringify(d,null,1)}catch(e){$('#log').textContent=e.message}load()};
+function hasProfileDrafts(){return Object.values(F.mfrProfileDrafts).some(function(x){return x&&Object.keys(x.overrides||{}).length})}
+function hasProfileSaves(){return Object.keys(F.mfrProfileSaving).length>0}
+document.querySelectorAll('header button[data-tab]').forEach((b)=>b.onclick=()=>{if(hasProfileSaves())return;if(tab==='mfrdata'&&b.dataset.tab!==tab&&hasProfileDrafts()){if(!confirm('Discard unsaved aircraft-data changes?'))return;F.mfrProfileDrafts={}}tab=b.dataset.tab;F.page=1;markTab();load()});
+window.addEventListener('popstate',()=>{if(hasProfileSaves()){syncURL();return}readURL();markTab();load()});
+window.addEventListener('beforeunload',(e)=>{if(hasProfileDrafts()||hasProfileSaves()){e.preventDefault();e.returnValue=''}});
+$('#run').onclick=async()=>{if(hasProfileSaves())return;$('#log').hidden=false;$('#log').textContent='running slice…';try{const d=await api('run',{});$('#log').textContent=JSON.stringify(d,null,1)}catch(e){$('#log').textContent=e.message}if(!hasProfileSaves())load()};
 
 // SPA pager: total/pageSize/current → buttons that set F.page and reload.
 function pager(total,pageSize,page){
@@ -96,6 +102,7 @@ function pager(total,pageSize,page){
 function wirePager(){document.querySelectorAll('button[data-page]').forEach((b)=>b.onclick=()=>{F.page=+b.dataset.page;load();window.scrollTo(0,0)})}
 
 async function load(){
+  if(hasProfileSaves())return;
   const my=++reqSeq;               // stale responses from an old tab must not render
   syncURL();
   $('#filters').style.display=tab==='review'?'flex':'none';
@@ -108,8 +115,9 @@ async function load(){
     else if(tab==='popularity')d=await api('catalog?sort=pop&page='+F.page);
     else if(tab==='dupes')d=await api('duplicates');
     else if(tab==='mfr')d=await api('mfr-matches?status='+(F.mfrStatus||'pending'));
+    else if(tab==='mfrdata')d=await api('mfr-profiles');
     else if(tab==='system')d=await api('system');
-    if(my!==reqSeq)return;          // a newer load() superseded this one
+    if(my!==reqSeq||hasProfileSaves())return; // a newer load/save superseded this one
     data=d;
     if(tab==='review'){renderFilters();renderReview()}
     else if(tab==='sources')renderSources();
@@ -117,8 +125,10 @@ async function load(){
     else if(tab==='popularity')renderPopularity();
     else if(tab==='dupes')renderDupes();
     else if(tab==='mfr')renderMfr();
+    else if(tab==='mfrdata')renderMfrProfiles();
     else if(tab==='system')renderSystem();
-  }catch(e){if(my===reqSeq)$('#view').innerHTML='<p class="empty">'+esc(e.message||'load error')+'</p>'}
+    $('#view').removeAttribute('aria-busy');
+  }catch(e){if(my===reqSeq&&!hasProfileSaves()){$('#view').innerHTML='<p class="empty">'+esc(e.message||'load error')+'</p>';$('#view').removeAttribute('aria-busy')}}
 }
 
 // ------- Review -------
@@ -413,6 +423,268 @@ function renderMfr(){
   document.querySelectorAll('[data-mfr-pair]').forEach(wirePair);
   $('#mfr-rebuild-all').onclick=async function(){var b=this;b.disabled=true;b.textContent='matching…';try{var d=await api('mfr-rebuild-all',{});alert('Matched '+d.masters+' models against '+d.candidates+' ranked candidates.');load()}catch(e){alert(e.message);b.disabled=false;b.textContent='Match newly added models'}};
   $('#mfr-harvest-now').onclick=async function(){if(!confirm('Queue a fresh crawl of all manufacturer sites now?'))return;var b=this;b.disabled=true;b.textContent='queueing…';try{var d=await api('mfr-harvest',{});alert(d.paused?'Manufacturer harvesting is paused.':'Queued '+d.queued+' manufacturer harvests.');load()}catch(e){alert(e.message);b.disabled=false;b.textContent='Harvest now'}};
+}
+
+// ------- Aircraft data (published + accepted manufacturer mappings only) -------
+const MFR_PROFILE_CSS='<style>'
+  +'.mp-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px;flex-wrap:wrap}.mp-intro .title{font-size:17px}.mp-intro .meta{max-width:700px;margin:2px 0 0}'
+  +'.mp-filterbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.mp-filterbar .meta{margin:0 0 0 5px}'
+  +'.mp-notice{margin:0 0 12px;padding:8px 10px;border:1px solid rgba(63,185,80,.4);border-radius:8px;background:rgba(63,185,80,.08);color:var(--ok);font-size:11px}.mp-notice.error{border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.08);color:var(--bad)}'
+  +'.mp-card{border:1px solid var(--border);border-radius:13px;background:var(--card);margin-bottom:16px;overflow:visible}.mp-card:focus{outline:2px solid rgba(62,181,232,.55);outline-offset:2px}.mp-card.dirty{border-color:rgba(210,153,34,.72);box-shadow:0 0 0 2px rgba(210,153,34,.08)}'
+  +'.mp-card-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}.mp-card-head .mp-name{font-size:15px;font-weight:700;margin:0}.mp-card-head .meta{margin:0}.mp-head-actions{margin-left:auto;display:flex;align-items:center;gap:8px}'
+  +'.mp-completion{font-size:11px;border:1px solid rgba(210,153,34,.45);color:var(--warn);border-radius:999px;padding:3px 8px;white-space:nowrap}.mp-completion.complete{border-color:rgba(63,185,80,.45);color:var(--ok)}'
+  +'.mp-summary{display:grid;grid-template-columns:minmax(180px,.72fr) minmax(0,1.55fr);gap:12px;padding:12px 14px}.mp-panel{min-width:0;border:1px solid var(--border);border-radius:9px;padding:10px;background:rgba(14,17,23,.34)}'
+  +'.mp-label{font-size:10px;font-weight:750;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}.mp-product-title{font-size:14px;font-weight:680;margin:3px 0 8px;line-height:1.3}.mp-model-photo{height:175px;border-radius:8px;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}.mp-model-photo img{width:100%;height:100%;object-fit:contain}.mp-photo-empty{height:100%;width:100%;display:flex;align-items:center;justify-content:center;background:#f0f2f4;color:#777;font-size:11px;text-align:center;padding:8px}'
+  +'.mp-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}.mp-link{font-size:12px;color:var(--accent-bright);font-weight:650}.mp-link-missing{font-size:11px;color:var(--bad);margin-top:8px;display:inline-block}'
+  +'.mp-gallery-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}.mp-gallery{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(128px,31%);gap:7px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 1px 8px}.mp-gallery a{height:138px;border-radius:7px;background:#fff;display:flex;overflow:hidden;scroll-snap-align:start;border:1px solid transparent}.mp-gallery a:hover{border-color:var(--accent-bright)}.mp-gallery img{width:100%;height:100%;object-fit:contain}'
+  +'.mp-shared{margin:0 14px 12px;padding:8px 10px;border:1px solid rgba(210,153,34,.4);border-radius:8px;background:rgba(210,153,34,.08);color:var(--warn);font-size:11px}'
+  +'.mp-form{border-top:1px solid var(--border);padding:13px 14px 14px}.mp-section{margin:0 0 16px}.mp-section-title{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-bright);font-weight:750;margin:0 0 7px}.mp-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}'
+  +'.mp-field{min-width:0;border:1px solid var(--border);border-radius:8px;padding:8px;background:rgba(14,17,23,.33)}.mp-field.wide{grid-column:1/-1}.mp-field-top{display:flex;align-items:center;gap:6px;justify-content:space-between;flex-wrap:wrap;margin-bottom:5px}.mp-field-label{font-size:11px;font-weight:650;color:var(--fg)}'
+  +'.mp-source{max-width:100%;font-size:9px;line-height:1.2;border:1px solid var(--border);border-radius:999px;padding:2px 5px;color:var(--muted);white-space:normal;overflow-wrap:anywhere}.mp-source.harvested{color:var(--accent-bright);border-color:rgba(62,181,232,.4)}.mp-source.manual{color:var(--ok);border-color:rgba(63,185,80,.4)}.mp-source.edited{color:var(--warn);border-color:rgba(210,153,34,.5)}.mp-source.unknown{color:var(--muted)}'
+  +'.mp-field select,.mp-field input[type=number],.mp-field textarea{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:7px 8px;font:inherit;font-size:12px}.mp-field textarea{min-height:68px;resize:vertical}.mp-field select:focus,.mp-field input:focus,.mp-field textarea:focus{outline:2px solid rgba(62,181,232,.55);outline-offset:1px}'
+  +'.mp-unit{font-size:10px;color:var(--muted);margin-top:3px}.mp-options{display:flex;gap:5px;flex-wrap:wrap}.mp-option{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);border-radius:999px;padding:3px 7px;font-size:10px;color:var(--muted);cursor:pointer}.mp-option:has(input:checked){border-color:rgba(62,181,232,.6);color:var(--fg);background:rgba(31,155,217,.09)}.mp-option input{accent-color:var(--accent-bright);margin:0}'
+  +'.mp-evidence{font-size:10px;color:var(--muted);line-height:1.35;margin-top:6px;padding-top:5px;border-top:1px dashed var(--border)}.mp-evidence b{color:var(--fg);font-weight:620}.mp-unknown-note{font-size:10px;color:var(--muted);margin-top:5px}'
+  +'.mp-savebar{position:sticky;bottom:0;z-index:2;display:flex;align-items:center;justify-content:flex-end;gap:9px;margin:4px -14px -14px;padding:10px 14px;background:rgba(22,27,34,.96);border-top:1px solid var(--border)}.mp-save-state{font-size:11px;color:var(--muted)}.mp-save-state.unsaved{color:var(--warn)}.mp-save-state.error{color:var(--bad)}.mp-save-state.saved{color:var(--ok)}'
+  +'@media(max-width:760px){.mp-summary{grid-template-columns:1fr}.mp-fields{grid-template-columns:1fr}.mp-field.wide{grid-column:auto}.mp-gallery{grid-auto-columns:72%}.mp-card-head .mp-head-actions{width:100%;margin-left:0;justify-content:space-between}}</style>';
+
+const MFR_PROFILE_FIELDS=[
+  {section:'Controls',key:'controlLayout',label:'Control layout',kind:'select',options:[['conventional','Conventional'],['v_tail','V-tail'],['elevon','Elevon / flying wing'],['rudder_elevator','Rudder + elevator'],['differential_thrust','Differential thrust'],['mixed_vtol','Mixed / VTOL'],['other','Other']]},
+  {section:'Controls',key:'channels',label:'Minimum channels',kind:'number',min:1,max:32,step:1,unit:'channels'},
+  {section:'Controls',key:'controlSurfaces',label:'Control surfaces',kind:'multi',options:[['aileron','Ailerons'],['elevator','Elevator'],['rudder','Rudder'],['elevon','Elevons'],['flaps','Flaps'],['spoilers','Spoilers'],['differential_thrust','Differential thrust']]},
+  {section:'Propulsion',key:'motorCount',label:'Motor / engine count',kind:'number',min:0,max:16,step:1},
+  {section:'Propulsion',key:'propulsionType',label:'Propulsion type',kind:'select',options:[['propeller','Propeller'],['edf','EDF'],['turbine','Turbine'],['unpowered','Unpowered'],['mixed','Mixed'],['other','Other']]},
+  {section:'Propulsion',key:'propulsionPosition',label:'Propulsion position',kind:'select',options:[['tractor','Tractor'],['pusher','Pusher'],['mixed','Mixed'],['not_applicable','Not applicable'],['other','Other']]},
+  {section:'Flying difficulty',key:'difficulty',label:'Pilot level',kind:'select',options:[['beginner','Beginner'],['intermediate','Intermediate'],['intermediate_advanced','Intermediate to advanced'],['advanced','Advanced']]},
+  {section:'Flying difficulty',key:'stabilization',label:'Stabilization',kind:'select',options:[['included','Included'],['optional','Optional'],['none','None']]},
+  {section:'Flying difficulty',key:'difficultyNotes',label:'Why it is easy or difficult',kind:'text',wide:true},
+  {section:'Weight',key:'recommendedAuwMinG',label:'Good AUW minimum',kind:'number',min:1,max:200000,step:1,unit:'grams'},
+  {section:'Weight',key:'recommendedAuwMaxG',label:'Good AUW maximum',kind:'number',min:1,max:200000,step:1,unit:'grams'},
+  {section:'Weight',key:'maxAuwG',label:'Maximum AUW',kind:'number',min:1,max:250000,step:1,unit:'grams'},
+  {section:'Weight',key:'payloadG',label:'Payload capacity',kind:'number',min:0,max:200000,step:1,unit:'grams'},
+  {section:'FPV and flight controller',key:'fpvReadiness',label:'FPV readiness',kind:'select',options:[['purpose_built','Purpose-built space'],['easy_fit','Easy to fit'],['modification_needed','Modification needed'],['not_recommended','Not recommended']]},
+  {section:'FPV and flight controller',key:'fcReadiness',label:'Flight-controller readiness',kind:'select',options:[['purpose_built','Purpose-built space'],['easy_fit','Easy to fit'],['modification_needed','Modification needed'],['not_recommended','Not recommended']]},
+  {section:'FPV and flight controller',key:'fpvFcNotes',label:'Space, access, cooling and CG notes',kind:'text',wide:true},
+  {section:'Slow flight',key:'lowSpeedBehavior',label:'Low-speed behavior',kind:'select',options:[['excellent','Excellent'],['good','Good'],['average','Average'],['demanding','Demanding']]},
+  {section:'Slow flight',key:'stallBehavior',label:'Stall behavior',kind:'select',options:[['gentle','Gentle'],['moderate','Moderate'],['sharp','Sharp']]},
+  {section:'Slow flight',key:'lowSpeedNotes',label:'Slow-flight and stall notes',kind:'text',wide:true},
+  {section:'Launch and landing',key:'launchMethods',label:'Launch methods',kind:'multi',options:[['hand_launch','Hand launch'],['ground_roll','Ground roll'],['bungee','Bungee'],['vtol','VTOL'],['water','Water']]},
+  {section:'Launch and landing',key:'landingMethods',label:'Landing methods',kind:'multi',options:[['wheels','Wheels'],['belly','Belly'],['skid','Skid'],['vtol','VTOL'],['water','Water'],['hand_catch','Hand catch']]},
+  {section:'Launch and landing',key:'fieldRequirement',label:'Field requirement',kind:'select',options:[['rough_grass_ok','Rough grass is okay'],['mown_grass_ok','Mown grass is okay'],['smooth_runway_recommended','Smooth runway recommended'],['paved_runway_required','Paved runway required'],['no_runway_needed','No runway needed'],['water_only','Water only']]},
+  {section:'Launch and landing',key:'fieldNotes',label:'Takeoff and landing notes',kind:'text',wide:true}
+];
+const MFR_PROFILE_ESSENTIALS=[
+  {label:'controls',keys:['controlLayout','channels','controlSurfaces'],all:true},
+  {label:'propulsion',keys:['motorCount','propulsionType','propulsionPosition'],all:true},
+  {label:'difficulty',keys:['difficulty']},
+  {label:'good AUW',keys:['recommendedAuwMinG','recommendedAuwMaxG']},
+  {label:'maximum AUW',keys:['maxAuwG']},
+  {label:'FPV',keys:['fpvReadiness']},
+  {label:'flight controller',keys:['fcReadiness']},
+  {label:'low speed',keys:['lowSpeedBehavior']},
+  {label:'landing field',keys:['landingMethods','fieldRequirement'],all:true}
+];
+
+function renderMfrProfiles(){
+  var rows=Array.isArray(data)?data:(data.profiles||data.rows||data.models||[]);
+  var asObj=function(v){if(v&&typeof v==='object')return v;try{var j=JSON.parse(v||'{}');return j&&typeof j==='object'?j:{}}catch(e){return {}}};
+  var safeUrl=function(v){try{var u=new URL(v);return (u.protocol==='http:'||u.protocol==='https:')?u.href:''}catch(e){return ''}};
+  var own=function(o,k){return Object.prototype.hasOwnProperty.call(o,k)};
+  var suggestionValue=function(v){return v&&typeof v==='object'&&own(v,'value')?v.value:v};
+  var sourceKind=function(v){return v&&typeof v==='object'?(v.kind||v.source||v.type||''):String(v||'')};
+  var sourceConfidence=function(v){return v&&typeof v==='object'?(v.confidence||''):''};
+  var meaningful=function(v){return v!==null&&v!==undefined&&v!==''&&v!=='unknown'&&(!Array.isArray(v)||v.length>0)};
+  var baseValue=function(r,k){
+    var vals=asObj(r.values);
+    if(own(vals,k))return vals[k];
+    var sug=asObj(r.suggestions);
+    return own(sug,k)?suggestionValue(sug[k]):null;
+  };
+  var shownValue=function(r,k){
+    var draft=F.mfrProfileDrafts[r.master_model_id],over=draft&&draft.overrides||{};
+    return own(over,k)?over[k]:baseValue(r,k);
+  };
+  var completion=function(r){
+    var done=MFR_PROFILE_ESSENTIALS.filter(function(g){
+      var states=g.keys.map(function(k){return meaningful(shownValue(r,k))});
+      return g.all?states.every(Boolean):states.some(Boolean);
+    });
+    return {done:done.length,total:MFR_PROFILE_ESSENTIALS.length,complete:done.length===MFR_PROFILE_ESSENTIALS.length};
+  };
+  var sourceInfo=function(r,k){
+    var draft=F.mfrProfileDrafts[r.master_model_id],over=draft&&draft.overrides||{};
+    if(own(over,k))return {label:over[k]===null?'Cleared (unsaved)':'Edited',cls:'edited'};
+    var stored=asObj(r.overrides);
+    if(own(stored,k))return {label:stored[k]===null?'Cleared manually':'Manual',cls:'manual'};
+    var src=asObj(r.sources)[k],kind=sourceKind(src).toLowerCase(),conf=sourceConfidence(src);
+    if(/manual|human|admin/.test(kind))return {label:'Manual',cls:'manual'};
+    if(/manufacturer|harvest|extract|text|image|visual|inference|derived/.test(kind)){
+      var label=/image|visual/.test(kind)?'Manufacturer photo':'Manufacturer text';
+      return {label:label+(conf?' · '+String(conf).replace(/_/g,' '):''),cls:'harvested'};
+    }
+    if(meaningful(suggestionValue(asObj(r.suggestions)[k])))return {label:'Harvested suggestion',cls:'harvested'};
+    return {label:'Unknown',cls:'unknown'};
+  };
+  var evidenceText=function(r,k){
+    var ev=asObj(r.evidence)[k],sug=asObj(r.suggestions)[k];
+    if(ev&&typeof ev==='object')ev=ev.text||ev.excerpt||ev.evidence||'';
+    if(!ev&&sug&&typeof sug==='object')ev=sug.evidence||sug.excerpt||'';
+    if(Array.isArray(ev))ev=ev.join(' · ');
+    return String(ev||'').slice(0,260);
+  };
+  var optionList=function(f,v){
+    return '<option value="">Unknown / needs input</option>'+f.options.map(function(o){return '<option value="'+esc(o[0])+'"'+(String(v??'')===String(o[0])?' selected':'')+'>'+esc(o[1])+'</option>'}).join('');
+  };
+  var displayValue=function(f,v){
+    if(!meaningful(v))return '';
+    if(f.kind==='multi')return (Array.isArray(v)?v:[]).map(function(x){var o=f.options.find(function(y){return y[0]===x});return o?o[1]:x}).join(', ');
+    if(f.options){var o=f.options.find(function(x){return String(x[0])===String(v)});if(o)return o[1]}
+    return String(v)+(f.unit?' '+f.unit:'');
+  };
+  var fieldHtml=function(r,f){
+    var v=shownValue(r,f.key),src=sourceInfo(r,f.key),ev=evidenceText(r,f.key),ctrl='';
+    var draft=F.mfrProfileDrafts[r.master_model_id],draftOver=draft&&draft.overrides||{},storedOver=asObj(r.overrides);
+    var isManual=own(draftOver,f.key)||own(storedOver,f.key),suggested=suggestionValue(asObj(r.suggestions)[f.key]),fid='mp-'+r.master_model_id+'-'+f.key;
+    if(f.kind==='select')ctrl='<select id="'+fid+'" data-mp-field="'+f.key+'">'+optionList(f,v)+'</select>';
+    else if(f.kind==='number')ctrl='<input id="'+fid+'" type="number" data-mp-field="'+f.key+'" min="'+f.min+'" max="'+f.max+'" step="'+f.step+'" value="'+(v==null?'':esc(v))+'"/>'+(f.unit?'<div class="mp-unit">'+esc(f.unit)+'</div>':'');
+    else if(f.kind==='text')ctrl='<textarea id="'+fid+'" data-mp-field="'+f.key+'" maxlength="1200" placeholder="Unknown / add notes">'+esc(v==null?'':v)+'</textarea>';
+    else {
+      var selected=Array.isArray(v)?v:[];
+      ctrl='<div class="mp-options" data-mp-multi="'+f.key+'" role="group" aria-labelledby="'+fid+'-label">'+f.options.map(function(o){
+        return '<label class="mp-option"><input type="checkbox" data-mp-field="'+f.key+'" value="'+esc(o[0])+'"'+(selected.includes(o[0])?' checked':'')+'/> '+esc(o[1])+'</label>';
+      }).join('')+'</div>';
+    }
+    var label=f.kind==='multi'?'<span class="mp-field-label" id="'+fid+'-label">'+esc(f.label)+'</span>':'<label class="mp-field-label" for="'+fid+'">'+esc(f.label)+'</label>';
+    return '<div class="mp-field'+(f.wide?' wide':'')+'" data-mp-field-wrap="'+f.key+'"><div class="mp-field-top">'+label+'<span class="mp-source '+src.cls+'" data-mp-source="'+f.key+'">'+esc(src.label)+'</span></div>'
+      +ctrl
+      +(meaningful(suggested)?'<div class="mp-evidence" data-mp-suggestion="'+f.key+'"'+(isManual?'':' hidden')+'><b>Manufacturer suggested:</b> '+esc(displayValue(f,suggested))+'</div>':'')
+      +(ev?'<div class="mp-evidence"><b>Manufacturer evidence:</b> '+esc(ev)+'</div>':'<div class="mp-unknown-note">No explicit manufacturer evidence yet.</div>')+'</div>';
+  };
+  var safeLocal=function(prefix,slug){
+    var p=String(prefix||'').replace(/\\/+$/,'')+'/'+String(slug||'').replace(/^\\/+|\\/+$/g,'')+'/';
+    return p.startsWith('/')?p:'';
+  };
+  var safeImage=function(v){
+    if(!v)return '';
+    var s=String(v);
+    if(/^\\/img\\/mfr\\/\\d+(?:\\/\\d+)?$/.test(s))return s;
+    try{var u=new URL(s,location.origin);return u.origin===location.origin&&/^\\/img\\/mfr\\/\\d+(?:\\/\\d+)?$/.test(u.pathname)?u.pathname:''}catch(e){return ''}
+  };
+  var galleryUrls=function(r){
+    var raw=r.images;
+    if(typeof raw==='string'){try{raw=JSON.parse(raw)}catch(e){raw=[]}}
+    if(!Array.isArray(raw))raw=[];
+    var count=Math.max(raw.length,Math.max(0,Math.min(20,Number(r.image_count)||0))),out=[];
+    for(var i=0;i<count;i++){
+      var item=raw[i],protectedUrl=item&&typeof item==='object'?item.url:item;
+      out.push(safeImage(protectedUrl)||('/img/mfr/'+r.mfr_product_id+'/'+i));
+    }
+    return out;
+  };
+  var sections=[...new Set(MFR_PROFILE_FIELDS.map(function(f){return f.section}))];
+  var card=function(r){
+    var id=+r.master_model_id,comp=completion(r),draft=F.mfrProfileDrafts[id],dirty=!!(draft&&Object.keys(draft.overrides||{}).length);
+    var saved=F.mfrProfileSaved[id],official=safeUrl(r.mfr_url),modelHref=safeLocal(r.path_prefix,r.slug),imgs=galleryUrls(r);
+    var imageHtml=imgs.length?'<div class="mp-gallery" role="region" aria-label="Manufacturer photo gallery">'+imgs.map(function(src,i){return '<a href="'+esc(src)+'" target="_blank" rel="noopener noreferrer" title="Open photo '+(i+1)+'"><img class="mp-gallery-img" src="'+esc(src)+'" alt="'+esc((r.mfr_title||r.name||'Manufacturer model')+' photo '+(i+1))+'" loading="lazy" decoding="async"/></a>'}).join('')+'</div>':'<div class="mp-photo-empty" style="height:138px">No manufacturer photos harvested.</div>';
+    var groups=sections.map(function(s){return '<section class="mp-section"><h3 class="mp-section-title">'+esc(s)+'</h3><div class="mp-fields">'+MFR_PROFILE_FIELDS.filter(function(f){return f.section===s}).map(function(f){return fieldHtml(r,f)}).join('')+'</div></section>'}).join('');
+    var share=Number(r.shared_mapping_count)||0;
+    var saveState=dirty?'Unsaved changes':saved?'Saved just now':r.updated_at?('Saved '+ago(r.updated_at)):'Not edited yet';
+    return '<article class="mp-card'+(dirty?' dirty':'')+'" data-mp-card="'+id+'" aria-labelledby="mp-card-title-'+id+'"><div class="mp-card-head"><h2 class="mp-name" id="mp-card-title-'+id+'">'+esc((r.brand?r.brand+' ':'')+(r.name||''))+'</h2><span class="meta">'+esc(r.mfr_brand||'Manufacturer')+' · mapped product '+esc(r.mfr_product_id)+'</span><span class="mp-head-actions"><span class="mp-completion'+(comp.complete?' complete':'')+'" data-mp-completion>'+comp.done+'/'+comp.total+' essentials</span></span></div>'
+      +'<div class="mp-summary"><section class="mp-panel"><div class="mp-label">OUR PUBLISHED MODEL</div><div class="mp-product-title">'+esc((r.brand?r.brand+' ':'')+(r.name||''))+'</div>'
+      +'<div class="mp-model-photo">'+(r.model_image?'<img class="mp-model-img" src="/img/master/'+id+'" alt="'+esc((r.brand?r.brand+' ':'')+(r.name||''))+'" loading="lazy" decoding="async"/><div class="mp-photo-empty" style="display:none">No model photo</div>':'<div class="mp-photo-empty">No model photo</div>')+'</div>'
+      +(modelHref?'<div class="mp-links"><a class="mp-link" href="'+esc(modelHref)+'" target="_blank" rel="noopener noreferrer">Open published model ↗</a></div>':'')+'</section>'
+      +'<section class="mp-panel"><div class="mp-gallery-head"><div><div class="mp-label">MATCHED MANUFACTURER PRODUCT</div><div class="mp-product-title">'+esc(r.mfr_title||'Untitled manufacturer product')+'</div></div><span class="meta">'+imgs.length+' photo'+(imgs.length===1?'':'s')+'</span></div>'
+      +imageHtml+(official?'<div class="mp-links"><a class="mp-link" href="'+esc(official)+'" target="_blank" rel="noopener noreferrer">Open official product ↗</a></div>':'<span class="mp-link-missing">Official product link unavailable</span>')+'</section></div>'
+      +(share>1?'<div class="mp-shared"><b>Shared mapping:</b> this manufacturer product is mapped to '+share+' catalog models. These edits apply only to '+esc(r.name||'this model')+'.</div>':'')
+      +(r.source_changed?'<div class="mp-shared"><b>Mapping changed:</b> earlier manual values were set aside. Review this manufacturer product before saving new values.</div>':'')
+      +'<form class="mp-form" data-mp-form="'+id+'">'+groups+'<div class="mp-savebar"><span class="mp-save-state'+(dirty?' unsaved':saved?' saved':'')+'" data-mp-save-state aria-live="polite">'+esc(saveState)+'</span><button type="submit" class="go" data-mp-save'+(dirty?'':' disabled')+'>Save model data</button></div></form></article>';
+  };
+  var allCount=rows.length,completeCount=rows.filter(function(r){return completion(r).complete}).length,needsCount=allCount-completeCount,cur=F.mfrDataFilter||'all';
+  var filtered=rows.filter(function(r){var c=completion(r).complete;return cur==='complete'?c:cur==='needs'?!c:true});
+  var filter=function(k,l,n){return '<button class="chip'+(cur===k?' on':'')+'" data-mp-filter="'+k+'" aria-pressed="'+(cur===k?'true':'false')+'">'+l+' <span>'+n+'</span></button>'};
+  $('#view').innerHTML=MFR_PROFILE_CSS+'<div class="mp-intro"><div><p class="title">Aircraft data</p><p class="meta">Only published models with an accepted manufacturer mapping appear here. Harvested facts remain visibly sourced; fill the unknowns and save one model at a time.</p></div><span class="tag w">admin only</span></div>'
+    +(F.mfrProfileNotice?'<p class="mp-notice'+(F.mfrProfileNotice.kind==='error'?' error':'')+'" role="status" aria-live="polite">'+esc(F.mfrProfileNotice.text||F.mfrProfileNotice)+'</p>':'')
+    +'<div class="mp-filterbar">'+filter('all','All',allCount)+filter('needs','Needs input',needsCount)+filter('complete','Complete',completeCount)+'<span class="meta">'+filtered.length+' shown</span></div>'
+    +(filtered.length?filtered.map(card).join(''):'<p class="empty">No models in this view.</p>');
+
+  var fieldByKey=function(k){return MFR_PROFILE_FIELDS.find(function(f){return f.key===k})};
+  var readControl=function(root,f){
+    if(f.kind==='multi'){
+      var checked=[...root.querySelectorAll('input[data-mp-field="'+f.key+'"]:checked')].map(function(x){return x.value});
+      return checked.length?checked:null;
+    }
+    var el=root.querySelector('[data-mp-field="'+f.key+'"]'),raw=el?el.value:'';
+    if(raw==='')return null;
+    return f.kind==='number'?Number(raw):raw;
+  };
+  var equal=function(a,b){return JSON.stringify(a)===JSON.stringify(b)};
+  var updateDirtyUi=function(root,r,k){
+    var id=+r.master_model_id,draft=F.mfrProfileDrafts[id],dirty=!!(draft&&Object.keys(draft.overrides||{}).length),comp=completion(r);
+    root.classList.toggle('dirty',dirty);
+    var save=root.querySelector('[data-mp-save]');if(save)save.disabled=!dirty;
+    var state=root.querySelector('[data-mp-save-state]');if(state){state.className='mp-save-state'+(dirty?' unsaved':'');state.textContent=dirty?'Unsaved changes':(r.updated_at?'Saved '+ago(r.updated_at):'Not edited yet')}
+    var badge=root.querySelector('[data-mp-source="'+k+'"]'),info=sourceInfo(r,k);if(badge){badge.className='mp-source '+info.cls;badge.textContent=info.label}
+    var suggestion=root.querySelector('[data-mp-suggestion="'+k+'"]'),stored=asObj(r.overrides),draftOver=draft&&draft.overrides||{};if(suggestion)suggestion.hidden=!(own(stored,k)||own(draftOver,k));
+    var meter=root.querySelector('[data-mp-completion]');if(meter){meter.className='mp-completion'+(comp.complete?' complete':'');meter.textContent=comp.done+'/'+comp.total+' essentials'}
+  };
+  var wireCard=function(root,r){
+    root.querySelectorAll('[data-mp-field]').forEach(function(el){el.oninput=function(){
+      var f=fieldByKey(el.dataset.mpField);if(!f)return;
+      var id=+r.master_model_id,draft=F.mfrProfileDrafts[id]||(F.mfrProfileDrafts[id]={mfrProductId:+r.mfr_product_id,overrides:{}});
+      var next=readControl(root,f),base=baseValue(r,f.key);
+      if(equal(next,base))delete draft.overrides[f.key];else draft.overrides[f.key]=next;
+      if(!Object.keys(draft.overrides).length)delete F.mfrProfileDrafts[id];
+      updateDirtyUi(root,r,f.key);
+    }});
+    root.querySelectorAll('.mp-gallery-img').forEach(function(img){img.onerror=function(){var a=img.closest('a');if(a)a.style.display='none'}});
+    root.querySelectorAll('.mp-model-img').forEach(function(img){img.onerror=function(){img.style.display='none';if(img.nextElementSibling)img.nextElementSibling.style.display='flex'}});
+    var form=root.querySelector('[data-mp-form]');if(form)form.onsubmit=async function(e){
+      e.preventDefault();
+      var id=+r.master_model_id,draft=F.mfrProfileDrafts[id],over=JSON.parse(JSON.stringify(draft&&draft.overrides||{})),saveData=data;
+      if(!Object.keys(over).length)return;
+      var btn=root.querySelector('[data-mp-save]'),state=root.querySelector('[data-mp-save-state]');
+      F.mfrProfileSaving[id]=true;
+      reqSeq++; // invalidate any load that began before this save
+      $('#view').removeAttribute('aria-busy');
+      document.querySelectorAll('header button[data-tab],#run,.mp-filterbar button,[data-mp-card] input,[data-mp-card] select,[data-mp-card] textarea,[data-mp-card] button').forEach(function(el){el.disabled=true});
+      btn.textContent='Saving…';state.className='mp-save-state';state.textContent='Saving changes…';
+      try{
+        var d=await api('mfr-profile',{masterId:id,mfrProductId:+r.mfr_product_id,overrides:over});
+        if(d.profile&&typeof d.profile==='object')Object.assign(r,d.profile);
+        else if(d.row&&typeof d.row==='object')Object.assign(r,d.row);
+        else {
+          var vals=asObj(r.values),sources=asObj(r.sources);
+          Object.keys(over).forEach(function(k){vals[k]=over[k];sources[k]={kind:'manual',confidence:'reviewed'}});
+          r.values=vals;r.sources=sources;r.updated_at=d.updated_at||Date.now();
+        }
+        if(d.overrides){
+          r.overrides=d.overrides;
+          var normalized=asObj(r.values);
+          Object.keys(over).forEach(function(k){if(own(d.overrides,k))normalized[k]=d.overrides[k]});
+          r.values=normalized;
+        }
+        if(d.values)r.values=d.values;if(d.sources)r.sources=d.sources;if(d.evidence)r.evidence=d.evidence;if(d.suggestions)r.suggestions=d.suggestions;
+        r.source_changed=false;
+        F.mfrProfileNotice={kind:'saved',text:'Saved aircraft data for '+((r.brand?r.brand+' ':'')+(r.name||'model'))+'.'};
+        delete F.mfrProfileDrafts[id];delete F.mfrProfileSaving[id];F.mfrProfileSaved[id]=Date.now();
+        document.querySelectorAll('header button[data-tab],#run').forEach(function(el){el.disabled=false});
+        if(tab==='mfrdata'&&data===saveData){var y=window.scrollY;renderMfrProfiles();requestAnimationFrame(function(){window.scrollTo(0,y);var fresh=document.querySelector('[data-mp-card="'+id+'"]');if(fresh)fresh.focus({preventScroll:true})})}
+      }catch(err){
+        delete F.mfrProfileSaving[id];
+        F.mfrProfileNotice={kind:'error',text:'Could not save '+((r.brand?r.brand+' ':'')+(r.name||'model'))+': '+(err.message||'Save failed')};
+        document.querySelectorAll('header button[data-tab],#run').forEach(function(el){el.disabled=false});
+        if(tab==='mfrdata'&&data===saveData){
+          var y=window.scrollY;renderMfrProfiles();requestAnimationFrame(function(){
+            window.scrollTo(0,y);
+            var fresh=document.querySelector('[data-mp-card="'+id+'"]'),freshState=fresh&&fresh.querySelector('[data-mp-save-state]');
+            if(freshState){freshState.className='mp-save-state error';freshState.textContent=err.message||'Save failed'}
+            if(fresh)fresh.focus({preventScroll:true});
+          });
+        }
+      }
+    };
+  };
+  document.querySelectorAll('[data-mp-card]').forEach(function(root){root.tabIndex=-1;var id=+root.dataset.mpCard,row=rows.find(function(x){return +x.master_model_id===id});if(row)wireCard(root,row)});
+  document.querySelectorAll('[data-mp-filter]').forEach(function(b){b.onclick=function(){if(hasProfileSaves())return;F.mfrDataFilter=b.dataset.mpFilter;syncURL();renderMfrProfiles()}});
 }
 
 // ------- System -------

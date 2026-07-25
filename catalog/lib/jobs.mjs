@@ -726,17 +726,173 @@ export async function mergeMasters(env, aId, bId, actor, reason) {
   try {
     specs = { ...JSON.parse(b.specs || '{}'), ...JSON.parse(a.specs || '{}') }
   } catch {}
+  const mergedAt = now()
+  // Reconcile profiles inside the same D1 batch that deletes B, so an admin
+  // save cannot land between a JavaScript pre-read and the merge. For a shared
+  // manufacturer product, B fills missing keys and A wins conflicts. Rebuilding
+  // the object from json_each (instead of json_patch) preserves explicit nulls.
+  const profileStmts = [
+    q(
+      env,
+      `UPDATE mfr_profile AS survivor
+       SET overrides_json=COALESCE((
+             SELECT json_group_object(
+                      key,
+                      json(CASE type
+                        WHEN 'text' THEN json_quote(value)
+                        WHEN 'null' THEN 'null'
+                        WHEN 'true' THEN 'true'
+                        WHEN 'false' THEN 'false'
+                        ELSE value
+                      END)
+                    )
+             FROM (
+               SELECT duplicate_value.key,duplicate_value.value,duplicate_value.type
+               FROM mfr_profile duplicate_profile,
+                    json_each(duplicate_profile.overrides_json) duplicate_value
+               WHERE duplicate_profile.master_model_id=?
+                 AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
+                 AND NOT EXISTS (
+                   SELECT 1 FROM json_each(survivor.overrides_json) survivor_value
+                   WHERE survivor_value.key=duplicate_value.key
+                 )
+               UNION ALL
+               SELECT key,value,type FROM json_each(survivor.overrides_json)
+             )
+           ),'{}'),
+           created_at=MIN(
+             survivor.created_at,
+             COALESCE((
+               SELECT duplicate_profile.created_at
+               FROM mfr_profile duplicate_profile
+               WHERE duplicate_profile.master_model_id=?
+                 AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
+             ),survivor.created_at)
+           ),
+           updated_at=MAX(
+             survivor.updated_at+1,
+             COALESCE((
+               SELECT duplicate_profile.updated_at+1
+               FROM mfr_profile duplicate_profile
+               WHERE duplicate_profile.master_model_id=?
+                 AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
+             ),0),
+             ?
+           ),
+           updated_by=?
+       WHERE survivor.master_model_id=?
+         AND EXISTS (
+           SELECT 1 FROM mfr_profile duplicate_profile
+           WHERE duplicate_profile.master_model_id=?
+             AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
+         )`,
+      bId,
+      bId,
+      bId,
+      mergedAt,
+      actor,
+      aId,
+      bId,
+    ),
+    q(
+      env,
+      `INSERT OR IGNORE INTO mfr_profile
+         (master_model_id,source_mfr_product_id,overrides_json,created_at,updated_at,updated_by)
+       SELECT ?,source_mfr_product_id,overrides_json,created_at,updated_at,updated_by
+       FROM mfr_profile WHERE master_model_id=?`,
+      aId,
+      bId,
+    ),
+  ]
   const stmts = [
     // free B's offers from any sku already carried by A, then re-home the rest
     q(env, `DELETE FROM offer WHERE master_model_id=? AND sku_id IN (SELECT sku_id FROM offer WHERE master_model_id=?)`, bId, aId),
     q(env, `UPDATE offer SET master_model_id=? WHERE master_model_id=?`, aId, bId),
-    q(env, `UPDATE master_model SET specs=?, hero_image=COALESCE(hero_image, ?), updated_at=? WHERE id=?`, JSON.stringify(specs), b.hero_image, now(), aId),
+    q(env, `UPDATE master_model
+            SET specs=?,hero_image=COALESCE(hero_image,?),updated_at=?,
+                pop_score=NULL,pop_raw=NULL,pop_updated_at=NULL,pop_signals=NULL
+            WHERE id=?`, JSON.stringify(specs), b.hero_image, mergedAt, aId),
     // B is absorbed then deleted — first remove EVERY merge_candidate row that
     // references B: the current pair AND any other pending pairs B sits in.
     // Otherwise deleting the master trips the a_id/b_id foreign key (RESTRICT)
     // and the whole merge throws. The next dedup pass re-evaluates the survivor
     // A against everything and re-creates candidates if they still look alike.
     q(env, `DELETE FROM merge_candidate WHERE a_id=? OR b_id=?`, bId, bId),
+    // YouTube rows carry a real FK to the master. Re-home them before deleting
+    // B and merge overlapping videos without dropping either model's human
+    // pin/exclude intent.
+    q(
+      env,
+      `INSERT INTO master_video
+         (master_model_id,video_id,title,channel,views,published_at,rank,
+          pinned,excluded,fetched_at)
+       SELECT ?,video_id,title,channel,views,published_at,rank,
+              CASE WHEN excluded=1 THEN 0 ELSE pinned END,excluded,fetched_at
+       FROM master_video WHERE master_model_id=?
+       ON CONFLICT(master_model_id,video_id) DO UPDATE SET
+         title=COALESCE(NULLIF(master_video.title,''),excluded.title),
+         channel=COALESCE(NULLIF(master_video.channel,''),excluded.channel),
+         views=CASE
+           WHEN master_video.views IS NULL THEN excluded.views
+           WHEN excluded.views IS NULL THEN master_video.views
+           ELSE MAX(master_video.views,excluded.views)
+         END,
+         published_at=COALESCE(master_video.published_at,excluded.published_at),
+         rank=CASE
+           WHEN master_video.rank IS NULL THEN excluded.rank
+           WHEN excluded.rank IS NULL THEN master_video.rank
+           ELSE MIN(master_video.rank,excluded.rank)
+         END,
+         pinned=CASE
+           WHEN MAX(master_video.excluded,excluded.excluded)=1 THEN 0
+           ELSE MAX(master_video.pinned,excluded.pinned)
+         END,
+         excluded=MAX(master_video.excluded,excluded.excluded),
+         fetched_at=MAX(master_video.fetched_at,excluded.fetched_at)`,
+      aId,
+      bId,
+    ),
+    q(env, `DELETE FROM master_video WHERE master_model_id=?`, bId),
+    // Manufacturer decisions are not FK-cascaded. Preserve B's accepted human
+    // decision when A has no accepted decision; otherwise A remains canonical.
+    q(
+      env,
+      `INSERT INTO mfr_match
+         (master_model_id,mfr_product_id,score,span_agree,tier,status,
+          decided_by,decided_at,updated_at,note)
+       SELECT ?,mfr_product_id,score,span_agree,tier,status,
+              decided_by,decided_at,updated_at,note
+       FROM mfr_match
+       WHERE master_model_id=? AND status='accepted'
+       ON CONFLICT(master_model_id) DO UPDATE SET
+         mfr_product_id=excluded.mfr_product_id,
+         score=excluded.score,
+         span_agree=excluded.span_agree,
+         tier=excluded.tier,
+         status=excluded.status,
+         decided_by=excluded.decided_by,
+         decided_at=excluded.decided_at,
+         updated_at=excluded.updated_at,
+         note=excluded.note
+       WHERE COALESCE(mfr_match.status,'pending')<>'accepted'`,
+      aId,
+      bId,
+    ),
+    q(
+      env,
+      `INSERT OR IGNORE INTO mfr_match
+         (master_model_id,mfr_product_id,score,span_agree,tier,status,
+          decided_by,decided_at,updated_at,note)
+       SELECT ?,mfr_product_id,score,span_agree,tier,status,
+              decided_by,decided_at,updated_at,note
+       FROM mfr_match WHERE master_model_id=?`,
+      aId,
+      bId,
+    ),
+    q(env, `DELETE FROM mfr_candidate WHERE master_model_id=?`, bId),
+    q(env, `DELETE FROM mfr_match WHERE master_model_id=?`, bId),
+    ...profileStmts,
+    q(env, `DELETE FROM mfr_profile WHERE master_model_id=?`, bId),
     q(env, `DELETE FROM master_model WHERE id=?`, bId),
     audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason }),
   ]

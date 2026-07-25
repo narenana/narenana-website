@@ -71,6 +71,37 @@ export const hostOf = (url) => {
   }
 }
 
+// Fetch while validating EVERY redirect target before it is requested. Native
+// fetch's default redirect mode validates only after following, which is too
+// late for an allowlisted image proxy: an allowed CDN could otherwise bounce
+// the Worker to an internal or arbitrary host.
+export async function fetchWithAllowedRedirects(
+  initialUrl,
+  { allowed, init = {}, fetcher = fetch, maxRedirects = 4 } = {},
+) {
+  if (typeof allowed !== 'function') throw new TypeError('allowed host predicate required')
+  let current
+  try {
+    current = new URL(initialUrl).href
+  } catch {
+    return { blocked: true, reason: 'bad-url' }
+  }
+  for (let redirects = 0; redirects <= maxRedirects; redirects++) {
+    if (!allowed(hostOf(current))) return { blocked: true, reason: 'host' }
+    const response = await fetcher(current, { ...init, redirect: 'manual' })
+    if (response.status < 300 || response.status >= 400) return { response, url: current }
+    const location = response.headers.get('location')
+    if (!location) return { response, url: current }
+    if (redirects === maxRedirects) return { blocked: true, reason: 'redirect-limit' }
+    try {
+      current = new URL(location, current).href
+    } catch {
+      return { blocked: true, reason: 'bad-redirect' }
+    }
+  }
+  return { blocked: true, reason: 'redirect-limit' }
+}
+
 // --- HTTP Basic auth ------------------------------------------------------
 // One admin identity ('admin' + ADMIN_PASS secret). The browser manages the
 // credential (native prompt; same-origin fetches attach it automatically), so
