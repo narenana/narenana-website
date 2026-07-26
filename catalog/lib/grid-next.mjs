@@ -14,7 +14,7 @@ import { page } from './public.mjs'
 
 const ROLE_VOCAB = ['Trainer', 'Sport / Park Flyer', 'Aerobatic / 3D', 'Warbird', 'Jet / EDF', 'Glider / Sailplane', 'FPV / Flying Wing', 'Scale Civilian', 'Airliner']
 const SIZE_BUCKETS = [['small', 'Small · under 1 m'], ['medium', 'Medium · 1–1.5 m'], ['large', 'Large · over 1.5 m']]
-const SORTS = ['price-desc', 'price-asc', 'span-desc', 'span-asc', 'name']
+const SORTS = ['price-desc', 'price-asc', 'span-desc', 'span-asc', 'name', 'popular']
 // boundary is inclusive of the label ranges: medium = [1000, 1500], large = >1500
 const sizeOf = (mm) => (!mm ? '' : mm < 1000 ? 'small' : mm <= 1500 ? 'medium' : 'large')
 const ri = (t) => ROLE_VOCAB.indexOf(t)
@@ -174,7 +174,7 @@ export async function gridDataNext(env, cat, power) {
                  OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%')`
   return all(
     env,
-    `SELECT m.id, m.slug, m.brand, m.name, m.power, m.role_tags, m.specs, m.hero_image,
+    `SELECT m.id, m.slug, m.brand, m.name, m.power, m.role_tags, m.specs, m.hero_image, m.pop_score,
             COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
             MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
@@ -228,7 +228,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     let tags = []
     try { tags = JSON.parse(m.role_tags || '[]') } catch {}
     tags = (Array.isArray(tags) ? tags : []).filter((t) => ROLE_VOCAB.includes(t)) // vocab-only (drops "Other"; hardens the embed)
-    return { m, tags, size: sizeOf(m.span_mm), cn: !!m.new_stock, cp: !!m.preowned_stock, price: m.min_price ?? null, span: m.span_mm || 0 }
+    return { m, tags, size: sizeOf(m.span_mm), cn: !!m.new_stock, cp: !!m.preowned_stock, price: m.min_price ?? null, span: m.span_mm || 0, pop: m.pop_score ?? null }
   })
 
   const mRoles = (it) => !selRoles.length || selRoles.some((t) => it.tags.includes(t))
@@ -250,6 +250,7 @@ export function renderGridNext(cat, rows, opts = {}) {
   // server initial order (client re-sorts identically)
   const cmp = (a, b) => {
     if (sort === 'name') return a.m.name.localeCompare(b.m.name)
+    if (sort === 'popular') return (b.pop ?? -1) - (a.pop ?? -1) || (b.price ?? -1) - (a.price ?? -1)
     if (sort === 'span-desc') return (b.span || 0) - (a.span || 0)
     if (sort === 'span-asc') return (a.span || 1e9) - (b.span || 1e9)
     const pa = a.price ?? (sort === 'price-asc' ? 1e12 : -1), pb = b.price ?? (sort === 'price-asc' ? 1e12 : -1)
@@ -276,23 +277,35 @@ export function renderGridNext(cat, rows, opts = {}) {
   const sizeChips = sizesPresent.map(([k, label]) => chip('size', k, label, sizeCount(k), selSizes.includes(k), 'fx-cb fx-size')).join('')
   const condChips = `${chip('cond', 'all', 'All', items.filter(mRoles).filter(mSizes).length, cond === 'all')}${chip('cond', 'new', 'New', condCount('new'), cond === 'new')}${chip('cond', 'pre-owned', 'Pre-owned', condCount('pre-owned'), cond === 'pre-owned')}`
 
-  const sortSel = `<select id="fx-sort" class="fx-sortsel" aria-label="Sort">${[['price-desc', 'Price: high to low'], ['price-asc', 'Price: low to high'], ['span-desc', 'Wingspan: large to small'], ['span-asc', 'Wingspan: small to large'], ['name', 'Name: A → Z']].map(([v, t]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`
+  const sortSel = `<select id="fx-sort" class="fx-sortsel" aria-label="Sort">${[['price-desc', 'Price: high to low'], ['price-asc', 'Price: low to high'], ['popular', 'Most popular'], ['span-desc', 'Wingspan: large to small'], ['span-asc', 'Wingspan: small to large'], ['name', 'Name: A → Z']].map(([v, t]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`
 
   const condLabel = (c) => (c === 'new' ? 'New' : 'Pre-owned')
   const nActive = selRoles.length + selSizes.length + (cond !== 'all' ? 1 : 0)
   const activeTags = [...selRoles.map((t) => ['role', t, t]), ...selSizes.map((k) => ['size', k, SIZE_BUCKETS.find((s) => s[0] === k)[1]]), ...(cond !== 'all' ? [['cond', cond, condLabel(cond)]] : [])]
     .map(([f, v, label]) => `<span class="fx-atag" data-f="${f}" data-v="${esc(v)}">${esc(label)}<button aria-label="Remove">×</button></span>`).join('')
 
-  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price }))
+  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price, o: it.pop }))
 
   // header: landing pages get their own H1 + breadcrumbs + intro; the main grid keeps the default.
   const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
   const subTxt = Lmeta ? `${resultN} ${Lmeta.noun} in stock · live prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · live prices from Indian sellers`
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
   const introHtml = Lmeta ? `<p class="fx-intro">Compare live prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
-  const crumbLd = Lmeta ? { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: Lmeta.crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, ...(i < Lmeta.crumbs.length - 1 ? { item: SITE + c.url } : {}) })) } : null
-  // crawlable internal links to every landing (helps discovery + PageRank flow)
-  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}<a href="${pref}/electric/">Electric</a><a href="${pref}/nitro/">Nitro / gas</a></nav>`
+  // Structured data on EVERY grid state, not just landings: BreadcrumbList
+  // (default Home › category when no landing) + an ItemList of the first
+  // visible results (capped — the full list would bloat the page).
+  const crumbLd = Lmeta
+    ? { '@type': 'BreadcrumbList', itemListElement: Lmeta.crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, ...(i < Lmeta.crumbs.length - 1 ? { item: SITE + c.url } : {}) })) }
+    : { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'narenana', item: `${SITE}/` }, { '@type': 'ListItem', position: 2, name: `${cat.name} in India` }] }
+  const listLd = {
+    '@type': 'ItemList', numberOfItems: resultN,
+    itemListElement: ordered.filter(visible).slice(0, 24).map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: `${it.m.brand ?? ''} ${it.m.name}`.trim(), url: `${SITE}${pref}/${it.m.slug}/` })),
+  }
+  const gridLd = { '@context': 'https://schema.org', '@graph': [crumbLd, listLd] }
+  // Crawlable internal links — but ONLY to landings that will actually serve
+  // (a role with no stock in this power 404s; the other power's grid and the
+  // sitemap still link roles that live only there).
+  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.filter((s) => rolesPresent.includes(ROLE_SLUG[s])).map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}${counts.electric > 0 ? `<a href="${pref}/electric/">Electric</a>` : ''}${counts.gas > 0 ? `<a href="${pref}/nitro/">Nitro / gas</a>` : ''}</nav>`
 
   const body = `
   <div class="shop-head"><div class="shop-head-in">
@@ -331,12 +344,18 @@ export function renderGridNext(cat, rows, opts = {}) {
   <script>var FX_DATA=${jsonSafe(fxData)},FX_POWER=${jsonSafe(power)},FX_SORT=${jsonSafe(sort)},FX_INIT=${jsonSafe({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${jsonSafe(pref)},FX_NOURL=${landing ? 'true' : 'false'};</script>
   <script>${FX_JS}</script>`
 
+  // Canonical discipline (mirrors the proven classic-grid rules): ?power=gas
+  // duplicates the /nitro/ landing → canonical THERE, not to the electric grid
+  // whose content is disjoint (the case where Google ignores the canonical).
+  // Any other non-default filter/sort state is noindex — crawlable, not indexed.
+  const filtered = !landing && (selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== 'price-desc')
   return page({
     title: Lmeta ? Lmeta.title : `${cat.name} in India — compare live prices | narenana`,
     desc: Lmeta ? Lmeta.desc : `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
-    path: Lmeta ? Lmeta.path : `${pref}/`,
+    path: Lmeta ? Lmeta.path : power === 'gas' ? `${pref}/nitro/` : `${pref}/`,
     body,
-    jsonld: crumbLd || undefined,
+    jsonld: gridLd,
+    noindex: filtered || undefined,
   })
 }
 
@@ -418,6 +437,7 @@ const FX_JS = `(function(){
   function results(){return FX_DATA.filter(function(d){return mRoles(d)&&mSizes(d)&&mCond(d);});}
   function cmp(a,b){
     if(state.sort==='name'){return (cardEls[a.i].querySelector('.prod-name').textContent).localeCompare(cardEls[b.i].querySelector('.prod-name').textContent);}
+    if(state.sort==='popular'){var oa=a.o==null?-1:a.o,ob=b.o==null?-1:b.o;return (ob-oa)||((b.p==null?-1:b.p)-(a.p==null?-1:a.p));}
     if(state.sort==='span-desc'){return (b.sp||0)-(a.sp||0);}
     if(state.sort==='span-asc'){return (a.sp||1e9)-(b.sp||1e9);}
     var pa=a.p==null?(state.sort==='price-asc'?1e12:-1):a.p, pb=b.p==null?(state.sort==='price-asc'?1e12:-1):b.p;

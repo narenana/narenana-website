@@ -327,7 +327,12 @@ export function renderMaster(cat, m, offers, similar = []) {
     const v = arr.map((o) => o.price_inr).filter(Boolean)
     return v.length ? Math.min(...v) : null
   }
-  const liveMin = minOf(liveOffers)
+  // The headline "from" price (and schema lowPrice) means a NEW, single unit —
+  // same rule as the grid (pack_qty=1). Multi-packs and pre-owned listings
+  // stay in the table but must not undercut the headline. Fall back to any
+  // live offer only when no single-unit new offer has a price.
+  const headlineOffers = liveOffers.filter((o) => o.pack_qty === 1 && conditionOf(o.title) !== 'used')
+  const liveMin = minOf(headlineOffers) ?? minOf(liveOffers)
   const seenMin = minOf(offers)
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
@@ -338,15 +343,22 @@ export function renderMaster(cat, m, offers, similar = []) {
       <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>
     </tr>`
 
-  const productLd = liveOffers.length && liveMin ? {
+  // Keep the Product entity in Google's graph even out of stock (with the
+  // last-seen price + OutOfStock availability) so the page recovers instantly
+  // when stock returns instead of re-earning rich results from scratch. The
+  // image uses the same offer-sku fallback the visible hero does.
+  const hasImg = m.hero_image || offers.some((o) => o.image_url)
+  const ldPrice = liveMin ?? seenMin
+  const productLd = ldPrice ? {
     '@type': 'Product',
     name: `${m.brand} ${m.name}`, brand: { '@type': 'Brand', name: m.brand }, description: m.blurb ?? undefined,
-    image: m.hero_image ? `${SITE}/img/master/${m.id}` : undefined,
+    image: hasImg ? `${SITE}/img/master/${m.id}` : undefined,
     offers: {
       '@type': 'AggregateOffer', priceCurrency: 'INR',
-      lowPrice: liveMin,
-      highPrice: Math.max(...liveOffers.map((o) => o.price_inr).filter(Boolean)),
-      offerCount: liveOffers.length, availability: 'https://schema.org/InStock',
+      lowPrice: ldPrice,
+      highPrice: Math.max(...(liveOffers.length ? liveOffers : offers).map((o) => o.price_inr).filter(Boolean)) || ldPrice,
+      offerCount: liveOffers.length || offers.length,
+      availability: liveOffers.length ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     },
   } : null
   const jsonld = {
@@ -391,6 +403,6 @@ export function renderMaster(cat, m, offers, similar = []) {
     desc: m.blurb || `${m.brand} ${m.name}: prices compared across ${offers.length} Indian seller listing${offers.length === 1 ? '' : 's'}.`,
     path: `${cat.path_prefix}/${m.slug}/`,
     body, jsonld,
-    image: m.hero_image ? `${SITE}/img/master/${m.id}` : undefined,
+    image: hasImg ? `${SITE}/img/master/${m.id}` : undefined,
   })
 }

@@ -14,6 +14,7 @@ import {
   rebuildManufacturerMatches,
 } from './mfr-jobs.mjs'
 import { configAgreement, configTypes } from './mfr-match.mjs'
+import { popScores } from './popularity.mjs'
 import {
   PROFILE_FIELDS,
   extractManufacturerFacts,
@@ -276,25 +277,28 @@ async function sitemapResponse(env, cats) {
   // Main site + the /log-viewer/ tool (this route shadows the static
   // site/sitemap.xml, so those entries must live here now). The FPV simulator
   // is on its own subdomain and ships its own sitemap.
-  const urls = [`${SITE}/`, `${SITE}/log-viewer/`]
+  // lastmod comes from master_model.updated_at — bumped only on real edits (the
+  // IndexNow cursor already relies on this), so it's an honest recrawl signal.
+  const urls = [{ u: `${SITE}/` }, { u: `${SITE}/log-viewer/` }]
   for (const cat of cats.filter((c) => c.live)) {
-    urls.push(`${SITE}${cat.path_prefix}/`)
-    urls.push(`${SITE}${cat.path_prefix}/browse/`)
+    urls.push({ u: `${SITE}${cat.path_prefix}/` })
+    urls.push({ u: `${SITE}${cat.path_prefix}/browse/` })
     const masters = await all(
       env,
-      `SELECT m.slug, COALESCE(m.power,'electric') AS power, m.role_tags,
+      `SELECT m.slug, COALESCE(m.power,'electric') AS power, m.role_tags, m.updated_at,
               MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
        FROM master_model m JOIN offer o ON o.master_model_id=m.id
        JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
       cat.id,
     )
-    for (const s of validLandings(masters)) urls.push(`${SITE}${cat.path_prefix}/${s}/`)
+    for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
     // In-stock only — don't feed Google product pages we can't currently sell.
     // Regenerates live each request, so pages auto-drop/return with stock.
-    for (const m of masters) if (m.any_stock) urls.push(`${SITE}${cat.path_prefix}/${m.slug}/`)
+    for (const m of masters) if (m.any_stock) urls.push({ u: `${SITE}${cat.path_prefix}/${m.slug}/`, lm: m.updated_at })
   }
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `<url><loc>${esc(u)}</loc></url>`).join('\n')}\n</urlset>`
+  const day = (ms) => (ms ? `<lastmod>${new Date(ms).toISOString().slice(0, 10)}</lastmod>` : '')
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(({ u, lm }) => `<url><loc>${esc(u)}</loc>${day(lm)}</url>`).join('\n')}\n</urlset>`
   return new Response(xml, { headers: { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=3600' } })
 }
 
@@ -543,7 +547,10 @@ async function api(request, url, env, ep, actor) {
        LEFT JOIN offer o ON o.sku_id=k.id LEFT JOIN master_model mm ON mm.id=o.master_model_id
        WHERE ${where} GROUP BY k.id ORDER BY k.first_seen DESC LIMIT ? OFFSET ?`, ...params, RPAGE, (rpage - 1) * RPAGE)
 
-    const masters = await all(env, `SELECT id, brand, name, brand_norm, name_norm FROM master_model LIMIT 400`)
+    // Newest-first + a cap far above catalog size: attach suggestions must see
+    // recently created masters or the review flow becomes a duplicate factory
+    // (an unordered LIMIT 400 silently hid everything created after row 400).
+    const masters = await all(env, `SELECT id, brand, name, brand_norm, name_norm FROM master_model ORDER BY id DESC LIMIT 1500`)
     const score = (t = '') => {
       const lc = t.toLowerCase()
       let s = 0
@@ -661,6 +668,9 @@ async function api(request, url, env, ep, actor) {
     if (body.action === 'approve') {
       const m = body.master ?? {}
       if (!m.brand || !m.name || !m.slug || !/^[a-z0-9-]{3,60}$/.test(m.slug)) return json({ error: 'brand, name and a valid slug are required' }, 400)
+      // Reserved slugs resolve BEFORE the master lookup (landing pages, browse
+      // hub, power slugs) — a master with one of these would be unreachable.
+      if (m.slug === 'browse' || resolveLanding(m.slug)) return json({ error: `"${m.slug}" is a reserved page name (landing/hub route) — pick another slug` }, 400)
       const specs = JSON.stringify(m.specs ?? {})
       // Category comes from the sku's source_url mapping (or an explicit
       // body.categoryId override) — never hardcoded in code.
@@ -812,6 +822,28 @@ async function api(request, url, env, ep, actor) {
       for (const m of masters) m.videos = (byMaster[m.id] || []).slice(0, 6)
     }
     return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort, popCoverage })
+  }
+
+  // Pin (survives re-searches, boosts nothing — informational) or exclude
+  // (drops the video from scoring — the mismatched-video fix) a matched
+  // YouTube video, then re-score the master from the persisted set so the
+  // ranking reflects the curation immediately, not on the next weekly poll.
+  if (ep === 'video-flag' && request.method === 'POST') {
+    const field = body.field === 'pinned' ? 'pinned' : body.field === 'excluded' ? 'excluded' : null
+    if (!field || !body.masterId || !body.videoId) return json({ error: 'masterId, videoId and field (pinned|excluded) required' }, 400)
+    const t = now()
+    await batch(env, [
+      q(env, `UPDATE master_video SET ${field}=? WHERE master_model_id=? AND video_id=?`, body.value ? 1 : 0, body.masterId, body.videoId),
+      audit(env, actor, 'video-' + field, 'master_model', body.masterId, { video: body.videoId, value: body.value ? 1 : 0 }),
+    ])
+    const mrow = await one(env, `SELECT m.id, COUNT(DISTINCT k.source_id) AS sellers,
+        MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+      FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
+      LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved' WHERE m.id=? GROUP BY m.id`, body.masterId)
+    const scored = await all(env, `SELECT views, published_at FROM master_video WHERE master_model_id=? AND excluded=0`, body.masterId)
+    const { raw, score, signals } = popScores({ videos: scored, sellers: mrow?.sellers ?? 0, anyStock: mrow?.any_stock ?? 0, nowMs: t })
+    await run(env, `UPDATE master_model SET pop_raw=?, pop_score=?, pop_signals=?, pop_updated_at=? WHERE id=?`, raw, score, JSON.stringify(signals).slice(0, 900), t, body.masterId)
+    return json({ ok: true, score })
   }
 
   if (ep === 'master' && request.method === 'POST') {
@@ -1384,8 +1416,22 @@ const probeOk = async (u) => {
   }
 }
 
+// Run the */15 slice AND persist its outcome — the cron result was previously
+// discarded, so a throwing/wedged slice was invisible (only the manual admin Run
+// button ever showed a log). One extra D1 statement per tick.
+async function runSliceLogged(env) {
+  const t = now()
+  try {
+    const res = await runSlice(env, 'cron')
+    const job = res?.job ?? (res?.skipped ? 'skipped' : res?.idle ? 'idle' : 'unknown')
+    await setSetting(env, 'job:last', JSON.stringify({ at: t, job, res }).slice(0, 1900))
+  } catch (e) {
+    await setSetting(env, 'job:last_error', JSON.stringify({ at: t, msg: String(e.message || e).slice(0, 500) }))
+  }
+}
+
 export function catalogScheduled(event, env, ctx) {
-  if (event.cron === '*/15 * * * *') ctx.waitUntil(runSlice(env, 'cron'))
+  if (event.cron === '*/15 * * * *') ctx.waitUntil(runSliceLogged(env))
   // One weekly trigger fans out bounded queue jobs. Each manufacturer page
   // receives a fresh subrequest budget without waking this Worker hourly.
   else if (event.cron === MFR_WEEKLY_CRON)

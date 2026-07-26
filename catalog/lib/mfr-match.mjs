@@ -1,27 +1,48 @@
 // Pure manufacturer matcher. Shared by local tooling and the production
 // harvesting cron; no environment access and no I/O.
 
-// Wingspan (mm) from free text: "1200mm", "1.2M", "wingspan: 1200 mm".
+// Wingspan (mm) from free text: "1200mm", "1,400mm", "1.2M", "wingspan: 1200 mm",
+// '68.2" wing span', "60 in Extra". Wingspan-LABELED matches always win; bare
+// numbers are trusted only in short text (titles) — long descriptions mention
+// too many other millimetre/inch figures ("includes 330mm propeller").
 export function spanOf(text) {
-  const t = ' ' + (text || '') + ' '
-  const m =
-    t.match(/wing\s*span[^0-9]{0,14}(\d{3,4})\s*mm/i) ||
-    t.match(/\b(\d{3,4})\s*mm\b/i) ||
-    t.match(/\b(\d(?:\.\d)?)\s*m\b(?!m)/i)
-  if (!m) return null
-  const v = parseFloat(m[1])
-  return v < 10 ? Math.round(v * 1000) : Math.round(v)
+  const t = (' ' + (text || '') + ' ').replace(/(\d),(\d{3})(?!\d)/g, '$1$2')
+  const mm = (v) => Math.round(parseFloat(v))
+  const inch = (v) => Math.round(parseFloat(v) * 25.4)
+  let m
+  if ((m = t.match(/wing\s*span[^0-9]{0,14}(\d{3,4})\s*mm/i))) return mm(m[1])
+  if ((m = t.match(/wing\s*span[^0-9]{0,14}(\d{2,3}(?:\.\d)?)\s*(?:"|''|″|in(?:ch(?:es)?)?\b)/i))) return inch(m[1])
+  if ((m = t.match(/(\d{2,3}(?:\.\d)?)\s*(?:"|''|″|in(?:ch(?:es)?)?\b)[^a-z0-9]{0,6}wing\s*span/i))) return inch(m[1])
+  if ((m = t.match(/wing\s*span[^0-9]{0,14}(\d(?:\.\d{1,2})?)\s*m\b(?!m)/i))) return mm(parseFloat(m[1]) * 1000)
+  if (t.length <= 90) {
+    if ((m = t.match(/\b(\d{3,4})\s*mm\b/i))) return mm(m[1])
+    if ((m = t.match(/\b(\d{2,3}(?:\.\d)?)\s*(?:"|''|″|in(?:ch(?:es)?)?\b)/i))) return inch(m[1])
+    if ((m = t.match(/\b(\d(?:\.\d)?)\s*m\b(?!m)/i))) return mm(parseFloat(m[1]) * 1000)
+  }
+  return null
 }
 
-// Strong build signals win; otherwise exclude common parts/accessories.
-const STRONG = /\b(pnp|rtf|bnf|arf)\b/i
+// Strong build signals win; otherwise exclude common parts/accessories. The
+// store's own product_type (Shopify) is more reliable than any title heuristic
+// — kit/aerobatic brands title planes with nothing but a model name + inch span
+// ("EDGE 540N 68.2\" WING SPAN"), which pure title matching wrongly drops.
+const STRONG = /\b(pnp|rtf|bnf|arf|rxr|receiver[\s-]*ready)\b/i
+const TYPE_AIRCRAFT = /\b(aircraft|air\s*plane|airplane|plane|glider|sailplane|warbird|edf|jet|biplane|3d|aerobatic|trainer|delta|fpv)\b/i
+const TYPE_PART = /\b(accessor|part|spare|hardware|electronic|covering|adhesive|engine|motor|servo|radio|batter|charger|prop|wheel|tool|field|pilot(s| figure)?|decal|apparel|gift)\b/i
 const PART =
   /(conversion kit|tail boom|fuselage|hatch|canopy|servo|\besc\b|\bvtx\b|\bvrx\b|\bmotor\b|propeller|\bprop\b|landing gear|\bcover\b|protector|\bmount\b|spare|replacement|\bcable\b|antenna|sticker|decal|foam set|foam case|carrying|storage|\bstand\b|charger|\bbattery\b|receiver|goggle|\blens\b|\bscrew\b|\bblock\b|\bpart\b|\bparts\b|set of|\bpack\b|\bbag\b|kit foam|nose \d|main wing|wing set|for rc (airplane|plane)|\d set\b)/i
-export function isAircraft(title) {
+export function isAircraft(title, productType) {
   const t = title || ''
   if (STRONG.test(t)) return true
+  if (productType) {
+    if (TYPE_PART.test(productType)) return false
+    if (TYPE_AIRCRAFT.test(productType)) return true
+  }
   if (PART.test(t)) return false
-  return /\b(plane|glider|trainer|warbird|edf|jet|delta)\b/i.test(t) || /(fixed|flying)[\s-]*wing/i.test(t)
+  if (/\b(plane|glider|trainer|warbird|edf|jet|delta)\b/i.test(t) || /(fixed|flying)[\s-]*wing/i.test(t)) return true
+  // A wingspan marker in the title ("68.2\" WING SPAN", "71 inches") after the
+  // part-words exclusion is an aircraft signal — kit brands title planes this way.
+  return /wing\s*span/i.test(t) || /\b\d{2,3}(?:\.\d)?\s*(?:"|″|in(?:ch(?:es)?)?\b)/i.test(t)
 }
 
 // Name match is containment of our short model tokens in the padded official

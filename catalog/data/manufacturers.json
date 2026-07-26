@@ -10,5 +10,9 @@
   {"brand":"Extreme Flight","domain":"extremeflightrc.com","probed_platform":"shopify","pursue":true},
   {"brand":"Kyosho","domain":"kyosho.com","probed_platform":"html","pursue":true},
   {"brand":"SIG","domain":"sigmfg.com","probed_platform":"shopify","pursue":true},
-  {"brand":"XFly","domain":"xflymodel.com","probed_platform":"html","pursue":true}
+  {"brand":"XFly","domain":"xflymodel.com","probed_platform":"html","pursue":true},
+  {"brand":"Pilot-RC","domain":"pilot-rc.com","probed_platform":"html","pursue":true},
+  {"brand":"FMS","domain":"motionrc.com","probed_platform":"html","pursue":true},
+  {"brand":"E-flite","domain":"horizonhobby.com","probed_platform":"html","pursue":true},
+  {"brand":"Hangar 9","domain":"horizonhobby.com","probed_platform":"html","pursue":true}
 ]

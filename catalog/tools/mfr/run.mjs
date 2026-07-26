@@ -45,7 +45,7 @@ strategy=excluded.strategy,status='active',updated_at=excluded.updated_at;\n`
   let products = []
   try { products = (await fetchStrategy(brand.domain, brand.brand)) || [] }
   catch (error) { console.error(`${brand.brand}: ${error.message}`) }
-  const aircraft = via === 'html' ? products : products.filter((p) => isAircraft(p.title))
+  const aircraft = via === 'html' ? products : products.filter((p) => isAircraft(p.title, p.product_type))
 
   for (const product of aircraft) {
     const extId = product.ext_id || product.url

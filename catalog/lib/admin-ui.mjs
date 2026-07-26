@@ -162,7 +162,7 @@ function skuRow(k){
     :F.status==='removed'?'<button class="ok" data-a="restore-live" data-sku="'+k.id+'">Restore</button>'
     :F.status==='flagged'?'<button class="ok" data-a="unflag" data-sku="'+k.id+'">Accept change</button><button class="no" data-a="unapprove" data-sku="'+k.id+'">Un-approve</button>':'';
   return '<div class="row" data-sku="'+k.id+'">'
-    +(k.image_url?'<img class="thumb" loading="lazy" src="'+esc(k.image_url)+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'"/>':'<div class="noimg">no image</div>')
+    +(k.image_url?'<img class="thumb" loading="lazy" src="/img/sku/'+k.id+'" onerror="this.outerHTML=\\'<div class=noimg>no image</div>\\'"/>':'<div class="noimg">no image</div>')
     +'<div><p class="title">'+esc(k.title||'(untitled)')+' '+(k.guess.kind==='accessory'||k.guess.kind==='other'?'<span class="tag" style="color:var(--warn)">AI: not aircraft</span>':k.score>0||k.guess.kind==='aircraft'?'<span class="tag w">likely</span>':'<span class="tag">unsure</span>')+'</p>'
     +'<p class="meta"><span class="tag">'+esc(k.source_id)+'</span> '+(k.price_inr?'<span class="price">'+inr(k.price_inr)+'</span>':'no price')+' '+stock
     +(k.master?' · mapped to <b>'+esc(k.master)+'</b>':'')+' · <a href="'+esc(k.url_canonical)+'" target="_blank" rel="noopener">seller page ↗</a></p>'
@@ -170,7 +170,11 @@ function skuRow(k){
 }
 function renderReview(){
   const rows=data.skus;
-  const total=(data.counts&&(data.counts[F.status]!=null?data.counts[F.status]:0))||rows.length;
+  // Pager total must respect the ACTIVE filters — the per-status count alone
+  // overstates pages when the default stock=in (or a seller) filter is on.
+  const total=(F.src&&data.srcCounts&&data.srcCounts[F.src]!=null)?data.srcCounts[F.src]
+    :(F.status==='new'&&data.stockCounts&&data.stockCounts[F.stock]!=null)?data.stockCounts[F.stock]
+    :(data.counts&&(data.counts[F.status]!=null?data.counts[F.status]:0))||rows.length;
   $('#view').innerHTML=(rows.length?rows.map(skuRow).join(''):'<p class="empty">Queue is clear.</p>')+pager(total,data.pageSize,data.page||1);
   wirePager();
 }
@@ -239,7 +243,9 @@ function renderCatalog(){
     const id=+i.dataset.m,f=i.dataset.f,body={id};
     if(f.startsWith('spec:')){const row=data.masters.find((x)=>x.id===id);let sp={};try{sp=JSON.parse(row.specs||'{}')}catch(e){}sp[f.slice(5)]=i.value.trim();row.specs=JSON.stringify(sp);body.specs=row.specs}
     else body[f]=i.value;
-    await api('master',body);
+    // Never lose an edit silently: flash saved/failed on the input itself.
+    try{await api('master',body);i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900)}
+    catch(e){i.style.outline='2px solid #f85149';alert('NOT saved: '+e.message)}
   });
 }
 
@@ -258,7 +264,9 @@ function renderPopularity(){
   $('#view').innerHTML=head+'<table class="t"><thead><tr><th style="width:30px">#</th><th>Model</th><th style="width:118px">Score</th><th>Matched YouTube videos</th><th style="width:64px">Offers</th></tr></thead><tbody>'
     +rows.map((m,i)=>{
       const vids=(m.videos||[]).map((v)=>'<div class="meta" style="'+(v.excluded?'opacity:.4;text-decoration:line-through':'')+'">'+(v.pinned?'📌 ':'▸ ')
-        +'<a href="https://youtu.be/'+esc(v.video_id)+'" target="_blank" rel="noopener">'+esc((v.title||'(untitled)').slice(0,64))+'</a> · '+fmtViews(v.views)+' views'+(v.channel?' · '+esc(v.channel):'')+'</div>').join('')
+        +'<a href="https://youtu.be/'+esc(v.video_id)+'" target="_blank" rel="noopener">'+esc((v.title||'(untitled)').slice(0,64))+'</a> · '+fmtViews(v.views)+' views'+(v.channel?' · '+esc(v.channel):'')
+        +' <button class="chip" data-vf="pinned" data-m="'+m.id+'" data-v="'+esc(v.video_id)+'" data-val="'+(v.pinned?0:1)+'" title="pin: survives re-searches">'+(v.pinned?'unpin':'pin')+'</button>'
+        +'<button class="chip'+(v.excluded?' on':'')+'" data-vf="excluded" data-m="'+m.id+'" data-v="'+esc(v.video_id)+'" data-val="'+(v.excluded?0:1)+'" title="exclude: wrong video — drop from scoring">'+(v.excluded?'include':'✕ wrong')+'</button></div>').join('')
         ||'<span class="meta">'+(m.pop_updated_at?'no videos matched':'not polled yet')+'</span>';
       const score=m.pop_score!=null
         ? '<b style="font-size:1rem">'+(Math.round(m.pop_score*10)/10)+'</b><div class="meta">raw '+(Math.round((m.pop_raw||0)*10)/10)+' · '+ago(m.pop_updated_at)+'</div>'
@@ -269,6 +277,11 @@ function renderPopularity(){
         +'<td class="meta">'+m.offers+' ('+m.live_offers+')</td></tr>'}).join('')
     +'</tbody></table>'+pager(data.total,data.pageSize,data.page||1);
   wirePager();
+  document.querySelectorAll('button[data-vf]').forEach((b)=>b.onclick=async()=>{
+    b.disabled=true;
+    try{await api('video-flag',{masterId:+b.dataset.m,videoId:b.dataset.v,field:b.dataset.vf,value:+b.dataset.val});load()}
+    catch(e){alert(e.message);b.disabled=false}
+  });
 }
 
 // ------- Duplicates -------
@@ -696,7 +709,12 @@ function renderSystem(){
   const healthTable='<h3>Source health</h3><table class="t"><thead><tr><th>Source</th><th>Last scan</th><th>Oldest verify</th><th>Live</th><th>Flagged</th><th>Removed</th></tr></thead><tbody>'
     +health.map((r)=>{const stale=r.last_scan&&(Date.now()-r.last_scan)>36*3.6e6;return '<tr><td>'+esc(r.source_id)+'</td><td'+(stale?' style="color:var(--bad)"':'')+'>'+ago(r.last_scan)+'</td><td>'+ago(r.oldest_verify)+'</td><td>'+(r.live||0)+'</td><td'+(r.flagged>0?' style="color:var(--warn)"':'')+'>'+(r.flagged||0)+'</td><td>'+(r.removed||0)+'</td></tr>'}).join('')
     +'</tbody></table>';
+  // Last cron slice outcome (persisted by runSliceLogged) — the only way to
+  // see that the */15 pipeline is alive and what it last did.
+  let lastJob='';try{const j=JSON.parse(s['job:last']||'null');if(j)lastJob='<p class="meta">last cron slice: <b>'+esc(j.job)+'</b> '+ago(j.at)+' <pre style="display:inline">'+esc(JSON.stringify(j.res||{}).slice(0,160))+'</pre></p>'}catch(e){}
+  let lastErr='';try{const j=JSON.parse(s['job:last_error']||'null');if(j)lastErr='<p class="meta" style="color:var(--bad)">last slice ERROR '+ago(j.at)+': '+esc(j.msg)+'</p>'}catch(e){}
   $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('dedup_paused','Dedup')+' '+tog('verify_paused','Verify')+' '+tog('popularity_paused','Popularity')+' '+tog('mfr_paused','Manufacturer harvest')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
+    +lastJob+lastErr
     +'<p class="meta">scan cursor: <pre>'+esc(s.scan_cursor||'—')+'</pre></p>'
     +healthTable
     +'<h3>Recent audit</h3><table class="t"><tbody>'

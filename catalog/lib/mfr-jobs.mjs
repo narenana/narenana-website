@@ -300,7 +300,7 @@ export async function harvestManufacturerPage(env, task, at = Date.now()) {
 
     const aircraft = cfg.via === 'html'
       ? page.products
-      : page.products.filter((product) => isAircraft(product.title))
+      : page.products.filter((product) => isAircraft(product.title, product.product_type))
     await upsertProducts(env, manufacturer, aircraft, at)
 
     if (!page.done) {

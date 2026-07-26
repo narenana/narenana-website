@@ -240,12 +240,21 @@ export async function upsertProducts(env, su, products, spent) {
 
     if (byP) {
       // Known product (identity = pid). URL may legitimately change; refresh data.
+      // BUT: if ANOTHER sku row already holds the new URL (product A moved onto a
+      // URL that used to be product B's), writing it would violate the unique
+      // url_canonical constraint and abort the whole batch — wedging the scan
+      // cursor forever. Keep byP's old URL, refresh data, and flag the collision.
+      const urlTaken = byU && byU.id !== byP.id
       const changed = byP.price_inr !== p.priceINR || !!byP.in_stock !== !!p.inStock
       stmts.push(q(env,
         `UPDATE sku SET url_canonical=?, url_raw=?, title=CASE WHEN review_status='new' THEN ? ELSE title END,
            image_url=COALESCE(?, image_url), price_inr=?, in_stock=?, variants=?, last_seen=?, misses=0, dead=0 WHERE id=?`,
-        p.url, p.url, p.title, p.img, p.priceINR, p.inStock == null ? null : p.inStock ? 1 : 0,
+        urlTaken ? byP.url_canonical : p.url, urlTaken ? byP.url_canonical : p.url,
+        p.title, p.img, p.priceINR, p.inStock == null ? null : p.inStock ? 1 : 0,
         JSON.stringify(p.variants ?? []), t, byP.id))
+      if (urlTaken)
+        stmts.push(q(env, `UPDATE sku SET flagged=? WHERE id=?`,
+          JSON.stringify({ kind: 'url-collision', detail: `pid ${p.pid} now lives at a URL held by sku #${byU.id}`, at: t }), byP.id))
       if (changed) {
         obs.push([byP.id, t, null, p.priceINR, p.inStock == null ? null : p.inStock ? 1 : 0])
         stats.changed++
@@ -529,8 +538,14 @@ async function popularitySlice(env, trigger) {
      LIMIT 1`,
   )
   const backfill = !!unscored
-  const due = backfill ? 'm.pop_score IS NULL' : 'm.pop_updated_at < ?'
-  const dueParams = backfill ? [] : [t - POP_REFRESH]
+  // Backfill retries carry a 24h backoff: the error path stamps pop_updated_at
+  // while leaving pop_score NULL, so without the time guard a persistently
+  // failing API key re-selects the same masters EVERY slice — claiming the tick
+  // and starving warm/verify behind it.
+  const due = backfill
+    ? 'm.pop_score IS NULL AND (m.pop_updated_at IS NULL OR m.pop_updated_at < ?)'
+    : 'm.pop_updated_at < ?'
+  const dueParams = backfill ? [t - DAY] : [t - POP_REFRESH]
   const rows = await all(
     env,
     `SELECT m.id, m.brand, m.name, m.category_id, c.triage,

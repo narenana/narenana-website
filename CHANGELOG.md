@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-07-24 — Review-driven fix batch + "Most popular" sort
+
+A 5-subsystem deep review of master produced a ranked gap list; this batch closes the
+verified bugs and quick wins, and ships the first consumer surface of the popularity signal.
+
+- **"Most popular" sort option** on the faceted grid (`?sort=popular`) — YouTube-led
+  `pop_score`, 100% coverage of in-stock models (162/162 scored). Sort option only; the
+  default sort is unchanged.
+- **Manufacturer matcher fixes** (verified against live feeds): `isAircraft` now trusts the
+  store's own `product_type` and recognizes wingspan-marker titles — SIG 93→297 and Extreme
+  Flight 167→1,698 aircraft recovered; `spanOf` handles thousands-commas ("1,400mm" no longer
+  parses as 400), inch specs (68.2" → 1732 mm), and ignores bare numbers in long text.
+  Pilot-RC (107 products) seeded + FMS/E-flite/Hangar 9 registry rows added. Prod matches
+  131 → 169.
+- **SEO regressions on the faceted grid fixed**: ItemList + BreadcrumbList JSON-LD on every
+  grid state; `?power=gas` canonicals to `/nitro/`; non-default filter/sort states are
+  noindex; "Browse by type" links only to landings that will actually serve (no more
+  sitewide links to 404s). Sitemap now emits honest `<lastmod>` from `updated_at`.
+- **Product-page price/schema honesty**: the headline "from" price (and schema `lowPrice`)
+  now means a new single unit (grid rule); out-of-stock pages keep their Product entity with
+  `OutOfStock` availability + last-seen price; og/LD image uses the same offer-sku fallback
+  as the visible hero.
+- **Pipeline hardening**: the */15 cron slice outcome is persisted (`job:last` /
+  `job:last_error`, shown in the System tab) — a failing slice is no longer invisible; the
+  scan can no longer wedge on a pid/URL collision (collision is flagged instead); popularity
+  backfill errors back off 24h instead of starving the slice chain every tick.
+- **Admin fixes**: video pin/exclude buttons (+ instant re-score) on the Popularity tab;
+  attach suggestions no longer capped at an unordered 400 masters (newest-first, cap 1500);
+  review thumbnails go through `/img/sku/` (WAF-blocked sellers visible + R2-warmed);
+  reserved slugs (landing/browse routes) rejected at approve; pager totals respect active
+  filters; inline catalog edits flash saved/failed instead of losing edits silently.
+
 ## 2026-07 — Catalog UX, SEO, image durability, and the manufacturer-content system
 
 A large session. Grouped by area; commit hashes in parentheses. Deeper design lives in
