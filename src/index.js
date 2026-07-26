@@ -37,10 +37,20 @@ export default {
       return videosResponse(env)
     }
 
-    if (url.pathname === '/stats' || url.pathname === '/stats/' || url.pathname.startsWith('/stats/api/')) {
+    // Match /stats on the DECODED path: the routes above/below compare the raw
+    // pathname, but env.ASSETS matches percent-DECODED paths — so /%73tats or
+    // /stats%2Ehtml would otherwise skip the Worker's gate and hit the asset
+    // layer directly. Undecodable paths can't be ours.
+    let statsPath = null
+    try {
+      statsPath = decodeURIComponent(url.pathname)
+    } catch {
+      statsPath = null
+    }
+    if (statsPath === '/stats' || statsPath === '/stats/' || (statsPath !== null && statsPath.startsWith('/stats/api/'))) {
       return handleStats(request, env, ctx, url)
     }
-    if (url.pathname === '/stats.html') {
+    if (statsPath === '/stats.html') {
       // The shell must only be reachable through the auth-gated /stats route.
       return Response.redirect(new URL('/stats', url).toString(), 302)
     }

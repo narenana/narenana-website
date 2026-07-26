@@ -24,7 +24,8 @@ binding = "ASSETS"
 # through to env.ASSETS.fetch() for paths it doesn't handle.
 run_worker_first = true
 
-# Hourly RSS fetch — refreshes the YouTube feed cache in KV.
+# Hourly cron — refreshes the YouTube feed cache AND the /stats portfolio
+# snapshot (both in VIDEOS_KV; see scheduled() in src/index.js).
 [triggers]
 crons = ["0 * * * *"]
 

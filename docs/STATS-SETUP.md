@@ -10,11 +10,22 @@ source, so partial setup is always visible, never broken.
 
 | Name | Kind | Purpose |
 |---|---|---|
-| `STATS_KEY` | secret | Page access key — visit `/stats?key=…` once, a cookie takes over |
+| `STATS_KEY` | secret | Page access key — visit `/stats?key=…` once, a session cookie takes over |
 | `GOOGLE_SA_KEY` | secret | Full service-account JSON — unlocks GA4 + Search Console |
 | `CF_API_TOKEN` | secret | Cloudflare API token — unlocks edge/RUM analytics |
 | `GA4_PROPERTY_ID` | var (set) | `534605239` — the narenana.com GA4 property |
 | `CF_ACCOUNT_TAG` | var (set) | Cloudflare account id |
+
+Generate `STATS_KEY` with real entropy — there is no lockout on guesses:
+
+```bash
+openssl rand -base64 24
+```
+
+A valid `?key=` visit never renders: the Worker 302s to the bare `/stats` URL
+and sets a signed **session token** cookie (30 days; the key itself is never
+stored client-side). Sessions are stateless HMAC tokens derived from
+`STATS_KEY` — rotating the secret instantly revokes every session.
 
 Set a secret with:
 
@@ -73,10 +84,18 @@ button) forces a snapshot rebuild instead of waiting for the hourly cron.
 ## Notes
 
 - The page and API send `X-Robots-Tag: noindex` and are never in the sitemap.
-- The snapshot lives in `VIDEOS_KV` under `stats_*` keys.
+- KV keys used (all in `VIDEOS_KV`): `stats_snapshot` (the hourly data) and
+  `stats_cf_ids` (discovered zone/RUM ids). Sessions are stateless (no KV).
 - Google quotas (200k tokens/day) and Cloudflare GraphQL limits (300 req/5min)
   are untouchable at one refresh per hour — do not wire the fetchers to run
   per-request.
+- **Accepted risk**: `LASTCALL_DB` is a full D1 binding to the live LAST CALL
+  leaderboard database — D1 bindings cannot be scoped read-only, so "read-only"
+  is enforced by code review (`src/stats.js` issues only SELECTs), not by the
+  platform.
 - Adding a future project: if it's a new subdomain reporting to the shared GA4
   stream, it auto-appears as a card; to name it properly, add one entry to
   `PROJECTS` in `site/stats.html`.
+- The live-test Worker `narenana-stats-preview` (workers.dev) duplicates this
+  code with the same cron + KV — **delete it once /stats is on production**:
+  `npx wrangler delete --name narenana-stats-preview`.

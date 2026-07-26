@@ -29,14 +29,69 @@ const STALE_MS = 2 * 60 * 60 * 1000 // serve-stale-and-revalidate threshold
 /* Routing + auth                                                      */
 /* ------------------------------------------------------------------ */
 
-/** True when this request may see the dashboard (key param or cookie). */
-function authorized(request, url, env) {
+/** Constant-time-ish string compare (Workers' timingSafeEqual when present). */
+function keyEquals(candidate, secret) {
+  if (typeof candidate !== 'string' || candidate.length !== secret.length) return false
+  const enc = new TextEncoder()
+  const a = enc.encode(candidate)
+  const b = enc.encode(secret)
+  if (a.byteLength !== b.byteLength) return false
+  if (crypto.subtle.timingSafeEqual) return crypto.subtle.timingSafeEqual(a, b)
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
+  return diff === 0
+}
+
+const SESSION_TTL = 30 * 24 * 3600 // seconds
+
+/**
+ * Sessions are STATELESS HMAC tokens (`<exp>.<mac>`), signed with a key
+ * derived from STATS_KEY — the cookie never carries the master key, there is
+ * no KV read per request and no KV-propagation race on first login, and
+ * rotating STATS_KEY instantly revokes every session.
+ */
+let sessionKeyPromise = null
+function sessionKey(env) {
+  if (!sessionKeyPromise) {
+    sessionKeyPromise = crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(`stats-session:${env.STATS_KEY}`),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign', 'verify'],
+    )
+  }
+  return sessionKeyPromise
+}
+
+async function mintSessionCookie(env) {
+  const exp = String(Math.floor(Date.now() / 1000) + SESSION_TTL)
+  const mac = await crypto.subtle.sign('HMAC', await sessionKey(env), new TextEncoder().encode(exp))
+  return `stats_session=${exp}.${b64urlBytes(mac)}; Max-Age=${SESSION_TTL}; Path=/stats; Secure; HttpOnly; SameSite=Lax`
+}
+
+/** Auth: ?key= presents the master key; the cookie carries a signed session.
+ * Returns 'key' | 'session' | false. */
+async function authorized(request, url, env) {
   if (!env.STATS_KEY) return false
   const key = url.searchParams.get('key')
-  if (key !== null) return key === env.STATS_KEY
-  const cookies = request.headers.get('cookie') || ''
-  const m = cookies.match(/(?:^|;\s*)stats_key=([^;]+)/)
-  return m !== null && decodeURIComponent(m[1]) === env.STATS_KEY
+  if (key !== null) return keyEquals(key, env.STATS_KEY) ? 'key' : false
+  try {
+    const cookies = request.headers.get('cookie') || ''
+    const m = cookies.match(/(?:^|;\s*)stats_session=(\d{1,12})\.([A-Za-z0-9_-]{20,64})/)
+    if (m === null) return false
+    if (Number(m[1]) < Date.now() / 1000) return false // expired
+    const mac = Uint8Array.from(atob(m[2].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
+    const okSig = await crypto.subtle.verify(
+      'HMAC',
+      await sessionKey(env),
+      mac,
+      new TextEncoder().encode(m[1]),
+    )
+    return okSig ? 'session' : false
+  } catch {
+    return false
+  }
 }
 
 /** Handle /stats, /stats/api/data (and bounce direct /stats.html hits). */
@@ -44,18 +99,24 @@ export async function handleStats(request, env, ctx, url) {
   if (!env.STATS_KEY) {
     return new Response('stats not configured (set the STATS_KEY secret)', { status: 503 })
   }
-  if (!authorized(request, url, env)) {
+  const auth = await authorized(request, url, env)
+  if (auth === false) {
     return new Response('unauthorized', { status: 401, headers: { 'x-robots-tag': 'noindex' } })
   }
 
   if (url.pathname === '/stats/api/data') {
-    const force = url.searchParams.get('refresh') === '1'
-    let json = force ? null : await env.VIDEOS_KV.get(SNAPSHOT_KEY)
+    // Force-refresh only on POST: SameSite=Lax cookies don't ride cross-site
+    // POSTs, so a hostile page can't burn upstream quota via top-level GETs —
+    // and a 60 s floor stops even same-site refresh hammering.
+    let force = false
+    if (url.searchParams.get('refresh') === '1' && request.method === 'POST') force = true
+    let json = await env.VIDEOS_KV.get(SNAPSHOT_KEY)
     if (json) {
-      // Serve last-good immediately; revalidate in the background when stale.
       try {
         const age = Date.now() - (JSON.parse(json).generatedAt || 0)
-        if (age > STALE_MS) ctx.waitUntil(refreshStats(env))
+        if (force && age > 60_000) json = null
+        // Serve last-good immediately; revalidate in the background when stale.
+        else if (age > STALE_MS) ctx.waitUntil(refreshStats(env))
       } catch {
         json = null
       }
@@ -70,18 +131,25 @@ export async function handleStats(request, env, ctx, url) {
     })
   }
 
-  // The page shell lives in site/stats.html; the Worker gates it and sets the
-  // auth cookie so the bare /stats URL works on the next visit.
+  // A valid ?key= never renders: mint a session and 302 to the bare URL so the
+  // master key doesn't persist in browser history / the address bar.
+  if (auth === 'key') {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: new URL('/stats', url).toString(),
+        'set-cookie': await mintSessionCookie(env),
+        'x-robots-tag': 'noindex',
+      },
+    })
+  }
+
+  // The page shell lives in site/stats.html; the Worker gates it.
   const shell = await env.ASSETS.fetch(new Request(new URL('/stats.html', url).toString()))
   const headers = new Headers(shell.headers)
   headers.set('x-robots-tag', 'noindex')
   headers.set('cache-control', 'no-store')
-  if (url.searchParams.get('key') !== null) {
-    headers.append(
-      'set-cookie',
-      `stats_key=${encodeURIComponent(env.STATS_KEY)}; Max-Age=2592000; Path=/stats; Secure; HttpOnly; SameSite=Lax`,
-    )
-  }
+  headers.set('referrer-policy', 'no-referrer')
   return new Response(shell.body, { status: shell.status, headers })
 }
 
@@ -108,7 +176,11 @@ export async function refreshStats(env) {
     lastcall,
     nanawing,
   })
-  await env.VIDEOS_KV.put(SNAPSHOT_KEY, json)
+  try {
+    await env.VIDEOS_KV.put(SNAPSHOT_KEY, json)
+  } catch {
+    // Persist failure must not kill the response — serve the fresh build.
+  }
   return json
 }
 
@@ -134,13 +206,33 @@ const b64url = (s) => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=
 const b64urlBytes = (buf) =>
   btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
-/** Mint (or reuse) a dual-scope Google access token. Cached in KV ~55 min. */
-async function googleToken(env) {
-  if (!env.GOOGLE_SA_KEY) throw new Error('not configured: GOOGLE_SA_KEY secret missing')
-  const cached = await env.VIDEOS_KV.get('stats_google_token', 'json')
-  if (cached && cached.exp > Date.now() / 1000 + 120) return cached.token
+/** Mint (or reuse) a dual-scope Google access token. Single-flight + cached in
+ * module scope: fetchGa and fetchGsc call this concurrently every refresh, and
+ * two parallel mints would double the subrequests and race a shared KV key —
+ * per-isolate caching is enough at one refresh per hour (2 subrequests). */
+let googleTokenCache = null // { promise, exp }
+function googleToken(env) {
+  if (!env.GOOGLE_SA_KEY) return Promise.reject(new Error('not configured: GOOGLE_SA_KEY secret missing'))
+  if (googleTokenCache && googleTokenCache.exp > Date.now() / 1000 + 120) {
+    return googleTokenCache.promise
+  }
+  const exp = Math.floor(Date.now() / 1000) + 3600 - 30
+  const promise = mintGoogleToken(env).catch((err) => {
+    googleTokenCache = null // never cache a failure
+    throw err
+  })
+  googleTokenCache = { promise, exp }
+  return promise
+}
 
-  const sa = JSON.parse(env.GOOGLE_SA_KEY)
+async function mintGoogleToken(env) {
+  let sa
+  try {
+    sa = JSON.parse(env.GOOGLE_SA_KEY)
+  } catch {
+    // Fixed text only — V8's parse errors embed a snippet of the raw secret.
+    throw new Error('GOOGLE_SA_KEY is not valid JSON')
+  }
   // Secrets pasted through shells may carry literal \n in the PEM — normalize.
   const pem = sa.private_key.replace(/\\n/g, '\n')
   const der = Uint8Array.from(atob(pem.replace(/-----[^-]+-----/g, '').replace(/\s/g, '')), (c) =>
@@ -175,11 +267,6 @@ async function googleToken(env) {
   if (!res.ok || !body.access_token) {
     throw new Error(`google token: ${body.error_description || body.error || res.status}`)
   }
-  await env.VIDEOS_KV.put(
-    'stats_google_token',
-    JSON.stringify({ token: body.access_token, exp: iat + 3600 }),
-    { expirationTtl: 3500 },
-  )
   return body.access_token
 }
 
@@ -210,7 +297,8 @@ const gaDate = (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}`
 async function fetchGa(env) {
   if (!env.GA4_PROPERTY_ID) throw new Error('not configured: GA4_PROPERTY_ID var missing')
   const token = await googleToken(env)
-  const range = [{ startDate: `${WINDOW_DAYS}daysAgo`, endDate: 'today' }]
+  // N-1 daysAgo..today = a true N-day inclusive window (matches dailySeries).
+  const range = [{ startDate: `${WINDOW_DAYS - 1}daysAgo`, endDate: 'today' }]
   const [traffic, events, channels, wwwPages] = await Promise.all([
     // Daily traffic per host — the portfolio's per-project series.
     runReport(env, token, {
@@ -276,12 +364,14 @@ async function gscQuery(token, body) {
 
 async function fetchGsc(env) {
   const token = await googleToken(env)
-  const startDate = daysAgoIso(WINDOW_DAYS)
+  const startDate = daysAgoIso(WINDOW_DAYS - 1)
   const endDate = daysAgoIso(0)
+  // dataState 'all' everywhere so the tables cover the same fresh ~2 days the
+  // clicks sparkline does (finalized-only would silently trail it).
   const [byDate, byPage, byQuery] = await Promise.all([
     gscQuery(token, { startDate, endDate, dimensions: ['date'], dataState: 'all', rowLimit: 1000 }),
-    gscQuery(token, { startDate, endDate, dimensions: ['page'], rowLimit: 50 }),
-    gscQuery(token, { startDate, endDate, dimensions: ['query'], rowLimit: 50 }),
+    gscQuery(token, { startDate, endDate, dimensions: ['page'], dataState: 'all', rowLimit: 50 }),
+    gscQuery(token, { startDate, endDate, dimensions: ['query'], dataState: 'all', rowLimit: 50 }),
   ])
   return { byDate, byPage, byQuery }
 }
@@ -302,7 +392,9 @@ async function cfApi(env, path) {
 /** Discover + cache the zoneTag / RUM siteTag once (token-scoped lookups). */
 async function cfIds(env) {
   const cached = await env.VIDEOS_KV.get(CF_IDS_KEY, 'json')
-  if (cached && cached.zoneTag) return cached
+  // Trust the cache only when COMPLETE — a null siteTag (token was missing the
+  // account-scope RUM permission at first probe) re-probes hourly until fixed.
+  if (cached && cached.zoneTag && cached.siteTag) return cached
   const zones = await cfApi(env, '/zones?name=narenana.com')
   const zoneTag = zones[0] && zones[0].id
   if (!zoneTag) throw new Error('cf: narenana.com zone not visible to this token')
@@ -322,7 +414,7 @@ async function cfIds(env) {
 async function fetchCf(env) {
   if (!env.CF_API_TOKEN) throw new Error('not configured: CF_API_TOKEN secret missing')
   const { zoneTag, siteTag } = await cfIds(env)
-  const start = daysAgoIso(WINDOW_DAYS)
+  const start = daysAgoIso(WINDOW_DAYS - 1)
   const end = daysAgoIso(0)
   const query = `
     query Portfolio($zone: string!, $account: string!, $site: string!, $start: Date!, $end: Date!, $rum: Boolean!) {
