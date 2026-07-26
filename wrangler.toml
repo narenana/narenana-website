@@ -32,6 +32,15 @@ crons = ["0 * * * *"]
 # Channel mirrored at /videos.json. Public, no API key needed.
 YOUTUBE_CHANNEL_ID = "UCaf-AGOmL7jLve1M1jibfRw"
 
+# /stats portfolio dashboard (src/stats.js). Non-secret ids; the secrets are
+# STATS_KEY, GOOGLE_SA_KEY and CF_API_TOKEN via `npx wrangler secret put`
+# (see docs/STATS-SETUP.md). NOTE: a secret may NOT share a name with a [vars]
+# key — keep these lists disjoint.
+# GA4 property "narenana.com" (single stream G-1KY518LPBH, hostname-segmented).
+GA4_PROPERTY_ID = "534605239"
+# Cloudflare account id (for the Web Analytics RUM dataset).
+CF_ACCOUNT_TAG = "495c03e17eecfce6122af7a16984ab12"
+
 # Where /log-viewer/* gets forwarded. The Pages/Workers deployment URL of
 # the tool's own repo (narenana/edgetx-log-parser). Override per-environment
 # in the CF dashboard if needed.
@@ -46,8 +55,28 @@ LOG_VIEWER_ORIGIN = "https://edgetx-log-parser.pages.dev"
 #     --project-name=edgetx-log-parser --branch=latest
 LOG_VIEWER_ORIGIN_LATEST = "https://latest.edgetx-log-parser.pages.dev"
 
-# KV namespace for the parsed feed JSON.
+# KV namespace for the parsed feed JSON (also holds the /stats snapshot +
+# cached Google token under stats_* keys).
 # Created with:  npx wrangler kv namespace create VIDEOS_KV
 [[kv_namespaces]]
 binding = "VIDEOS_KV"
 id = "e048dd7b7b0849bcba7b51557c4c6752"
+
+# LAST CALL's leaderboard D1 (owned by the last-call Pages project — D1 is
+# account-level, so this Worker reads the same database READ-ONLY for the
+# /stats funnel: starts/runs/scores).
+[[d1_databases]]
+binding = "LASTCALL_DB"
+database_name = "last-call-leaderboard"
+database_id = "b056ee20-eb0a-4b20-813b-ca4c8900cd07"
+
+# Nanawing's stats + leaderboard Workers. Service bindings, because a deployed
+# Worker may NOT fetch() another Worker's *.workers.dev URL on the same account
+# (Cloudflare blocks it — error 1042). Local dev falls back to the public URLs.
+[[services]]
+binding = "FPVSIM_STATS"
+service = "fpvsim-stats"
+
+[[services]]
+binding = "FPVSIM_BOARD"
+service = "fpvsim-leaderboard"

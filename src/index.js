@@ -3,11 +3,15 @@
 // fetch() routes:
 //   http:// or apex             → 301 redirect → https://www.narenana.com (canonical)
 //   /videos.json                → JSON of latest videos (KV-backed cache)
+//   /stats, /stats/api/*        → private portfolio dashboard (src/stats.js)
 //   /log-viewer, /log-viewer/*  → strip prefix → LOG_VIEWER_ORIGIN
 //   everything else             → env.ASSETS.fetch(request) → site/ files
 //
-// scheduled() (hourly cron): fetch RSS for YOUTUBE_CHANNEL_ID, parse, write to
-// KV under key "feed". Page reloads naturally pick up the new payload.
+// scheduled() (hourly cron): fetch RSS for YOUTUBE_CHANNEL_ID → KV "feed", and
+// refresh the /stats portfolio snapshot → KV "stats_snapshot". Page reloads
+// naturally pick up the new payloads.
+
+import { handleStats, refreshStats } from './stats.js'
 
 export default {
   async fetch(request, env, ctx) {
@@ -33,6 +37,14 @@ export default {
       return videosResponse(env)
     }
 
+    if (url.pathname === '/stats' || url.pathname === '/stats/' || url.pathname.startsWith('/stats/api/')) {
+      return handleStats(request, env, ctx, url)
+    }
+    if (url.pathname === '/stats.html') {
+      // The shell must only be reachable through the auth-gated /stats route.
+      return Response.redirect(new URL('/stats', url).toString(), 302)
+    }
+
     if (url.pathname === '/log-viewer' || url.pathname.startsWith('/log-viewer/')) {
       // latest.narenana.com mirrors the LATEST log-viewer preview build (the
       // `latest` Pages branch alias); www / apex stay on the production
@@ -49,6 +61,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil(refreshFeed(env))
+    ctx.waitUntil(refreshStats(env).catch(() => null)) // fail-soft: keep last-good snapshot
   },
 }
 

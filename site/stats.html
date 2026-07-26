@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Private ops dashboard: gated by the Worker (/stats), never indexed, and
+       deliberately carries NO analytics snippet — don't measure the measuring. -->
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0e1117" />
+  <title>Portfolio stats — narenana</title>
+  <style>
+    :root {
+      --bg: #0e1117; --fg: #e6edf3; --muted: #8b949e;
+      --accent: #1f9bd9; --accent-bright: #3eb5e8;
+      --card: #161b22; --border: #30363d;
+      --up: #3fb950; --down: #f85149;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      line-height: 1.6; padding: 28px 24px 64px;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    a { color: var(--accent-bright); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header.top { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+    h1 { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; margin: 0; }
+    h1 .accent { color: var(--accent-bright); }
+    .meta { color: var(--muted); font-size: 0.85rem; }
+    .meta button {
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      border-radius: 8px; padding: 2px 10px; font: inherit; font-size: 0.8rem; cursor: pointer;
+    }
+    .meta button:hover { border-color: var(--accent); color: var(--fg); }
+
+    h2 {
+      font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted); margin: 40px 0 12px;
+    }
+
+    .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+    .tile {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px;
+    }
+    .tile .label { color: var(--muted); font-size: 0.8rem; }
+    .tile .value { font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; }
+    .tile .note { color: var(--muted); font-size: 0.78rem; }
+
+    .delta { font-size: 0.78rem; font-weight: 700; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+    .delta.up { color: var(--up); background: rgba(63, 185, 80, 0.12); }
+    .delta.down { color: var(--down); background: rgba(248, 81, 73, 0.12); }
+    .delta.flat { color: var(--muted); background: rgba(139, 148, 158, 0.12); }
+
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+    .proj {
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px 14px;
+      transition: border-color 120ms, transform 120ms;
+    }
+    .proj:hover { border-color: var(--accent); transform: translateY(-1px); }
+    .proj .head { display: flex; align-items: baseline; gap: 10px; }
+    .proj .name { font-weight: 700; font-size: 1.05rem; }
+    .proj .host { color: var(--muted); font-size: 0.75rem; margin-left: auto; }
+    .proj .big { display: flex; align-items: baseline; gap: 10px; margin-top: 4px; }
+    .proj .big .n { font-size: 1.6rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .proj .big .u { color: var(--muted); font-size: 0.8rem; }
+    .proj svg { display: block; width: 100%; height: 46px; margin: 6px 0 4px; }
+    .proj .facts { color: var(--muted); font-size: 0.8rem; display: flex; gap: 14px; flex-wrap: wrap; }
+    .proj .facts b { color: var(--fg); font-variant-numeric: tabular-nums; font-weight: 600; }
+
+    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px; }
+    .panel .title { font-weight: 700; margin-bottom: 6px; }
+    .panel svg.line { display: block; width: 100%; height: 60px; margin: 4px 0 10px; }
+
+    .tbl { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+    th, td { text-align: left; padding: 5px 10px 5px 0; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: 0; }
+    td.trunc { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .chip { font-size: 0.75rem; border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; color: var(--muted); }
+    .chip.ok { border-color: rgba(63, 185, 80, 0.5); color: var(--up); }
+    .chip.err { border-color: rgba(248, 81, 73, 0.5); color: var(--down); }
+
+    .empty { color: var(--muted); font-size: 0.85rem; }
+    footer { margin-top: 64px; color: var(--muted); font-size: 0.8rem; }
+    #err { color: var(--down); margin-top: 24px; display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>Portfolio <span class="accent">stats</span></h1>
+      <span class="meta" id="generated"></span>
+      <span class="meta"><button id="refresh">refresh</button></span>
+    </header>
+
+    <div id="err"></div>
+
+    <h2>Last 7 days · vs previous 7</h2>
+    <div class="tiles" id="tiles"></div>
+
+    <h2>Projects · 28-day sessions</h2>
+    <div class="cards" id="projects"></div>
+
+    <h2>Search — google, whole portfolio</h2>
+    <div class="cols" id="search"></div>
+
+    <h2>Play funnels</h2>
+    <div class="cols" id="funnels"></div>
+
+    <h2>Data sources</h2>
+    <div class="chips" id="sources"></div>
+
+    <footer>Private dashboard · noindex · snapshot refreshes hourly (button forces it) · built for
+      deciding what to grow next.</footer>
+  </div>
+
+  <script>
+    'use strict'
+    /* ------------------------------------------------------------------ *
+     * Project mapping — EDIT HERE as the portfolio grows. Hosts not listed
+     * still get an auto-card from GA data, so new subdomains just appear.
+     * ------------------------------------------------------------------ */
+    const PROJECTS = [
+      { id: 'lastcall', name: 'Last Call', host: 'lastcall.narenana.com', sub: 'reverse tower defence' },
+      { id: 'nanawing', name: 'Nanawing', host: 'sim.narenana.com', sub: 'FPV wing simulator' },
+      { id: 'hub', name: 'narenana.com', host: 'www.narenana.com', sub: 'hub · wings catalog · log viewer' },
+      { id: 'agent', name: 'Agent', host: 'agent.narenana.com', sub: 'agent.narenana.com' },
+    ]
+
+    const $ = (id) => document.getElementById(id)
+    const fmt = (n) => {
+      if (n === null || n === undefined || Number.isNaN(n)) return '—'
+      if (Math.abs(n) >= 1e6) return (n / 1e6).toFixed(1) + 'M'
+      if (Math.abs(n) >= 10000) return Math.round(n / 1000) + 'k'
+      if (Math.abs(n) >= 1000) return (n / 1000).toFixed(1) + 'k'
+      return String(Math.round(n * 10) / 10)
+    }
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
+    /** Percent-delta chip comparing the last 7 values to the 7 before. */
+    function deltaChip(series) {
+      const last7 = series.slice(-7).reduce((a, b) => a + b, 0)
+      const prev7 = series.slice(-14, -7).reduce((a, b) => a + b, 0)
+      if (prev7 === 0 && last7 === 0) return '<span class="delta flat">—</span>'
+      // A spike from a near-zero base is "new traction", not a meaningful %.
+      if (prev7 === 0 || (last7 - prev7) / prev7 > 5) return '<span class="delta up">new</span>'
+      const pct = ((last7 - prev7) / prev7) * 100
+      const cls = pct > 3 ? 'up' : pct < -3 ? 'down' : 'flat'
+      const sign = pct > 0 ? '+' : ''
+      return `<span class="delta ${cls}">${sign}${pct.toFixed(0)}%</span>`
+    }
+
+    /** Inline SVG sparkline: area + line + emphasized endpoint. */
+    function spark(values, w = 300, h = 46) {
+      if (!values.length || values.every((v) => v === 0)) {
+        return `<svg viewBox="0 0 ${w} ${h}"><line x1="0" y1="${h - 4}" x2="${w}" y2="${h - 4}" stroke="#30363d" stroke-dasharray="3 4"/></svg>`
+      }
+      const max = Math.max(...values, 1)
+      const step = w / Math.max(values.length - 1, 1)
+      const pts = values.map((v, i) => [i * step, h - 4 - (v / max) * (h - 10)])
+      const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
+      const area = line + ` L ${w} ${h} L 0 ${h} Z`
+      const [lx, ly] = pts[pts.length - 1]
+      return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+        <path d="${area}" fill="rgba(31,155,217,0.14)"/>
+        <path d="${line}" fill="none" stroke="#3eb5e8" stroke-width="1.8"/>
+        <circle cx="${lx}" cy="${ly}" r="2.6" fill="#3eb5e8"/>
+      </svg>`
+    }
+
+    /** Zero-filled daily series for the window from [date, value] pairs. */
+    function dailySeries(pairs, days) {
+      const byDay = new Map(pairs)
+      const out = []
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10)
+        out.push(byDay.get(d) || 0)
+      }
+      return out
+    }
+
+    function render(data) {
+      const days = data.windowDays
+      $('generated').textContent = 'snapshot ' + new Date(data.generatedAt).toLocaleString()
+      const ok = (s) => s && !s.error
+
+      /* ---- per-host GA series ---- */
+      const hostDaily = new Map() // host -> [ [date, sessions] ]
+      const hostTotals = new Map() // host -> {sessions, users, views}
+      if (ok(data.ga)) {
+        for (const [date, host, sessions, users, views] of data.ga.traffic) {
+          if (!hostDaily.has(host)) hostDaily.set(host, [])
+          hostDaily.get(host).push([date, sessions])
+          const t = hostTotals.get(host) || { sessions: 0, users: 0, views: 0 }
+          t.sessions += sessions; t.users += users; t.views += views
+          hostTotals.set(host, t)
+        }
+      }
+      const topChannel = (host) => {
+        if (!ok(data.ga)) return null
+        const rows = data.ga.channels.filter((r) => r[1] === host && r[0] !== 'Unassigned')
+        return rows.length ? rows[0][0] + ' ' + fmt(rows[0][2]) : null
+      }
+      const eventCount = (host, name) => {
+        if (!ok(data.ga)) return null
+        const row = data.ga.events.find((r) => r[0] === name && r[1] === host)
+        return row ? row[2] : 0
+      }
+
+      /* ---- game-native series (work without GA) ---- */
+      const lcDaily = ok(data.lastcall) ? data.lastcall.daily : []
+      const lcRuns = dailySeries(lcDaily.map((r) => [r[0], r[3]]), days)
+      const lcStarts = dailySeries(lcDaily.map((r) => [r[0], r[1]]), days)
+      const nwSeries = ok(data.nanawing) ? data.nanawing.series : []
+      const nwFlights = dailySeries(nwSeries.map((r) => [r[0], r[1]]), days)
+
+      /* ---- summary tiles ---- */
+      const gaAll = [] // portfolio-wide daily sessions
+      if (ok(data.ga)) {
+        const byDate = new Map()
+        for (const [date, , sessions] of data.ga.traffic) byDate.set(date, (byDate.get(date) || 0) + sessions)
+        gaAll.push(...dailySeries([...byDate.entries()], days))
+      }
+      const gscClicks = ok(data.gsc) ? dailySeries(data.gsc.byDate.map((r) => [r[0], r[1]]), days) : []
+      const plays = lcRuns.map((v, i) => v + (nwFlights[i] || 0))
+      const cfUniq = ok(data.cf) ? dailySeries(data.cf.zone.map((r) => [r[0], r[2]]), days) : []
+      const tile = (label, series, note) => {
+        const val = series.length ? series.slice(-7).reduce((a, b) => a + b, 0) : null
+        return `<div class="tile"><div class="label">${label}</div>
+          <div class="value">${fmt(val)} ${series.length ? deltaChip(series) : ''}</div>
+          <div class="note">${note}</div></div>`
+      }
+      $('tiles').innerHTML =
+        tile('Sessions — all projects', gaAll, ok(data.ga) ? 'google analytics, every hostname' : 'GA not configured yet') +
+        tile('Search clicks', gscClicks, ok(data.gsc) ? 'google search → any page' : 'Search Console not configured yet') +
+        tile('Game plays', plays, 'Last Call runs + Nanawing flights') +
+        tile('Edge visitors', cfUniq, ok(data.cf) ? 'cloudflare uniques (adblock-proof)' : 'Cloudflare API not configured yet')
+
+      /* ---- project cards (known projects + any unlisted GA hosts) ---- */
+      const known = new Set(PROJECTS.map((p) => p.host))
+      const extra = [...hostTotals.keys()].filter((h) => !known.has(h)).map((h) => ({ id: h, name: h, host: h, sub: 'auto-discovered' }))
+      const cards = [...PROJECTS, ...extra].map((p) => {
+        let series = hostDaily.has(p.host) ? dailySeries(hostDaily.get(p.host), days) : []
+        let seriesLabel = 'sessions · 7d' // the big number is the 7-day sum
+        // Without GA creds, fall back to game-native activity so cards stay live.
+        if (!series.length && p.id === 'lastcall') { series = lcStarts; seriesLabel = 'game starts · 7d' }
+        if (!series.length && p.id === 'nanawing') { series = nwFlights; seriesLabel = 'flights · 7d' }
+        const t = hostTotals.get(p.host)
+        const facts = []
+        if (p.id === 'lastcall' && ok(data.lastcall)) {
+          facts.push(`<span>plays 28d <b>${fmt(lcRuns.reduce((a, b) => a + b, 0))}</b></span>`)
+          facts.push(`<span>wins <b>${fmt(lcDaily.reduce((a, r) => a + r[4], 0))}</b></span>`)
+          const gs = eventCount(p.host, 'game_start')
+          if (gs) facts.push(`<span>ga game_start <b>${fmt(gs)}</b></span>`)
+        }
+        if (p.id === 'nanawing' && ok(data.nanawing)) {
+          facts.push(`<span>flights 28d <b>${fmt(nwFlights.reduce((a, b) => a + b, 0))}</b></span>`)
+          facts.push(`<span>all-time <b>${fmt(data.nanawing.totals.flights)}</b></span>`)
+          facts.push(`<span>air-hrs <b>${fmt(data.nanawing.totals.air_seconds / 3600)}</b></span>`)
+        }
+        if (t) facts.push(`<span>views 28d <b>${fmt(t.views)}</b></span>`)
+        const ch = topChannel(p.host)
+        if (ch) facts.push(`<span>top channel <b>${esc(ch)}</b></span>`)
+        const wow = series.length ? deltaChip(series) : ''
+        const n7 = series.length ? fmt(series.slice(-7).reduce((a, b) => a + b, 0)) : '—'
+        return { p, html: `<div class="proj">
+          <div class="head"><span class="name">${esc(p.name)}</span><span class="host">${esc(p.sub)}</span></div>
+          <div class="big"><span class="n">${n7}</span><span class="u">${seriesLabel}</span>${wow}</div>
+          ${spark(series)}
+          <div class="facts">${facts.join('') || '<span class="empty">no data yet</span>'}</div>
+        </div>`, weight: series.slice(-7).reduce((a, b) => a + b, 0) }
+      })
+      // Momentum order: busiest project first — the growth question at a glance.
+      cards.sort((a, b) => b.weight - a.weight)
+      $('projects').innerHTML = cards.map((c) => c.html).join('')
+
+      /* ---- search section ---- */
+      if (ok(data.gsc)) {
+        const rows = (list, keyLabel) => `
+          <div class="tbl"><table><thead><tr><th>${keyLabel}</th><th class="num">clicks</th><th class="num">impr</th><th class="num">pos</th></tr></thead>
+          <tbody>${list.slice(0, 12).map((r) => `<tr><td class="trunc" title="${esc(r[0])}">${esc(String(r[0]).replace('https://', ''))}</td>
+            <td class="num">${fmt(r[1])}</td><td class="num">${fmt(r[2])}</td><td class="num">${r[4].toFixed(1)}</td></tr>`).join('')}</tbody></table></div>`
+        const impr = dailySeries(data.gsc.byDate.map((r) => [r[0], r[2]]), days)
+        $('search').innerHTML = `
+          <div class="panel"><div class="title">Clicks ${deltaChip(gscClicks)} &amp; impressions ${deltaChip(impr)}</div>
+            <svg class="line"></svg>${rows(data.gsc.byQuery, 'query')}</div>
+          <div class="panel"><div class="title">Pages earning search traffic</div>${rows(data.gsc.byPage, 'page')}</div>`
+        $('search').querySelector('svg.line').outerHTML = spark(gscClicks, 500, 60)
+      } else {
+        $('search').innerHTML = `<div class="panel empty">${esc((data.gsc && data.gsc.error) || 'no data')}</div>`
+      }
+
+      /* ---- play funnels ---- */
+      const lcHtml = ok(data.lastcall) ? (() => {
+        const t = data.lastcall.totals
+        const maps = data.lastcall.byMap.map((m) =>
+          `<tr><td>${esc(m.map)}</td><td class="num">${fmt(m.starts)}</td><td class="num">${fmt(m.players)}</td><td class="num">${fmt(m.runs)}</td><td class="num">${fmt(m.wins)}</td></tr>`).join('')
+        return `<div class="panel"><div class="title">Last Call — starts/day ${deltaChip(lcStarts)}</div>
+          ${spark(lcStarts, 500, 60)}
+          <div class="facts" style="color:var(--muted);font-size:0.8rem;margin-bottom:8px">
+            all-time: starts <b style="color:var(--fg)">${fmt(t.starts)}</b> · players <b style="color:var(--fg)">${fmt(t.players)}</b> ·
+            finishes <b style="color:var(--fg)">${fmt(t.runs)}</b> · wins <b style="color:var(--fg)">${fmt(t.wins)}</b> ·
+            board rows <b style="color:var(--fg)">${fmt(t.boardRows)}</b></div>
+          <div class="tbl"><table><thead><tr><th>map</th><th class="num">starts</th><th class="num">players</th><th class="num">finishes</th><th class="num">wins</th></tr></thead><tbody>${maps}</tbody></table></div></div>`
+      })() : `<div class="panel empty">Last Call: ${esc((data.lastcall && data.lastcall.error) || 'no data')}</div>`
+
+      const nwHtml = ok(data.nanawing) ? (() => {
+        const t = data.nanawing.totals
+        return `<div class="panel"><div class="title">Nanawing — flights/day ${deltaChip(nwFlights)}</div>
+          ${spark(nwFlights, 500, 60)}
+          <div class="facts" style="color:var(--muted);font-size:0.8rem">
+            all-time: flights <b style="color:var(--fg)">${fmt(t.flights)}</b> · air-hours <b style="color:var(--fg)">${fmt(t.air_seconds / 3600)}</b> ·
+            landings <b style="color:var(--fg)">${fmt(t.landings)}</b> · crashes <b style="color:var(--fg)">${fmt(t.crashes)}</b> ·
+            stalls <b style="color:var(--fg)">${fmt(t.stalls)}</b>${data.nanawing.racers !== null ? ` · racers <b style="color:var(--fg)">${fmt(data.nanawing.racers)}</b>` : ''}</div></div>`
+      })() : `<div class="panel empty">Nanawing: ${esc((data.nanawing && data.nanawing.error) || 'no data')}</div>`
+      $('funnels').innerHTML = lcHtml + nwHtml
+
+      /* ---- www page split (wings catalog etc.) appended to search column ---- */
+      if (ok(data.ga) && data.ga.wwwPages.length) {
+        const rows = data.ga.wwwPages.slice(0, 12).map((r) =>
+          `<tr><td class="trunc" title="${esc(r[0])}">${esc(r[0])}</td><td class="num">${fmt(r[1])}</td><td class="num">${fmt(r[2])}</td></tr>`).join('')
+        $('funnels').innerHTML += `<div class="panel"><div class="title">www.narenana.com — page split (wings catalog / log viewer / home)</div>
+          <div class="tbl"><table><thead><tr><th>path</th><th class="num">views 28d</th><th class="num">users</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
+      }
+
+      /* ---- source chips ---- */
+      const chip = (name, s) => {
+        const cls = ok(s) ? 'ok' : s && s.error && /not configured/.test(s.error) ? '' : 'err'
+        const label = ok(s) ? 'ok' : s && s.error ? esc(s.error) : 'no data'
+        return `<span class="chip ${cls}"><b>${name}</b> — ${label}</span>`
+      }
+      $('sources').innerHTML =
+        chip('Google Analytics', data.ga) + chip('Search Console', data.gsc) +
+        chip('Cloudflare', data.cf) + chip('Last Call D1', data.lastcall) + chip('Nanawing', data.nanawing)
+    }
+
+    async function load(force) {
+      $('err').style.display = 'none'
+      try {
+        const res = await fetch('/stats/api/data' + (force ? '?refresh=1' : ''))
+        if (res.status === 401) throw new Error('unauthorized — open /stats?key=YOUR_KEY once to set the cookie')
+        if (!res.ok) throw new Error('api ' + res.status)
+        render(await res.json())
+      } catch (err) {
+        $('err').textContent = String(err.message || err)
+        $('err').style.display = 'block'
+      }
+    }
+    $('refresh').addEventListener('click', () => load(true))
+    load(false)
+  </script>
+</body>
+</html>
