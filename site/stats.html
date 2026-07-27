@@ -268,6 +268,12 @@
 
       /* ---- project cards (known projects + any unlisted GA hosts) ---- */
       const known = new Set(PROJECTS.map((p) => p.host))
+      // Cloudflare RUM pageviews per host (28d) — adblock-proof edge truth, a
+      // useful reality check against GA's blockable sessions.
+      const rumByHost = {}
+      if (ok(data.cf) && Array.isArray(data.cf.rum)) {
+        for (const r of data.cf.rum) rumByHost[r[1]] = (rumByHost[r[1]] || 0) + r[2]
+      }
       const extra = [...hostTotals.keys()].filter((h) => !known.has(h)).map((h) => ({ id: h, name: h, host: h, sub: 'auto-discovered' }))
       const cards = [...PROJECTS, ...extra].map((p) => {
         let series = hostDaily.has(p.host) ? dailySeries(hostDaily.get(p.host), days) : []
@@ -289,6 +295,7 @@
           facts.push(`<span>air-hrs <b>${fmt(data.nanawing.totals.air_seconds / 3600)}</b></span>`)
         }
         if (t) facts.push(`<span>views 28d <b>${fmt(t.views)}</b></span>`)
+        if (rumByHost[p.host]) facts.push(`<span>edge views <b>${fmt(rumByHost[p.host])}</b></span>`)
         const ch = topChannel(p.host)
         if (ch) facts.push(`<span>top channel <b>${esc(ch)}</b></span>`)
         const wow = series.length ? deltaChip(series) : ''

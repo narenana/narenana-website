@@ -395,43 +395,37 @@ async function cfApi(env, path) {
   return data.result
 }
 
-/** Discover + cache the zoneTag / RUM siteTag once (token-scoped lookups). */
-async function cfIds(env) {
+/** Discover + cache the narenana.com zoneTag once (Zone Analytics token scope).
+ * RUM needs NO siteTag — the account-wide dataset groups by requestHost with
+ * only Account Analytics:Read (the Web Analytics /rum/site_info REST call, which
+ * needs a separate Web-Analytics permission, is deliberately not used). */
+async function cfZoneTag(env) {
   const cached = await env.VIDEOS_KV.get(CF_IDS_KEY, 'json')
-  // Trust the cache only when COMPLETE — a null siteTag (token was missing the
-  // account-scope RUM permission at first probe) re-probes hourly until fixed.
-  if (cached && cached.zoneTag && cached.siteTag) return cached
+  if (cached && cached.zoneTag) return cached.zoneTag
   const zones = await cfApi(env, '/zones?name=narenana.com')
   const zoneTag = zones[0] && zones[0].id
   if (!zoneTag) throw new Error('cf: narenana.com zone not visible to this token')
-  let siteTag = null
-  try {
-    const sites = await cfApi(env, `/accounts/${env.CF_ACCOUNT_TAG}/rum/site_info/list`)
-    const site = sites.find((s) => s.zone_tag === zoneTag || /narenana/.test(s.host || '')) || sites[0]
-    siteTag = site ? site.site_tag : null
-  } catch {
-    // RUM listing needs an account-scope permission; zone traffic still works.
-  }
-  const ids = { zoneTag, siteTag }
-  await env.VIDEOS_KV.put(CF_IDS_KEY, JSON.stringify(ids))
-  return ids
+  await env.VIDEOS_KV.put(CF_IDS_KEY, JSON.stringify({ zoneTag }))
+  return zoneTag
 }
 
 async function fetchCf(env) {
   if (!env.CF_API_TOKEN) throw new Error('not configured: CF_API_TOKEN secret missing')
-  const { zoneTag, siteTag } = await cfIds(env)
+  const zoneTag = await cfZoneTag(env)
   const start = daysAgoIso(WINDOW_DAYS - 1)
   const end = daysAgoIso(0)
-  // Cloudflare's GraphQL API rejects @include/@skip directives, so the RUM
-  // block (and its variables) are spliced in as strings only when we actually
-  // have a siteTag + account — no directive, no unused-variable validation error.
-  const hasRum = Boolean(siteTag && env.CF_ACCOUNT_TAG)
+  // Cloudflare's GraphQL API rejects @include/@skip directives, so the RUM block
+  // (and its $account variable) is spliced in as a string only when the account
+  // tag exists — no directive, no unused-variable validation error. RUM is
+  // account-wide (no siteTag filter) grouped by requestHost = the per-project
+  // pageview split, adblock-proof.
+  const hasRum = Boolean(env.CF_ACCOUNT_TAG)
   const rumBlock = hasRum
     ? `
         accounts(filter: { accountTag: $account }) {
           rumPageloadEventsAdaptiveGroups(
             limit: 1000
-            filter: { date_geq: $start, date_leq: $end, siteTag: $site }
+            filter: { date_geq: $start, date_leq: $end }
             orderBy: [date_ASC]
           ) {
             count
@@ -441,7 +435,7 @@ async function fetchCf(env) {
         }`
     : ''
   const query = `
-    query Portfolio($zone: string!, $start: Date!, $end: Date!${hasRum ? ', $account: string!, $site: string!' : ''}) {
+    query Portfolio($zone: string!, $start: Date!, $end: Date!${hasRum ? ', $account: string!' : ''}) {
       viewer {
         zones(filter: { zoneTag: $zone }) {
           httpRequests1dGroups(limit: 31, filter: { date_geq: $start, date_leq: $end }, orderBy: [date_ASC]) {
@@ -453,7 +447,7 @@ async function fetchCf(env) {
       }
     }`
   const variables = hasRum
-    ? { zone: zoneTag, start, end, account: env.CF_ACCOUNT_TAG, site: siteTag }
+    ? { zone: zoneTag, start, end, account: env.CF_ACCOUNT_TAG }
     : { zone: zoneTag, start, end }
   const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
     method: 'POST',
