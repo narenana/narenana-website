@@ -19,7 +19,7 @@ import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpan
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
 import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
-import { popScores } from './popularity.mjs'
+import { popScores, videoRelevant } from './popularity.mjs'
 import { storeSnapshot } from './snapshot.mjs'
 import { now, imgKey } from './util.mjs'
 
@@ -603,7 +603,10 @@ async function popularitySlice(env, trigger) {
            title=excluded.title, channel=excluded.channel, views=excluded.views,
            published_at=excluded.published_at, rank=excluded.rank, fetched_at=excluded.fetched_at`,
         m.id, v.videoId, v.title, v.channel, v.views ?? null, v.publishedAt ?? null, i,
-        flags.get(v.videoId)?.pinned ?? 0, flags.get(v.videoId)?.excluded ?? 0, t,
+        flags.get(v.videoId)?.pinned ?? 0,
+        // Manual flags always win; NEW videos that fail the relevance gate
+        // persist pre-excluded (visible struck-through in admin, rescuable).
+        flags.get(v.videoId)?.excluded ?? (videoRelevant({ brand: m.brand, name: m.name, title: v.title, channel: v.channel }) ? 0 : 1), t,
       ),
     )
     if (stmts.length) await batch(env, stmts)

@@ -14,6 +14,46 @@
 // Absolute magnitudes don't matter (sorting is comparative) — the terms are
 // weighted for legibility in pop_signals, not calibrated to any 0..100 scale.
 
+// ---- video relevance gate ---------------------------------------------------
+// YouTube search returns its top videos for "{brand} {name} rc plane" — for
+// generic model names ("Trainer 60", "Low Wing Sport") that's popular but
+// UNRELATED aviation content, which then dominates the score (a Star Wars
+// miniature short ranked a no-name trainer #4 site-wide). A video only counts
+// when its TITLE contains the model's distinctive tokens, anchored by the brand
+// (title or channel) or an RC-context word. Pure + unit-testable; used at
+// poll-time (new videos persist pre-excluded when irrelevant) and for
+// re-scoring already-persisted rows without spending quota.
+
+// Words that appear in model names but identify nothing (categories, build
+// types, sizes, colours, marketing filler) — matching on these is noise.
+const VID_NOISE =
+  /\b(rc|plane|airplane|aircraft|model|models|wing|kit|pnp|rtf|arf|bnf|fpv|vtol|edf|jet|scale|sport|park|flyer|trainer|glider|warbird|classic|low|mid|high|mini|micro|big|giant|super|ultra|pro|plus|new|version|edition|combo|set|only|yellow|red|blue|green|white|black|silver|gold|orange|grey|gray|camo|scheme|v\d+)\b/g
+export function modelKeyToks(name) {
+  return (' ' + (name || '').toLowerCase() + ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(VID_NOISE, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 2)
+}
+// Strong RC signals only — "flight"/"plane" are too generic (they matched
+// full-size-aviation content); channel names count (Joshua Bardwell, Model AV8R).
+const RC_CTX = /\b(rc|fpv|vtol|edf|maiden|aeromodel\w*|foam\w*|glider|flite|pnp|rtf|arf|hobby|drone|model|aero)\b/i
+
+export function videoRelevant({ brand, name, title, channel }) {
+  const T = (' ' + (title || '').toLowerCase() + ' ').replace(/[^a-z0-9]+/g, ' ')
+  const toks = modelKeyToks(name)
+  if (!toks.length) return false // nothing distinctive to verify against → can't trust any match
+  let hit = 0
+  for (const t of toks) if (new RegExp('\\b' + t + '\\b').test(T)) hit++
+  const mh = hit / toks.length
+  const b = (brand || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const flat = T.replace(/ /g, '')
+  const cFlat = (' ' + (channel || '').toLowerCase()).replace(/[^a-z0-9]+/g, '')
+  const brandHit = !!b && (flat.includes(b) || cFlat.includes(b))
+  const ctx = RC_CTX.test((title || '') + ' ' + (channel || ''))
+  return (brandHit && mh >= 0.3) || (mh >= 0.6 && ctx)
+}
+
 export const POP_WEIGHTS = {
   views: 12, // weight on log10(1 + total views across the top videos)
   breadth: 8, // weight on log10(1 + distinct non-excluded videos)
