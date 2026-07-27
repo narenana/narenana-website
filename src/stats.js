@@ -336,10 +336,16 @@ async function fetchGa(env) {
       limit: '200',
     }),
   ])
+  // Drop dev/preview noise so real projects aren't buried under a wall of
+  // ephemeral *.pages.dev branch previews and localhost. hostName is the last
+  // dimension in traffic/events/channels rows.
+  const real = (h) =>
+    typeof h === 'string' &&
+    !/(^|\.)localhost$|^127\.0\.0\.1$|\.pages\.dev$|\.workers\.dev$/i.test(h)
   return {
-    traffic: traffic.map((r) => [gaDate(r[0]), r[1], r[2], r[3], r[4]]),
-    events,
-    channels,
+    traffic: traffic.filter((r) => real(r[1])).map((r) => [gaDate(r[0]), r[1], r[2], r[3], r[4]]),
+    events: events.filter((r) => real(r[1])),
+    channels: channels.filter((r) => real(r[1])),
     wwwPages,
   }
 }
@@ -416,17 +422,13 @@ async function fetchCf(env) {
   const { zoneTag, siteTag } = await cfIds(env)
   const start = daysAgoIso(WINDOW_DAYS - 1)
   const end = daysAgoIso(0)
-  const query = `
-    query Portfolio($zone: string!, $account: string!, $site: string!, $start: Date!, $end: Date!, $rum: Boolean!) {
-      viewer {
-        zones(filter: { zoneTag: $zone }) {
-          httpRequests1dGroups(limit: 31, filter: { date_geq: $start, date_leq: $end }, orderBy: [date_ASC]) {
-            dimensions { date }
-            sum { requests pageViews cachedRequests bytes }
-            uniq { uniques }
-          }
-        }
-        accounts(filter: { accountTag: $account }) @include(if: $rum) {
+  // Cloudflare's GraphQL API rejects @include/@skip directives, so the RUM
+  // block (and its variables) are spliced in as strings only when we actually
+  // have a siteTag + account — no directive, no unused-variable validation error.
+  const hasRum = Boolean(siteTag && env.CF_ACCOUNT_TAG)
+  const rumBlock = hasRum
+    ? `
+        accounts(filter: { accountTag: $account }) {
           rumPageloadEventsAdaptiveGroups(
             limit: 1000
             filter: { date_geq: $start, date_leq: $end, siteTag: $site }
@@ -436,23 +438,27 @@ async function fetchCf(env) {
             sum { visits }
             dimensions { date requestHost }
           }
-        }
+        }`
+    : ''
+  const query = `
+    query Portfolio($zone: string!, $start: Date!, $end: Date!${hasRum ? ', $account: string!, $site: string!' : ''}) {
+      viewer {
+        zones(filter: { zoneTag: $zone }) {
+          httpRequests1dGroups(limit: 31, filter: { date_geq: $start, date_leq: $end }, orderBy: [date_ASC]) {
+            dimensions { date }
+            sum { requests pageViews cachedRequests bytes }
+            uniq { uniques }
+          }
+        }${rumBlock}
       }
     }`
+  const variables = hasRum
+    ? { zone: zoneTag, start, end, account: env.CF_ACCOUNT_TAG, site: siteTag }
+    : { zone: zoneTag, start, end }
   const res = await fetch('https://api.cloudflare.com/client/v4/graphql', {
     method: 'POST',
     headers: { authorization: `Bearer ${env.CF_API_TOKEN}`, 'content-type': 'application/json' },
-    body: JSON.stringify({
-      query,
-      variables: {
-        zone: zoneTag,
-        account: env.CF_ACCOUNT_TAG || '',
-        site: siteTag || '',
-        start,
-        end,
-        rum: Boolean(siteTag && env.CF_ACCOUNT_TAG),
-      },
-    }),
+    body: JSON.stringify({ query, variables }),
   })
   const data = await res.json()
   // GraphQL errors arrive as HTTP 200 + errors[] — always check the array.
