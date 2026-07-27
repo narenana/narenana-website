@@ -12,6 +12,7 @@
 
 import { handleCatalog, catalogScheduled } from '../catalog/lib/worker.mjs'
 import { consumeManufacturerHarvestQueue } from '../catalog/lib/mfr-jobs.mjs'
+import { handleStats, refreshStats } from './stats.js'
 
 export default {
   async fetch(request, env, ctx) {
@@ -55,6 +56,26 @@ export default {
       return harden(await videosResponse(env), url, isLocal)
     }
 
+    // Private portfolio dashboard (src/stats.js). Sets its own security headers
+    // (noindex/no-store/referrer-policy + the auth cookie), so — like
+    // /log-viewer — it's returned unwrapped rather than through harden(), whose
+    // Headers copy would collapse the Set-Cookie. Matched on the DECODED path so
+    // %-encoded variants can't slip past the gate to ASSETS.
+    {
+      let statsPath = null
+      try {
+        statsPath = decodeURIComponent(url.pathname)
+      } catch {
+        statsPath = null
+      }
+      if (statsPath === '/stats' || statsPath === '/stats/' || (statsPath !== null && statsPath.startsWith('/stats/api/'))) {
+        return handleStats(request, env, ctx, url)
+      }
+      if (statsPath === '/stats.html') {
+        return Response.redirect(new URL('/stats', url).toString(), 302)
+      }
+    }
+
     // Catalog platform — public category pages (D1-backed), /admin, /api/*,
     // /img/* and /catalog.css. Returns null for paths it doesn't own.
     // FAIL OPEN: a D1 outage (or missing tables) must degrade to the catalog
@@ -83,7 +104,10 @@ export default {
   async scheduled(event, env, ctx) {
     // Dispatch on the cron expression. Hourly: YouTube RSS refresh (here) +
     // IndexNow push. */15: catalog slice. Weekly: manufacturer queue fan-out.
-    if (event.cron === '0 * * * *') ctx.waitUntil(refreshFeed(env))
+    if (event.cron === '0 * * * *') {
+      ctx.waitUntil(refreshFeed(env))
+      ctx.waitUntil(refreshStats(env).catch(() => null)) // fail-soft: keep last-good snapshot
+    }
     catalogScheduled(event, env, ctx)
   },
 

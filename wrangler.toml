@@ -57,9 +57,37 @@ database_name = "catalog"
 database_id = "1737eb67-2904-49d1-bda2-2e0033b7b6c0"
 migrations_dir = "catalog/migrations"
 
+# LAST CALL's leaderboard D1 (owned by the last-call Pages project — D1 is
+# account-level, so /stats reads the same database READ-ONLY for the funnel:
+# starts/runs/scores). No migrations_dir — this Worker never migrates it.
+[[d1_databases]]
+binding = "LASTCALL_DB"
+database_name = "last-call-leaderboard"
+database_id = "b056ee20-eb0a-4b20-813b-ca4c8900cd07"
+
+# Nanawing's stats + leaderboard Workers, read by /stats. Service bindings,
+# because a deployed Worker may NOT fetch() another same-account *.workers.dev
+# URL (Cloudflare blocks it, error 1042). src/stats.js falls back to the public
+# URLs in local dev where the binding stub can't reach a non-running service.
+[[services]]
+binding = "FPVSIM_STATS"
+service = "fpvsim-stats"
+
+[[services]]
+binding = "FPVSIM_BOARD"
+service = "fpvsim-leaderboard"
+
 [vars]
 # Channel mirrored at /videos.json. Public, no API key needed.
 YOUTUBE_CHANNEL_ID = "UCaf-AGOmL7jLve1M1jibfRw"
+
+# /stats portfolio dashboard (src/stats.js). Non-secret ids; the secrets are
+# STATS_KEY, GOOGLE_SA_KEY, CF_API_TOKEN via `npx wrangler secret put`
+# (see docs/STATS-SETUP.md). A secret may NOT share a name with a [vars] key.
+# GA4 property "narenana.com" (single stream G-1KY518LPBH, hostname-segmented).
+GA4_PROPERTY_ID = "534605239"
+# Cloudflare account id (for the Web Analytics RUM dataset).
+CF_ACCOUNT_TAG = "495c03e17eecfce6122af7a16984ab12"
 
 # Where /log-viewer/* gets forwarded. The Pages/Workers deployment URL of
 # the tool's own repo (narenana/edgetx-log-parser). Override per-environment
