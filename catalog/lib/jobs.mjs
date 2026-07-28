@@ -246,10 +246,14 @@ export async function upsertProducts(env, su, products, spent) {
       // url_canonical constraint and abort the whole batch — wedging the scan
       // cursor forever. Keep byP's old URL, refresh data, and flag the collision.
       const urlTaken = byU && byU.id !== byP.id
-      const changed = byP.price_inr !== p.priceINR || !!byP.in_stock !== !!p.inStock
+      // A feed that DOESN'T KNOW price/stock (Zoho lists supply neither) must
+      // never erase what verify established — null incoming means "no data",
+      // not "gone". COALESCE keeps the last-known value; an explicit 0/price
+      // change still writes through. Same rule in the byU branch below.
+      const changed = (p.priceINR != null && byP.price_inr !== p.priceINR) || (p.inStock != null && !!byP.in_stock !== !!p.inStock)
       stmts.push(q(env,
         `UPDATE sku SET url_canonical=?, url_raw=?, title=CASE WHEN review_status='new' THEN ? ELSE title END,
-           image_url=COALESCE(?, image_url), price_inr=?, in_stock=?, variants=?, last_seen=?, misses=0, dead=0 WHERE id=?`,
+           image_url=COALESCE(?, image_url), price_inr=COALESCE(?, price_inr), in_stock=COALESCE(?, in_stock), variants=?, last_seen=?, misses=0, dead=0 WHERE id=?`,
         urlTaken ? byP.url_canonical : p.url, urlTaken ? byP.url_canonical : p.url,
         p.title, p.img, p.priceINR, p.inStock == null ? null : p.inStock ? 1 : 0,
         JSON.stringify(p.variants ?? []), t, byP.id))
@@ -268,10 +272,10 @@ export async function upsertProducts(env, su, products, spent) {
           JSON.stringify({ kind: 'missing', detail: `url now serves a different product (pid ${byU.platform_pid} → ${p.pid})`, at: t }), byU.id))
         inserts.push(p)
       } else {
-        const changed = byU.price_inr !== p.priceINR || !!byU.in_stock !== !!p.inStock
+        const changed = (p.priceINR != null && byU.price_inr !== p.priceINR) || (p.inStock != null && !!byU.in_stock !== !!p.inStock)
         stmts.push(q(env,
           `UPDATE sku SET platform_pid=COALESCE(platform_pid, ?), title=CASE WHEN review_status='new' THEN ? ELSE title END,
-             image_url=COALESCE(?, image_url), price_inr=?, in_stock=?, variants=?, last_seen=?, misses=0, dead=0 WHERE id=?`,
+             image_url=COALESCE(?, image_url), price_inr=COALESCE(?, price_inr), in_stock=COALESCE(?, in_stock), variants=?, last_seen=?, misses=0, dead=0 WHERE id=?`,
           p.pid, p.title, p.img, p.priceINR, p.inStock == null ? null : p.inStock ? 1 : 0,
           JSON.stringify(p.variants ?? []), t, byU.id))
         if (changed) {
