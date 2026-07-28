@@ -15,6 +15,9 @@ import { page } from './public.mjs'
 const ROLE_VOCAB = ['Trainer', 'Sport / Park Flyer', 'Aerobatic / 3D', 'Warbird', 'Jet / EDF', 'Glider / Sailplane', 'FPV / Flying Wing', 'Scale Civilian', 'Airliner']
 const SIZE_BUCKETS = [['small', 'Small · under 1 m'], ['medium', 'Medium · 1–1.5 m'], ['large', 'Large · over 1.5 m']]
 const SORTS = ['price-desc', 'price-asc', 'span-desc', 'span-asc', 'name', 'popular']
+// Most-popular is the DEFAULT sort (YouTube-led pop_score, relevance-gated;
+// 100% in-stock coverage). Keep the client URL-omission rule in FX_JS in sync.
+const DEFAULT_SORT = 'popular'
 // boundary is inclusive of the label ranges: medium = [1000, 1500], large = >1500
 const sizeOf = (mm) => (!mm ? '' : mm < 1000 ? 'small' : mm <= 1500 ? 'medium' : 'large')
 const ri = (t) => ROLE_VOCAB.indexOf(t)
@@ -217,7 +220,7 @@ export function renderGridNext(cat, rows, opts = {}) {
   const landing = opts.landing || null // { L, slug }
   const Lmeta = landing ? landingMeta(cat, landing.L, landing.slug) : null
   const power = opts.power === 'gas' ? 'gas' : opts.power === 'all' ? 'all' : 'electric'
-  const sort = SORTS.includes(opts.sort) ? opts.sort : 'price-desc'
+  const sort = SORTS.includes(opts.sort) ? opts.sort : DEFAULT_SORT
   const cond = ['new', 'pre-owned'].includes(opts.cond) ? opts.cond : 'all'
   const selRoles = (opts.roles || []).filter((t) => ROLE_VOCAB.includes(t))
   const selSizes = (opts.sizes || []).filter((k) => SIZE_BUCKETS.some((s) => s[0] === k))
@@ -265,7 +268,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     }
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
-    if (sort !== 'price-desc') qs.set('sort', sort)
+    if (sort !== DEFAULT_SORT) qs.set('sort', sort)
     const s = qs.toString()
     return `${pref}/${s ? '?' + s : ''}`
   }
@@ -277,7 +280,7 @@ export function renderGridNext(cat, rows, opts = {}) {
   const sizeChips = sizesPresent.map(([k, label]) => chip('size', k, label, sizeCount(k), selSizes.includes(k), 'fx-cb fx-size')).join('')
   const condChips = `${chip('cond', 'all', 'All', items.filter(mRoles).filter(mSizes).length, cond === 'all')}${chip('cond', 'new', 'New', condCount('new'), cond === 'new')}${chip('cond', 'pre-owned', 'Pre-owned', condCount('pre-owned'), cond === 'pre-owned')}`
 
-  const sortSel = `<select id="fx-sort" class="fx-sortsel" aria-label="Sort">${[['price-desc', 'Price: high to low'], ['price-asc', 'Price: low to high'], ['popular', 'Most popular'], ['span-desc', 'Wingspan: large to small'], ['span-asc', 'Wingspan: small to large'], ['name', 'Name: A → Z']].map(([v, t]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`
+  const sortSel = `<select id="fx-sort" class="fx-sortsel" aria-label="Sort">${[['popular', 'Most popular'], ['price-desc', 'Price: high to low'], ['price-asc', 'Price: low to high'], ['span-desc', 'Wingspan: large to small'], ['span-asc', 'Wingspan: small to large'], ['name', 'Name: A → Z']].map(([v, t]) => `<option value="${v}"${sort === v ? ' selected' : ''}>${t}</option>`).join('')}</select>`
 
   const condLabel = (c) => (c === 'new' ? 'New' : 'Pre-owned')
   const nActive = selRoles.length + selSizes.length + (cond !== 'all' ? 1 : 0)
@@ -348,7 +351,7 @@ export function renderGridNext(cat, rows, opts = {}) {
   // duplicates the /nitro/ landing → canonical THERE, not to the electric grid
   // whose content is disjoint (the case where Google ignores the canonical).
   // Any other non-default filter/sort state is noindex — crawlable, not indexed.
-  const filtered = !landing && (selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== 'price-desc')
+  const filtered = !landing && (selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== DEFAULT_SORT)
   return page({
     title: Lmeta ? Lmeta.title : `${cat.name} in India — compare live prices | narenana`,
     desc: Lmeta ? Lmeta.desc : `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
@@ -481,7 +484,7 @@ const FX_JS = `(function(){
       if(state.roles.size)p.set('role',Array.from(state.roles).join(','));
       if(state.sizes.size)p.set('size',Array.from(state.sizes).join(','));
       if(state.cond!=='all')p.set('cond',state.cond);
-      if(state.sort!=='price-desc')p.set('sort',state.sort);
+      if(state.sort!=='popular')p.set('sort',state.sort);
       history.replaceState(null,'',FX_PREF+'/?'+p.toString());}catch(e){}
   }
   function toggle(f,v,off){
