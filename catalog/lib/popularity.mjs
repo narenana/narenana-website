@@ -45,9 +45,13 @@ export function videoRelevant({ brand, name, title, channel }) {
   if (!toks.length) return false // nothing distinctive to verify against → can't trust any match
   let hit = 0
   for (const t of toks) if (new RegExp('\\b' + t + '\\b').test(T)) hit++
-  // Concatenated names ("DolphinPro", "T1Ranger") defeat word-boundary
-  // matching — a run of ALL tokens joined counts as a full match.
-  if (hit < toks.length && toks.length > 1 && T.replace(/ /g, '').includes(toks.join(''))) hit = toks.length
+  // Concatenated names defeat word-boundary matching ("DolphinPro" in a title
+  // never matches token 'dolphin'). Use the RAW name tokens (pre-noise-strip:
+  // "Dolphin Pro" → dolphinpro) — a multi-token run present in the flattened
+  // title counts as a full match. Multi-token only: single-word substrings
+  // would false-positive ("art" in "start").
+  const rawToks = (' ' + (name || '').toLowerCase() + ' ').replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter((x) => x.length >= 2)
+  if (hit < toks.length && rawToks.length > 1 && T.replace(/ /g, '').includes(rawToks.join(''))) hit = toks.length
   const mh = hit / toks.length
   const b = (brand || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
   const flat = T.replace(/ /g, '')
