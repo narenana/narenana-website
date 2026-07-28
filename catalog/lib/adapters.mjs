@@ -475,6 +475,13 @@ export async function checkPage(url, source) {
   if (!res.ok) return { blocked: true } // 403/429/5xx — WAF or seller hiccup
   const html = await res.text()
   if (isChallenge(html)) return { blocked: true } // 200 + interstitial
+  return parseProductPage(html, source, url)
+}
+
+// Parse a product page's HTML into the verify result. Split from checkPage so
+// the browser-render fallback (Browser Rendering fetch for WAF-blocked sellers)
+// runs the IDENTICAL extraction on the HTML a real Chrome retrieved.
+export function parseProductPage(html, source, url) {
   const t = html.match(/<title[^>]*>([^<]+)<\/title>/i)
   const title = t ? t[1].replace(/\s*[|–—-]\s*[^|–—-]*$/, '').replace(/\s+/g, ' ').trim().slice(0, 140) : null
   const img = ogImageFrom(html, url)

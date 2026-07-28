@@ -15,7 +15,8 @@
 //   * URL hit with mismatched pid ⇒ old row dead+flagged, new row inserted
 //   * a scan never rewrites identity fields of a reviewed row
 
-import { feedPage, checkPage, checkWooProduct, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
+import puppeteer from '@cloudflare/puppeteer'
+import { feedPage, checkPage, checkWooProduct, parseProductPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
 import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
@@ -923,16 +924,42 @@ export async function mergeMasters(env, aId, bId, actor, reason) {
 // -------------------------------------------------------------- verify slice
 const FLAG_DELTA = 0.25
 
+// Browser-render fallback for WAF-blocked sellers (source.scrape_status =
+// 'browser'). One shared headless-Chrome session per slice, hard page cap —
+// with verify's ~daily rotation this stays comfortably inside the Free plan's
+// ~10 browser-minutes/day (24 flagged skus ≈ 3 min/day).
+const BROWSER_PAGES_PER_SLICE = 3
+
 async function verifySlice(env, trigger) {
   const t = now()
   const rows = await all(
     env,
-    `SELECT k.*, s.platform, s.home_url FROM sku k JOIN source s ON s.id=k.source_id
+    `SELECT k.*, s.platform, s.home_url, s.scrape_status FROM sku k JOIN source s ON s.id=k.source_id
      WHERE k.review_status='approved' AND k.dead=0
      ORDER BY COALESCE(k.last_checked,0) ASC LIMIT 6`,
   )
   const log = []
   const stmts = []
+  let browser = null, browserPages = 0
+  const browserHtml = async (url) => {
+    if (!env.BROWSER || browserPages >= BROWSER_PAGES_PER_SLICE) return null
+    browserPages++
+    try {
+      browser ??= await puppeteer.launch(env.BROWSER)
+      const pg = await browser.newPage()
+      try {
+        const resp = await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 })
+        const status = resp?.status() ?? 0
+        if (status === 404 || status === 410) return { gone: true }
+        const html = await pg.content()
+        return html && !isChallenge(html) ? { html } : null
+      } finally {
+        try { await pg.close() } catch {}
+      }
+    } catch {
+      return null
+    }
+  }
   const kindOf = (f) => {
     try {
       return f ? JSON.parse(f).kind : null
@@ -941,15 +968,27 @@ async function verifySlice(env, trigger) {
     }
   }
   for (const sku of rows) {
-    // Daily snapshot refresh: fetch the page, hash its product core, and re-store
-    // only if it changed (the owner's "checksum, replace if changed"). Guarded —
-    // a snapshot failure never affects the price/stock verify below.
-    try { const sh = await getHtml(sku.url_canonical, { tries: 1, timeoutMs: 7000 }); if (sh) await storeSnapshot(env, sku.id, sh, t) } catch {}
-    // WooCommerce: trust the Store API (reliable price/stock) over HTML scraping.
-    const res =
-      sku.platform === 'woocommerce' && sku.platform_pid
-        ? await checkWooProduct(sku.home_url, sku.platform_pid, sku.url_canonical)
-        : await checkPage(sku.url_canonical, sku)
+    let res
+    if (sku.scrape_status === 'browser') {
+      // WAF-blocked seller: plain fetches are known-dead — go straight to the
+      // browser (no wasted 7-9s timeouts). Snapshot from the browser HTML too.
+      const b = await browserHtml(sku.url_canonical)
+      if (b?.gone) res = { gone: true }
+      else if (b?.html) {
+        try { await storeSnapshot(env, sku.id, b.html, t) } catch {}
+        res = parseProductPage(b.html, sku, sku.url_canonical)
+      } else res = { blocked: true } // budget spent or challenge — preserve data, rotate on
+    } else {
+      // Daily snapshot refresh: fetch the page, hash its product core, and re-store
+      // only if it changed (the owner's "checksum, replace if changed"). Guarded —
+      // a snapshot failure never affects the price/stock verify below.
+      try { const sh = await getHtml(sku.url_canonical, { tries: 1, timeoutMs: 7000 }); if (sh) await storeSnapshot(env, sku.id, sh, t) } catch {}
+      // WooCommerce: trust the Store API (reliable price/stock) over HTML scraping.
+      res =
+        sku.platform === 'woocommerce' && sku.platform_pid
+          ? await checkWooProduct(sku.home_url, sku.platform_pid, sku.url_canonical)
+          : await checkPage(sku.url_canonical, sku)
+    }
     // The daily feed scan updates last_seen for every product still listed. A
     // "gone" signal is only trusted to AUTO-remove when the feed ALSO stopped
     // seeing it — a 404 that contradicts a fresh feed sighting is suspect.
@@ -1016,6 +1055,7 @@ async function verifySlice(env, trigger) {
       log.push(`${sku.id} ${sku.title?.slice(0, 30)}: ok ${res.priceINR ?? '—'}`)
     }
   }
+  if (browser) { try { await browser.close() } catch {} }
   if (stmts.length) await batch(env, stmts)
-  return { job: 'verify', trigger, checked: rows.length, log }
+  return { job: 'verify', trigger, checked: rows.length, log: browserPages ? [...log, `browser pages: ${browserPages}`] : log }
 }
