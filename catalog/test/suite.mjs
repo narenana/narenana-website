@@ -491,11 +491,14 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
     { id: 4, slug: 'mix', brand: '', name: 'Extra 300', power: 'electric', role_tags: '["Aerobatic / 3D","Other","</script>x"]', specs: '{"spanMM":1500}', sellers: 2, hero_any: null, min_price: 9000, span_mm: 1500, new_stock: 1, preowned_stock: 1 },
   ]
   const cnt = { electric: 4, gas: 0 }
-  const base = { power: 'electric', roles: [], sizes: [], cond: 'all', sort: 'price-desc', counts: cnt }
+  // 'popular' is the DEFAULT sort (DEFAULT_SORT in grid-next.mjs) — the default
+  // state must be indexable; any explicit non-default sort must be noindex.
+  const base = { power: 'electric', roles: [], sizes: [], cond: 'all', sort: 'popular', counts: cnt }
   const out = renderGridNext(cat, rows, base)
   assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
   assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
   assert.ok(!out.includes('name="robots" content="noindex"'), 'default grid must be indexable (not noindex)')
+  assert.ok(renderGridNext(cat, rows, { ...base, sort: 'price-desc' }).includes('name="robots" content="noindex"'), 'non-default sort state is noindex')
   assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
   assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
 
