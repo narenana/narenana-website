@@ -27,7 +27,14 @@ export const STRATEGIES = {
   // ---- distributors / custom sites with JSON-LD Product pages ----
   // motionrc: brand is in the product URL (/products/freewing-…) so we can scope
   // the (15k-url) sitemap to the brand cheaply. Carries Freewing/Dynam/FMS.
-  'motionrc.com': { via: 'jsonld', sitemaps: ['/sitemap.xml'], urlIncludes: '/products/', scopeByBrandInUrl: true, max: 80 },
+  // FMS also makes RC CARS whose part URLs sort alphabetically BEFORE the
+  // planes (fms-1-12-scale-… < fms-1400mm-…) — without urlSkip + urlPrefer the
+  // whole page budget went to crawler parts and the aircraft filter kept 0.
+  'motionrc.com': {
+    via: 'jsonld', sitemaps: ['/sitemap.xml'], urlIncludes: '/products/', scopeByBrandInUrl: true, max: 120,
+    urlSkip: /(crawler|rock-racer|1-1[0-9]-scale|1-24-scale|rc-cars|truck|buggy|bearing|driveshaft|axle|tire|wheel|shock-|chassis|differential|transmission|winch|-esc-|servo|light-kit|bumper|body-shell)/i,
+    urlPrefer: /(\d{3,4}mm|edf|pnp|rtf|arf|bnf|glider|warbird|airplane|-plane|jet)/i,
+  },
   // horizonhobby: JSON-LD carries brand+description; product URLs don't encode
   // brand, so scope by fetched JSON-LD brand. Carries E-flite/Hangar 9.
   'horizonhobby.com': { via: 'jsonld', sitemaps: ['/sitemap_0-product.xml', '/sitemap_1-product.xml'], urlIncludes: '/product/', scopeByBrandInLd: true, max: 400 },
@@ -40,6 +47,11 @@ export const STRATEGIES = {
   'xflymodel.com': { via: 'html' },
   // still needs a parser (workflow build hit a transient auth error) — retry
   'dwhobby.com': { via: 'todo', note: 'old PHP; custom HTML — parser pending' },
+  // FMS's own store (fmsmodel.com redirects here). Cloudflare JS challenge blocks
+  // every plain fetch (Worker AND local node) — data is refreshed via a LOCAL
+  // real-browser pull (JSON-LD per product page; sitemap has EN+ES locale
+  // duplicates — dedupe by ext_id preferring non-/es/). Weekly queue skips it.
+  'fmshobby.com': { via: 'todo', note: 'Cloudflare challenge — refresh via local browser pull (see mfr memory)' },
 }
 
 async function shopify(domain, options = {}) {
@@ -98,7 +110,13 @@ async function jsonldSitemap(domain, cfg, brandHint, options = {}) {
       }
     } catch {}
   }
-  const allUrls = [...urls].slice(0, cfg.max || 120)
+  // Spend the page budget wisely: drop known-irrelevant slugs outright (FMS
+  // car/crawler parts), then fetch plane-looking URLs first — the budget may
+  // not cover the whole brand. Deterministic order, so queue paging stays stable.
+  let list = [...urls]
+  if (cfg.urlSkip) list = list.filter((u) => !cfg.urlSkip.test(u))
+  if (cfg.urlPrefer) list.sort((a, b) => ((cfg.urlPrefer.test(b) ? 1 : 0) - (cfg.urlPrefer.test(a) ? 1 : 0)) || a.localeCompare(b))
+  const allUrls = list.slice(0, cfg.max || 120)
   const targets = allUrls.slice(offset, offset + limit)
   const out = []
   for (const u of targets) {
