@@ -115,6 +115,9 @@
     <h2>Play funnels</h2>
     <div class="cols" id="funnels"></div>
 
+    <h2>YouTube — narenana channel</h2>
+    <div id="youtube"></div>
+
     <h2>Data sources</h2>
     <div class="chips" id="sources"></div>
 
@@ -360,6 +363,33 @@
           <div class="tbl"><table><thead><tr><th>path</th><th class="num">views 28d</th><th class="num">users</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
       }
 
+      /* ---- YouTube ---- */
+      if (ok(data.youtube)) {
+        const y = data.youtube
+        const c = y.channel
+        const r = y.recent || {}
+        const head = c
+          ? `<div class="facts" style="font-size:0.82rem;margin-bottom:10px">
+               subscribers <b style="color:var(--fg);font-size:1.05rem">${fmt(c.subscribers)}</b> ·
+               lifetime views <b style="color:var(--fg)">${fmt(c.totalViews)}</b> ·
+               videos <b style="color:var(--fg)">${fmt(c.videoCount)}</b></div>`
+          : `<div class="empty" style="margin-bottom:10px">Add a <code>YT_API_KEY</code> secret for subscribers + lifetime totals (YouTube Data API). Recent-upload metrics below need no key.</div>`
+        const rows = (r.top || []).slice(0, 10).map((v) =>
+          `<tr><td class="trunc" title="${esc(v[0])}"><a href="${esc(v[3])}" target="_blank" rel="noreferrer">${esc(v[0])}</a></td>
+             <td class="num">${fmt(v[1])}</td><td class="num">${fmt(v[2])}</td></tr>`).join('')
+        $('youtube').innerHTML = `<div class="panel">
+          <div class="title">Channel</div>${head}
+          <div class="facts" style="font-size:0.82rem;margin-bottom:8px">
+            recent feed: <b style="color:var(--fg)">${fmt(r.inFeed)}</b> videos ·
+            <b style="color:var(--fg)">${fmt(r.views)}</b> views ·
+            <b style="color:var(--fg)">${fmt(r.likes)}</b> likes ·
+            <b style="color:var(--fg)">${fmt(r.uploads28d)}</b> uploaded in ${days}d</div>
+          <div class="tbl"><table><thead><tr><th>recent upload (by views)</th><th class="num">views</th><th class="num">likes</th></tr></thead>
+            <tbody>${rows || '<tr><td class="empty">no recent uploads in the feed</td></tr>'}</tbody></table></div></div>`
+      } else {
+        $('youtube').innerHTML = `<div class="panel empty">YouTube: ${esc((data.youtube && data.youtube.error) || 'no data')}</div>`
+      }
+
       /* ---- source chips ---- */
       const chip = (name, s) => {
         const cls = ok(s) ? 'ok' : s && s.error && /not configured/.test(s.error) ? '' : 'err'
@@ -368,7 +398,8 @@
       }
       $('sources').innerHTML =
         chip('Google Analytics', data.ga) + chip('Search Console', data.gsc) +
-        chip('Cloudflare', data.cf) + chip('Last Call D1', data.lastcall) + chip('Nanawing', data.nanawing)
+        chip('Cloudflare', data.cf) + chip('Last Call D1', data.lastcall) +
+        chip('Nanawing', data.nanawing) + chip('YouTube', data.youtube)
     }
 
     async function load(force) {

@@ -159,12 +159,13 @@ export async function handleStats(request, env, ctx, url) {
 
 /** Fetch every source (independently fail-soft) and persist the snapshot. */
 export async function refreshStats(env) {
-  const [ga, gsc, cf, lastcall, nanawing] = await Promise.all([
+  const [ga, gsc, cf, lastcall, nanawing, youtube] = await Promise.all([
     section(() => fetchGa(env)),
     section(() => fetchGsc(env)),
     section(() => fetchCf(env)),
     section(() => fetchLastCall(env)),
     section(() => fetchNanawing(env)),
+    section(() => fetchYouTube(env)),
   ])
   const json = JSON.stringify({
     v: 1,
@@ -175,6 +176,7 @@ export async function refreshStats(env) {
     cf,
     lastcall,
     nanawing,
+    youtube,
   })
   try {
     await env.VIDEOS_KV.put(SNAPSHOT_KEY, json)
@@ -569,4 +571,56 @@ async function fetchNanawing(env) {
     series: series.map((r) => [r.day, r.flights, r.sessions, r.pilots]),
     racers,
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* YouTube — recent uploads (free, from the KV feed) + channel totals  */
+/* ------------------------------------------------------------------ */
+
+async function fetchYouTube(env) {
+  // Recent uploads come FREE from the same KV `feed` the Worker refreshes
+  // hourly (parseFeed in index.js): {id,title,published,views,likes,url,...}.
+  let videos = []
+  try {
+    const raw = await env.VIDEOS_KV.get('feed')
+    if (raw) videos = JSON.parse(raw).videos || []
+  } catch {
+    videos = []
+  }
+  const cutoff = Date.now() - WINDOW_DAYS * 86400000
+  const recent = {
+    inFeed: videos.length,
+    views: videos.reduce((a, v) => a + (v.views || 0), 0),
+    likes: videos.reduce((a, v) => a + (v.likes || 0), 0),
+    uploads28d: videos.filter((v) => Date.parse(v.published) > cutoff).length,
+    // Best recent uploads by views (title, views, likes, url).
+    top: [...videos]
+      .sort((a, b) => (b.views || 0) - (a.views || 0))
+      .slice(0, 10)
+      .map((v) => [v.title, v.views || 0, v.likes || 0, v.url]),
+  }
+
+  // Channel-level totals (subscribers, lifetime views, video count) are PUBLIC
+  // data the YouTube Data API v3 serves with just an API key — no OAuth. Only
+  // fetched when YT_API_KEY is set; otherwise the recent-upload metrics stand
+  // alone and the panel prompts to add the key.
+  let channel = null
+  if (env.YT_API_KEY) {
+    const id = env.YOUTUBE_CHANNEL_ID
+    const res = await fetch(
+      `https://www.googleapis.com/youtube/v3/channels?part=statistics,snippet&id=${id}&key=${env.YT_API_KEY}`,
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(`youtube: ${(data.error && data.error.message) || res.status}`)
+    const c = data.items && data.items[0]
+    if (c) {
+      channel = {
+        title: c.snippet.title,
+        subscribers: Number(c.statistics.subscriberCount),
+        totalViews: Number(c.statistics.viewCount),
+        videoCount: Number(c.statistics.videoCount),
+      }
+    }
+  }
+  return { recent, channel }
 }
