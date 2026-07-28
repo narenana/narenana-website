@@ -306,7 +306,10 @@ function recipesFor(recipes, components) {
   </section>`
 }
 
-export function renderMaster(cat, m, offers, similar = []) {
+export function renderMaster(cat, m, offers, similar = [], videos = []) {
+  // Only well-formed YouTube ids reach markup/URLs (defense against any junk
+  // that might land in master_video).
+  const vids = (videos || []).filter((v) => /^[A-Za-z0-9_-]{6,15}$/.test(v.video_id || ''))
   let specs = {}
   try {
     specs = JSON.parse(m.specs || '{}')
@@ -373,8 +376,54 @@ export function renderMaster(cat, m, offers, similar = []) {
         ],
       },
       ...(productLd ? [productLd] : []),
+      // VideoObject per embedded review → video rich-result eligibility.
+      ...vids.map((v) => ({
+        '@type': 'VideoObject',
+        name: v.title || `${m.brand} ${m.name} video`,
+        thumbnailUrl: `https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg`,
+        uploadDate: v.published_at ? new Date(v.published_at).toISOString().slice(0, 10) : undefined,
+        embedUrl: `https://www.youtube-nocookie.com/embed/${v.video_id}`,
+        url: `https://www.youtube.com/watch?v=${v.video_id}`,
+      })),
     ],
   }
+
+  // Click-to-play facade: the page ships only thumbnails (~20 KB each); the
+  // real player (~1 MB+ of YouTube JS) loads on demand, in place, autoplaying —
+  // playback stays ON THIS PAGE (privacy-enhanced youtube-nocookie host).
+  const fmtV = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : n ? String(n) : '')
+  const videoSection = vids.length ? `
+    <section class="ytv" style="margin-top:44px"><h2 class="sec">Watch it fly</h2>
+    <div class="ytv-grid">${vids.map((v) => `
+      <button class="ytv-card" data-yt="${v.video_id}" aria-label="Play video: ${esc(v.title || '')}">
+        <span class="ytv-thumb"><img src="https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg" alt="${esc(v.title || 'video thumbnail')}" loading="lazy" width="480" height="360" /><span class="ytv-play" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></span></span>
+        <span class="ytv-meta"><span class="ytv-title">${esc((v.title || '').slice(0, 80))}</span><span class="ytv-sub">${esc(v.channel || 'YouTube')}${v.views ? ' · ' + fmtV(v.views) + ' views' : ''}</span></span>
+      </button>`).join('')}
+    </div>
+    <style>
+    .ytv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+    .ytv-card{display:flex;flex-direction:column;gap:8px;padding:0;border:0;background:none;cursor:pointer;text-align:left;font-family:inherit}
+    .ytv-thumb{position:relative;display:block;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#0F2C39}
+    .ytv-thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}
+    .ytv-card:hover .ytv-thumb img{transform:scale(1.04)}
+    .ytv-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#FCF9F1}
+    .ytv-play svg{width:46px;height:46px;padding:12px;background:rgba(15,44,57,.72);border-radius:999px;transition:background .2s}
+    .ytv-card:hover .ytv-play svg{background:#EF7A25}
+    .ytv-frame{aspect-ratio:16/9;border-radius:10px;overflow:hidden}
+    .ytv-frame iframe{width:100%;height:100%;border:0;display:block}
+    .ytv-title{display:block;font-weight:600;font-size:14px;line-height:1.3;color:var(--ink,#0F2C39)}
+    .ytv-sub{display:block;font-size:12px;color:var(--muted,#5c6b6b);margin-top:2px}
+    </style>
+    <script>document.querySelectorAll('.ytv-card').forEach(function(b){b.addEventListener('click',function(){
+      var id=b.dataset.yt;if(!/^[A-Za-z0-9_-]{6,15}$/.test(id))return;
+      // Replace the whole BUTTON with a plain container — an iframe inside a
+      // (disabled) button would be unclickable / invalid interactive nesting.
+      var w=document.createElement('div');w.className='ytv-card';w.style.cursor='default';
+      w.innerHTML='<div class="ytv-frame"><iframe src="https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0" title="YouTube video player" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>';
+      var meta=b.querySelector('.ytv-meta');if(meta)w.appendChild(meta);
+      b.replaceWith(w);
+      },{once:true})})</script>
+    </section>` : ''
 
   const body = `
   <main class="wrap">
@@ -396,6 +445,7 @@ export function renderMaster(cat, m, offers, similar = []) {
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
       <tbody>${offers.map(offerRow).join('')}</tbody></table>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
+    ${videoSection}
     ${similar.length ? `<section class="similar" style="margin-top:44px"><h2 class="sec">Similar models</h2><ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul></section>` : ''}
   </main>`
   return page({

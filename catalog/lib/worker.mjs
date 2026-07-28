@@ -155,7 +155,15 @@ export async function handleCatalog(request, url, env, ctx) {
       // trustworthy framework for it. Product pages now show similar models
       // instead — same category, in-stock, sharing a role tag.
       const similar = await similarMasters(env, cat, m)
-      return html(renderMaster(cat, m, offers, similar))
+      // Curated YouTube reviews (relevance-gated + admin pin/exclude) — embedded
+      // on-page via a click-to-play facade, never a navigation to YouTube.
+      const videos = await all(
+        env,
+        `SELECT video_id, title, channel, views, published_at FROM master_video
+         WHERE master_model_id=? AND excluded=0 ORDER BY pinned DESC, views DESC LIMIT 3`,
+        m.id,
+      )
+      return html(renderMaster(cat, m, offers, similar, videos))
     }
   }
   // unknown slug → the REAL category grid (page 1, electric) with 404 status
