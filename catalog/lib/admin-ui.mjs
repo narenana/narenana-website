@@ -270,6 +270,7 @@ function renderPopularity(){
         ||'<span class="meta">'+(m.pop_updated_at?'no videos matched':'not polled yet')+'</span>';
       const score=m.pop_score!=null
         ? '<b style="font-size:1rem">'+(Math.round(m.pop_score*10)/10)+'</b><div class="meta">raw '+(Math.round((m.pop_raw||0)*10)/10)+' · '+ago(m.pop_updated_at)+'</div>'
+          +'<div class="meta" title="owner boost: multiplies the score (0.5–2, 1 = neutral)">boost <input class="inline" type="number" step="0.05" min="0.5" max="2" value="'+(m.pop_boost??1)+'" data-boost="'+m.id+'" style="width:58px;padding:2px 4px"/></div>'
         : '<span class="tag">—</span>';
       return '<tr><td class="meta">'+(m.pop_score!=null?start+i+1:'')+'</td>'
         +'<td style="min-width:150px"><b>'+esc(m.brand||'')+'</b> '+esc(m.name||'')+'<div class="meta"><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span> · '+esc(m.status)+' · <a href="'+esc(m.path)+'" target="_blank">page ↗</a></div></td>'
@@ -281,6 +282,10 @@ function renderPopularity(){
     b.disabled=true;
     try{await api('video-flag',{masterId:+b.dataset.m,videoId:b.dataset.v,field:b.dataset.vf,value:+b.dataset.val});load()}
     catch(e){alert(e.message);b.disabled=false}
+  });
+  document.querySelectorAll('input[data-boost]').forEach((i)=>i.onchange=async()=>{
+    try{await api('pop-boost',{masterId:+i.dataset.boost,boost:+i.value});load()}
+    catch(e){alert('NOT saved: '+e.message);i.style.outline='2px solid #f85149'}
   });
 }
 

@@ -832,6 +832,19 @@ async function api(request, url, env, ep, actor) {
     return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort, popCoverage })
   }
 
+  // Re-score one master from its persisted videos + current boost — shared by
+  // the video-flag and pop-boost endpoints so curation reflects immediately.
+  const rescorePop = async (masterId, t) => {
+    const mrow = await one(env, `SELECT m.id, m.pop_boost, COUNT(DISTINCT k.source_id) AS sellers,
+        MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
+      FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
+      LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved' WHERE m.id=? GROUP BY m.id`, masterId)
+    const scored = await all(env, `SELECT views, published_at FROM master_video WHERE master_model_id=? AND excluded=0`, masterId)
+    const { raw, score, signals } = popScores({ videos: scored, sellers: mrow?.sellers ?? 0, anyStock: mrow?.any_stock ?? 0, nowMs: t, boost: mrow?.pop_boost ?? 1 })
+    await run(env, `UPDATE master_model SET pop_raw=?, pop_score=?, pop_signals=?, pop_updated_at=? WHERE id=?`, raw, score, JSON.stringify(signals).slice(0, 900), t, masterId)
+    return score
+  }
+
   // Pin (survives re-searches, boosts nothing — informational) or exclude
   // (drops the video from scoring — the mismatched-video fix) a matched
   // YouTube video, then re-score the master from the persisted set so the
@@ -844,14 +857,20 @@ async function api(request, url, env, ep, actor) {
       q(env, `UPDATE master_video SET ${field}=? WHERE master_model_id=? AND video_id=?`, body.value ? 1 : 0, body.masterId, body.videoId),
       audit(env, actor, 'video-' + field, 'master_model', body.masterId, { video: body.videoId, value: body.value ? 1 : 0 }),
     ])
-    const mrow = await one(env, `SELECT m.id, COUNT(DISTINCT k.source_id) AS sellers,
-        MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
-      FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
-      LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved' WHERE m.id=? GROUP BY m.id`, body.masterId)
-    const scored = await all(env, `SELECT views, published_at FROM master_video WHERE master_model_id=? AND excluded=0`, body.masterId)
-    const { raw, score, signals } = popScores({ videos: scored, sellers: mrow?.sellers ?? 0, anyStock: mrow?.any_stock ?? 0, nowMs: t })
-    await run(env, `UPDATE master_model SET pop_raw=?, pop_score=?, pop_signals=?, pop_updated_at=? WHERE id=?`, raw, score, JSON.stringify(signals).slice(0, 900), t, body.masterId)
-    return json({ ok: true, score })
+    return json({ ok: true, score: await rescorePop(body.masterId, t) })
+  }
+
+  // Owner popularity boost (0.5–2.0, 1 = neutral) — for the few models where
+  // YouTube reach and community esteem diverge (toy RTFs vs hobbyist staples).
+  if (ep === 'pop-boost' && request.method === 'POST') {
+    const b = Number(body.boost)
+    if (!body.masterId || !Number.isFinite(b) || b < 0.5 || b > 2) return json({ error: 'masterId and boost in [0.5, 2] required' }, 400)
+    const t = now()
+    await batch(env, [
+      q(env, `UPDATE master_model SET pop_boost=? WHERE id=?`, b === 1 ? null : b, body.masterId),
+      audit(env, actor, 'pop-boost', 'master_model', body.masterId, { boost: b }),
+    ])
+    return json({ ok: true, score: await rescorePop(body.masterId, t) })
   }
 
   if (ep === 'master' && request.method === 'POST') {

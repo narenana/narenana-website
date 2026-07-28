@@ -45,6 +45,9 @@ export function videoRelevant({ brand, name, title, channel }) {
   if (!toks.length) return false // nothing distinctive to verify against → can't trust any match
   let hit = 0
   for (const t of toks) if (new RegExp('\\b' + t + '\\b').test(T)) hit++
+  // Concatenated names ("DolphinPro", "T1Ranger") defeat word-boundary
+  // matching — a run of ALL tokens joined counts as a full match.
+  if (hit < toks.length && toks.length > 1 && T.replace(/ /g, '').includes(toks.join(''))) hit = toks.length
   const mh = hit / toks.length
   const b = (brand || '').toLowerCase().replace(/[^a-z0-9]+/g, '')
   const flat = T.replace(/ /g, '')
@@ -75,7 +78,7 @@ export function availabilityFactor({ sellers = 0, anyStock = 0 } = {}) {
 // videos: [{ views, published_at, excluded? }]. nowMs: current epoch ms.
 // Returns { raw, score, signals } — signals is the transparent breakdown stored
 // in master_model.pop_signals.
-export function popScores({ videos = [], sellers = 0, anyStock = 0, nowMs }) {
+export function popScores({ videos = [], sellers = 0, anyStock = 0, nowMs, boost = 1 }) {
   const vids = videos.filter((v) => !v.excluded)
   const top = [...vids].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, TOP_N)
   const viewSum = top.reduce((n, v) => n + (v.views || 0), 0)
@@ -89,7 +92,10 @@ export function popScores({ videos = [], sellers = 0, anyStock = 0, nowMs }) {
   const raw = round2(vTerm + bTerm + rTerm)
 
   const avail = availabilityFactor({ sellers, anyStock })
-  const score = round2(raw * avail)
+  // Owner boost: reach and community esteem diverge for a few models (toy RTFs
+  // vs hobbyist staples) — a per-master multiplier the owner sets in admin.
+  const b = Number.isFinite(+boost) && +boost > 0 ? Math.min(2, Math.max(0.5, +boost)) : 1
+  const score = round2(raw * avail * b)
   return {
     raw,
     score,
@@ -100,6 +106,7 @@ export function popScores({ videos = [], sellers = 0, anyStock = 0, nowMs }) {
       sellers,
       anyStock: anyStock ? 1 : 0,
       avail: round2(avail),
+      ...(b !== 1 ? { boost: b } : {}),
       terms: { views: round2(vTerm), breadth: round2(bTerm), recency: round2(rTerm) },
       at: nowMs,
     },

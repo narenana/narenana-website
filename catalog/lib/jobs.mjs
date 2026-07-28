@@ -553,7 +553,7 @@ async function popularitySlice(env, trigger) {
   const dueParams = backfill ? [t - DAY] : [t - POP_REFRESH]
   const rows = await all(
     env,
-    `SELECT m.id, m.brand, m.name, m.category_id, c.triage,
+    `SELECT m.id, m.brand, m.name, m.category_id, m.pop_boost, c.triage,
             COUNT(DISTINCT k.source_id) AS sellers,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
@@ -619,7 +619,7 @@ async function popularitySlice(env, trigger) {
     // Score from the PERSISTED set — naturally includes admin-pinned videos a
     // later search dropped, and excludes admin-excluded ones.
     const scored = await all(env, `SELECT views, published_at FROM master_video WHERE master_model_id=? AND excluded=0`, m.id)
-    const { raw, score, signals } = popScores({ videos: scored, sellers: m.sellers, anyStock: m.any_stock, nowMs: t })
+    const { raw, score, signals } = popScores({ videos: scored, sellers: m.sellers, anyStock: m.any_stock, nowMs: t, boost: m.pop_boost ?? 1 })
     await run(
       env,
       `UPDATE master_model SET pop_raw=?, pop_score=?, pop_signals=?, pop_updated_at=? WHERE id=?`,
