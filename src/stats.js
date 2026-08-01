@@ -13,12 +13,12 @@
 //    flaky upstream yields { error } for that section and the page renders
 //    what it has. LAST CALL (D1 binding) + Nanawing (public endpoints) work
 //    with zero external credentials.
-//  - Access: STATS_KEY secret. First visit with ?key=… sets a cookie so the
-//    bare /stats URL works afterwards. Everything is noindex.
+//  - Access: HTTP Basic auth, username `admin`, password = STATS_BASIC_PASS
+//    secret (the browser prompts once). Everything is noindex.
 //
-// Secrets (npx wrangler secret put …): STATS_KEY, GOOGLE_SA_KEY (the full
-// service-account JSON), CF_API_TOKEN. Vars: GA4_PROPERTY_ID, CF_ACCOUNT_TAG.
-// See docs/STATS-SETUP.md for the one-time grant steps.
+// Secrets (npx wrangler secret put …): STATS_BASIC_PASS, GOOGLE_SA_KEY (the
+// full service-account JSON), CF_API_TOKEN, YT_API_KEY (shared w/ the catalog).
+// Vars: GA4_PROPERTY_ID, CF_ACCOUNT_TAG. See docs/STATS-SETUP.md.
 
 const SNAPSHOT_KEY = 'stats_snapshot'
 const CF_IDS_KEY = 'stats_cf_ids'
@@ -29,85 +29,63 @@ const STALE_MS = 2 * 60 * 60 * 1000 // serve-stale-and-revalidate threshold
 /* Routing + auth                                                      */
 /* ------------------------------------------------------------------ */
 
-/** Constant-time-ish string compare (Workers' timingSafeEqual when present). */
-function keyEquals(candidate, secret) {
-  if (typeof candidate !== 'string' || candidate.length !== secret.length) return false
-  const enc = new TextEncoder()
-  const a = enc.encode(candidate)
-  const b = enc.encode(secret)
-  if (a.byteLength !== b.byteLength) return false
-  if (crypto.subtle.timingSafeEqual) return crypto.subtle.timingSafeEqual(a, b)
+/** Constant-time string compare (Workers' timingSafeEqual when present). */
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false
+  const ea = new TextEncoder().encode(a)
+  const eb = new TextEncoder().encode(b)
+  if (ea.byteLength !== eb.byteLength) return false
+  if (crypto.subtle.timingSafeEqual) return crypto.subtle.timingSafeEqual(ea, eb)
   let diff = 0
-  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i]
+  for (let i = 0; i < ea.length; i++) diff |= ea[i] ^ eb[i]
   return diff === 0
 }
 
-const SESSION_TTL = 30 * 24 * 3600 // seconds
+// HTTP Basic auth. Username is fixed; the password is the STATS_BASIC_PASS
+// secret (never in the repo — this is a PUBLIC GitHub repo). Change the
+// password with: npx wrangler secret put STATS_BASIC_PASS
+const BASIC_USER = 'admin'
 
-/**
- * Sessions are STATELESS HMAC tokens (`<exp>.<mac>`), signed with a key
- * derived from STATS_KEY — the cookie never carries the master key, there is
- * no KV read per request and no KV-propagation race on first login, and
- * rotating STATS_KEY instantly revokes every session.
- */
-let sessionKeyPromise = null
-function sessionKey(env) {
-  if (!sessionKeyPromise) {
-    sessionKeyPromise = crypto.subtle.importKey(
-      'raw',
-      new TextEncoder().encode(`stats-session:${env.STATS_KEY}`),
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign', 'verify'],
-    )
-  }
-  return sessionKeyPromise
-}
-
-async function mintSessionCookie(env) {
-  const exp = String(Math.floor(Date.now() / 1000) + SESSION_TTL)
-  const mac = await crypto.subtle.sign('HMAC', await sessionKey(env), new TextEncoder().encode(exp))
-  return `stats_session=${exp}.${b64urlBytes(mac)}; Max-Age=${SESSION_TTL}; Path=/stats; Secure; HttpOnly; SameSite=Lax`
-}
-
-/** Auth: ?key= presents the master key; the cookie carries a signed session.
- * Returns 'key' | 'session' | false. */
-async function authorized(request, url, env) {
-  if (!env.STATS_KEY) return false
-  const key = url.searchParams.get('key')
-  if (key !== null) return keyEquals(key, env.STATS_KEY) ? 'key' : false
+/** Verify `Authorization: Basic base64(admin:<STATS_BASIC_PASS>)`. */
+function basicAuthOk(request, env) {
+  if (!env.STATS_BASIC_PASS) return false
+  const h = request.headers.get('authorization') || ''
+  const m = h.match(/^Basic\s+([A-Za-z0-9+/=]+)$/i)
+  if (!m) return false
+  let decoded
   try {
-    const cookies = request.headers.get('cookie') || ''
-    const m = cookies.match(/(?:^|;\s*)stats_session=(\d{1,12})\.([A-Za-z0-9_-]{20,64})/)
-    if (m === null) return false
-    if (Number(m[1]) < Date.now() / 1000) return false // expired
-    const mac = Uint8Array.from(atob(m[2].replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0))
-    const okSig = await crypto.subtle.verify(
-      'HMAC',
-      await sessionKey(env),
-      mac,
-      new TextEncoder().encode(m[1]),
-    )
-    return okSig ? 'session' : false
+    decoded = atob(m[1])
   } catch {
     return false
   }
+  const i = decoded.indexOf(':')
+  if (i < 0) return false
+  const user = decoded.slice(0, i)
+  const pass = decoded.slice(i + 1)
+  return safeEqual(user, BASIC_USER) && safeEqual(pass, env.STATS_BASIC_PASS)
 }
 
-/** Handle /stats, /stats/api/data (and bounce direct /stats.html hits). */
+/** Handle /stats + /stats/api/*. Gated by HTTP Basic auth (username `admin`).
+ * The browser prompts once and resends the credentials on every request to the
+ * realm — page shell AND the data fetch — so no cookie/session plumbing. */
 export async function handleStats(request, env, ctx, url) {
-  if (!env.STATS_KEY) {
-    return new Response('stats not configured (set the STATS_KEY secret)', { status: 503 })
+  if (!env.STATS_BASIC_PASS) {
+    return new Response('stats not configured (set the STATS_BASIC_PASS secret)', { status: 503 })
   }
-  const auth = await authorized(request, url, env)
-  if (auth === false) {
-    return new Response('unauthorized', { status: 401, headers: { 'x-robots-tag': 'noindex' } })
+  if (!basicAuthOk(request, env)) {
+    return new Response('Authentication required', {
+      status: 401,
+      headers: {
+        'WWW-Authenticate': 'Basic realm="narenana portfolio stats", charset="UTF-8"',
+        'x-robots-tag': 'noindex',
+        'cache-control': 'no-store',
+      },
+    })
   }
 
   if (url.pathname === '/stats/api/data') {
-    // Force-refresh only on POST: SameSite=Lax cookies don't ride cross-site
-    // POSTs, so a hostile page can't burn upstream quota via top-level GETs —
-    // and a 60 s floor stops even same-site refresh hammering.
+    // Force-refresh (rebuild the upstream snapshot) only on POST, past a 60 s
+    // floor, so a stray/cross-site request can't burn API quota.
     let force = false
     if (url.searchParams.get('refresh') === '1' && request.method === 'POST') force = true
     let json = await env.VIDEOS_KV.get(SNAPSHOT_KEY)
@@ -126,19 +104,6 @@ export async function handleStats(request, env, ctx, url) {
       headers: {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',
-        'x-robots-tag': 'noindex',
-      },
-    })
-  }
-
-  // A valid ?key= never renders: mint a session and 302 to the bare URL so the
-  // master key doesn't persist in browser history / the address bar.
-  if (auth === 'key') {
-    return new Response(null, {
-      status: 302,
-      headers: {
-        location: new URL('/stats', url).toString(),
-        'set-cookie': await mintSessionCookie(env),
         'x-robots-tag': 'noindex',
       },
     })

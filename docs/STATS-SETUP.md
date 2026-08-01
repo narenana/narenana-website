@@ -10,22 +10,20 @@ source, so partial setup is always visible, never broken.
 
 | Name | Kind | Purpose |
 |---|---|---|
-| `STATS_KEY` | secret | Page access key — visit `/stats?key=…` once, a session cookie takes over |
+| `STATS_BASIC_PASS` | secret | HTTP Basic-auth password (username is fixed: `admin`) |
 | `GOOGLE_SA_KEY` | secret | Full service-account JSON — unlocks GA4 + Search Console |
 | `CF_API_TOKEN` | secret | Cloudflare API token — unlocks edge/RUM analytics |
+| `YT_API_KEY` | secret | YouTube Data API key — channel totals (shared with the catalog) |
 | `GA4_PROPERTY_ID` | var (set) | `534605239` — the narenana.com GA4 property |
 | `CF_ACCOUNT_TAG` | var (set) | Cloudflare account id |
 
-Generate `STATS_KEY` with real entropy — there is no lockout on guesses:
-
-```bash
-openssl rand -base64 24
-```
-
-A valid `?key=` visit never renders: the Worker 302s to the bare `/stats` URL
-and sets a signed **session token** cookie (30 days; the key itself is never
-stored client-side). Sessions are stateless HMAC tokens derived from
-`STATS_KEY` — rotating the secret instantly revokes every session.
+**Access:** `/stats` is gated by **HTTP Basic auth** — the browser prompts for
+a username + password. Username is always `admin`; the password is the
+`STATS_BASIC_PASS` secret. Change it any time with `npx wrangler secret put
+STATS_BASIC_PASS` (there is no guess-lockout, so use a real password, not
+`password`). The browser caches the credentials and resends them on every
+request to the realm, so both the page and its data API just work after one
+prompt.
 
 Set a secret with:
 
@@ -77,7 +75,7 @@ KV under `stats_cf_ids`; delete that key to re-discover).
 
 ## Verifying
 
-Open `/stats?key=…` and check the **Data sources** chips at the bottom — each
+Open `/stats` (browser prompts for admin + password) and check the **Data sources** chips at the bottom — each
 reads `ok`, `not configured: …`, or a real error. `?refresh=1` (the *refresh*
 button) forces a snapshot rebuild instead of waiting for the hourly cron.
 

@@ -405,12 +405,12 @@
     async function load(force) {
       $('err').style.display = 'none'
       try {
-        // Force-refresh is a POST: SameSite=Lax keeps the session cookie off
-        // cross-site POSTs, so third-party pages can't burn upstream quota.
+        // The browser resends the Basic-auth credentials automatically. Force-
+        // refresh is a POST (past the server's 60s floor) to rebuild the snapshot.
         const res = await fetch('/stats/api/data' + (force ? '?refresh=1' : ''), {
           method: force ? 'POST' : 'GET',
         })
-        if (res.status === 401) throw new Error('unauthorized — open /stats?key=YOUR_KEY once to start a session')
+        if (res.status === 401) throw new Error('sign-in expired — reload the page to sign in again')
         if (!res.ok) throw new Error('api ' + res.status)
         render(await res.json())
       } catch (err) {
@@ -418,9 +418,6 @@
         $('err').style.display = 'block'
       }
     }
-    // Belt-and-braces: the server 302-scrubs ?key= before rendering, but if a
-    // keyed URL ever reaches the page, drop it from the address bar + history.
-    if (location.search.includes('key=')) history.replaceState(null, '', '/stats')
     $('refresh').addEventListener('click', () => load(true))
     load(false)
   </script>
