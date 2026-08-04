@@ -237,6 +237,38 @@
       .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
       .chip{display:inline-flex;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.03em;padding:5px 11px;border:1.5px solid #0F2C39;border-radius:999px}
       .tool-ctas{display:flex;flex-wrap:wrap;gap:14px;margin-top:28px}
+      .revcard{display:flex;gap:14px;align-items:center;width:100%;margin-top:20px;padding:12px;text-align:left;cursor:pointer;
+        background:#FFF9EC;border:1.5px solid #0F2C39;border-radius:14px;box-shadow:4px 4px 0 #0F2C39;
+        transition:transform .18s ease,box-shadow .18s ease;font-family:inherit;color:inherit}
+      .revcard:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 #0F2C39}
+      .revshot{position:relative;flex:0 0 auto;width:clamp(120px,26%,168px);aspect-ratio:16/9;border-radius:9px;overflow:hidden;border:1.5px solid #0F2C39}
+      .revshot img{width:100%;height:100%;object-fit:cover;display:block}
+      .revplay{position:absolute;inset:0;margin:auto;width:40px;height:28px;border-radius:7px;display:grid;place-items:center;
+        color:#fff;background:rgba(15,44,57,.72);border:1px solid rgba(255,255,255,.35)}
+      .revcard:hover .revplay{background:#E62117}
+      .revtext{display:flex;flex-direction:column;gap:3px;min-width:0}
+      .revlbl{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.72}
+      .revquote{font-size:15px;line-height:1.35;font-weight:600}
+      .revwatch{font-size:13px;font-weight:700;color:#D8641A}
+      @media (max-width:420px){.revcard{flex-direction:column;align-items:stretch}.revshot{width:100%}}
+      /* review modal */
+      .revmodal{position:fixed;inset:0;z-index:120;display:grid;place-items:center;padding:clamp(12px,3vw,32px)}
+      .revmodal[hidden]{display:none}
+      .revmodal .back{position:absolute;inset:0;background:rgba(12,37,49,.88);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+      .revmodal .panel{position:relative;z-index:1;width:min(1080px,100%);max-height:100%;display:flex;flex-direction:column;gap:12px;
+        background:#F3EEE0;border:2px solid #0F2C39;border-radius:18px;padding:clamp(14px,2vw,20px);box-shadow:10px 10px 0 rgba(15,44,57,.35)}
+      .revmodal .head{display:flex;align-items:center;justify-content:space-between;gap:14px}
+      .revmodal .head p{margin:0;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;opacity:.75}
+      .revmodal .x{width:38px;height:38px;flex:0 0 auto;display:grid;place-items:center;cursor:pointer;border-radius:10px;
+        background:transparent;border:1.5px solid #0F2C39;color:#0F2C39}
+      .revmodal .x:hover{background:#0F2C39;color:#F3EEE0}
+      .revmodal .stage{position:relative;aspect-ratio:16/9;width:100%;min-height:0;border-radius:12px;overflow:hidden;border:1.5px solid #0F2C39;background:#0C2531}
+      .revmodal .stage iframe{width:100%;height:100%;border:0;display:block}
+      .revmodal .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 20px}
+      .revmodal .foot p{margin:0;flex:1 1 240px;font-size:15px;font-weight:600}
+      @media (max-width:620px){.revmodal .foot{flex-direction:column;align-items:stretch}.revmodal .foot .btn{justify-content:center}}
+      @media (max-height:520px){.revmodal .stage{aspect-ratio:auto;flex:1 1 auto}.revmodal .foot p{display:none}}
+      body.revopen{overflow:hidden}
       .mock{border:2px solid #0F2C39;border-radius:10px;overflow:hidden;background:#FCF9F1;transition:transform .28s ease,box-shadow .28s ease}
       .mock:hover{transform:translate(-4px,-4px)}
       .mock.acc-orange:hover{box-shadow:12px 12px 0 #EF7A25}
@@ -439,6 +471,21 @@
               <span class="chip">Simulated LiPo</span>
               <span class="chip">Race course</span>
             </div>
+            <button class="revcard" type="button" id="nw-revopen" aria-label="Play the Giz FPV review of Nanawing">
+              <span class="revshot">
+                <picture>
+                  <source srcset="/assets/giz-review.webp" type="image/webp">
+                  <img src="/assets/giz-review.jpg" width="960" height="540" loading="lazy" decoding="async"
+                       alt="Giz FPV review thumbnail: a laptop running Nanawing beside an RC transmitter">
+                </picture>
+                <span class="revplay" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg></span>
+              </span>
+              <span class="revtext">
+                <span class="revlbl">As reviewed by <b>Giz FPV</b> &middot; 22.4k subs</span>
+                <span class="revquote">&ldquo;Whoever made this&hellip; they are an actual <b>FPV pilot</b>&rdquo;</span>
+                <span class="revwatch">Watch the review &rarr;</span>
+              </span>
+            </button>
             <div class="tool-ctas">
               <a href="https://sim.narenana.com" target="_blank" rel="noopener" class="btn btn-orange btn-md">Fly now
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
@@ -722,6 +769,58 @@
             .catch(function () { renderVideos(FALLBACK) })
         }
       })()
+    </script>
+    <!-- Giz FPV review player. FACADE: the thumbnail is a local asset; the YouTube iframe is
+         created only on open and removed on close (which stops playback). -->
+    <div class="revmodal" id="nw-revmodal" hidden>
+      <div class="back" data-revclose></div>
+      <div class="panel" role="dialog" aria-modal="true" aria-labelledby="nw-revttl">
+        <div class="head">
+          <p id="nw-revttl">As reviewed by <b>Giz FPV</b> &middot; 22.4k subscribers</p>
+          <button class="x" type="button" data-revclose aria-label="Close the video">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div class="stage" id="nw-revstage"></div>
+        <div class="foot">
+          <p>&ldquo;Whoever made this&hellip; they are an actual FPV pilot&rdquo; &mdash; Giz FPV</p>
+          <a class="btn btn-sky btn-md" href="https://sim.narenana.com" target="_blank" rel="noopener">Fly Nanawing free
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var modal = document.getElementById("nw-revmodal");
+        var openBtn = document.getElementById("nw-revopen");
+        var stage = document.getElementById("nw-revstage");
+        if (!modal || !openBtn || !stage) return;
+        var last = null;
+        function fill () {
+          stage.innerHTML = "";
+          if (!navigator.onLine) {
+            stage.innerHTML = '<div style="display:grid;place-items:center;height:100%;padding:20px;text-align:center;color:#F3EEE0">' +
+              '<div><b style="display:block;font-size:17px;margin-bottom:6px">Couldn&rsquo;t connect to the internet</b>' +
+              'The review plays on YouTube, so it needs a connection.</div></div>';
+            return;
+          }
+          var f = document.createElement("iframe");
+          f.src = "https://www.youtube-nocookie.com/embed/3x8sWLL6EhI?autoplay=1&rel=0&modestbranding=1";
+          f.title = "Giz FPV reviews Nanawing";
+          f.allow = "accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture";
+          f.referrerPolicy = "strict-origin-when-cross-origin";
+          f.allowFullscreen = true;
+          stage.appendChild(f);
+        }
+        function open () { last = document.activeElement; modal.hidden = false; document.body.classList.add("revopen"); fill(); var x = modal.querySelector(".x"); if (x) x.focus(); }
+        function close () { stage.innerHTML = ""; modal.hidden = true; document.body.classList.remove("revopen"); if (last && last.focus) last.focus(); }
+        openBtn.addEventListener("click", open);
+        Array.prototype.forEach.call(modal.querySelectorAll("[data-revclose]"), function (b) { b.addEventListener("click", close); });
+        document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) close(); });
+        window.addEventListener("online", function () { if (!modal.hidden && !stage.querySelector("iframe")) fill(); });
+      })();
     </script>
   </body>
 </html>
