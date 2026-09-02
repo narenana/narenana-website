@@ -95,7 +95,34 @@ export async function handleCatalog(request, url, env, ctx) {
     }
   }
 
-  // ---- public category routes ----
+  // ---- public pages: EDGE-CACHED (D1 free-tier guard, 2026-09) ----
+  // Every public route recomputes facet counts + listing JOINs per request; crawler traffic alone
+  // was reading ~8.5M D1 rows/day against the account's 5M/day free cap (Cloudflare alert, two days
+  // running). The rendered page is cached at the edge per full URL for 15 min (s-maxage) with a
+  // 5 min browser max-age — stock and prices move on ingest cadence, not per-view. Admin, /api,
+  // and the image proxy above are never cached; non-200s (incl. the 404 grid) and non-GETs skip.
+  if (request.method === 'GET') {
+    const cache = caches.default
+    const hit = await cache.match(request)
+    if (hit) return hit
+    const res = await publicCatalogPages(url, env)
+    if (
+      res && res.status === 200
+      && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
+    ) {
+      const store = new Response(res.clone().body, res)
+      store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
+      store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
+      ctx.waitUntil(cache.put(request, store))
+    }
+    return res
+  }
+  return publicCatalogPages(url, env)
+}
+
+// The public catalog surface (grids, landings, browse hub, product pages, sitemap) — everything
+// here may run heavy D1 aggregations, so it is only ever reached through the edge cache above.
+async function publicCatalogPages(url, env) {
   const cats = await categories(env)
   if (path === '/sitemap.xml') return sitemapResponse(env, cats)
   const cat = cats.find((c) => path === c.path_prefix || path.startsWith(c.path_prefix + '/'))
