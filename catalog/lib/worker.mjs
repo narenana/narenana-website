@@ -123,6 +123,7 @@ export async function handleCatalog(request, url, env, ctx) {
 // The public catalog surface (grids, landings, browse hub, product pages, sitemap) — everything
 // here may run heavy D1 aggregations, so it is only ever reached through the edge cache above.
 async function publicCatalogPages(url, env) {
+  const path = url.pathname.replace(/\/+$/, '') || '/' // same normalization as handleCatalog
   const cats = await categories(env)
   if (path === '/sitemap.xml') return sitemapResponse(env, cats)
   const cat = cats.find((c) => path === c.path_prefix || path.startsWith(c.path_prefix + '/'))
@@ -811,12 +812,38 @@ async function api(request, url, env, ep, actor) {
     const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
     const anomalyOnly = url.searchParams.get('anomaly') === '1'
     const sort = url.searchParams.get('sort') === 'pop' ? 'pop' : 'updated'
-    const where = anomalyOnly ? 'WHERE m.anomaly IS NOT NULL' : ''
+    // Workbench filters: free-text search + status + live-stock. All server-side
+    // so they cover the whole catalog, not just the visible page.
+    const qText = (url.searchParams.get('q') || '').trim().slice(0, 60)
+    const mStatus = ['ready', 'draft'].includes(url.searchParams.get('mstatus')) ? url.searchParams.get('mstatus') : ''
+    const stockF = ['in', 'none'].includes(url.searchParams.get('stock')) ? url.searchParams.get('stock') : ''
+    const conds = []
+    const condParams = []
+    if (anomalyOnly) conds.push('m.anomaly IS NOT NULL')
+    if (mStatus) { conds.push('m.status=?'); condParams.push(mStatus) }
+    if (qText) { conds.push('(m.brand LIKE ? OR m.name LIKE ? OR m.slug LIKE ?)'); const like = `%${qText}%`; condParams.push(like, like, like) }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : ''
+    const having = stockF === 'in' ? 'HAVING live_offers > 0' : stockF === 'none' ? 'HAVING COALESCE(live_offers,0) = 0' : ''
     // Popularity sort: highest pop_score first, never-polled (NULL) last — this
     // is the ADMIN preview of the sort before it's exposed to customers.
     const orderBy = sort === 'pop' ? 'ORDER BY m.pop_score IS NULL, m.pop_score DESC' : 'ORDER BY m.updated_at DESC'
-    const total = (await one(env, `SELECT COUNT(*) n FROM master_model m ${where}`))?.n ?? 0
+    const total = (await one(env, `SELECT COUNT(*) n FROM (
+        SELECT m.id, SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers
+        FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
+        LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+        ${where} GROUP BY m.id ${having})`, ...condParams))?.n ?? 0
     const anomalyCount = (await one(env, `SELECT COUNT(*) n FROM master_model WHERE anomaly IS NOT NULL`))?.n ?? 0
+    // Header chips need whole-catalog numbers independent of the active filter.
+    const chipRows = await all(env, `SELECT m.status, COUNT(*) AS n,
+        SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM offer o JOIN sku k ON k.id=o.sku_id
+          AND k.review_status='approved' AND k.in_stock=1 AND k.dead=0
+          WHERE o.master_model_id=m.id) THEN 1 ELSE 0 END) AS nostock
+      FROM master_model m GROUP BY m.status`)
+    const chips = { ready: 0, draft: 0, readyNoStock: 0 }
+    for (const r of chipRows) {
+      if (r.status === 'ready') { chips.ready = r.n; chips.readyNoStock = r.nostock }
+      else if (r.status === 'draft') chips.draft = r.n
+    }
     const popCoverage = sort === 'pop'
       ? await one(
         env,
@@ -839,10 +866,11 @@ async function api(request, url, env, ep, actor) {
       )
       : null
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
-        SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers
+        SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers,
+        MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
-      ${where} GROUP BY m.id ${orderBy} LIMIT ? OFFSET ?`, PAGE, (page - 1) * PAGE)
+      ${where} GROUP BY m.id ${having} ${orderBy} LIMIT ? OFFSET ?`, ...condParams, PAGE, (page - 1) * PAGE)
     for (const m of masters) m.path = `${cats.find((c) => c.id === m.category_id)?.path_prefix ?? ''}/${m.slug}/`
     // Attach the matched YouTube videos — only for the popularity view, so the
     // ordinary Catalog tab never touches master_video (top by views; excluded
@@ -856,7 +884,7 @@ async function api(request, url, env, ep, actor) {
       for (const v of vids) (byMaster[v.master_model_id] ??= []).push(v)
       for (const m of masters) m.videos = (byMaster[m.id] || []).slice(0, 6)
     }
-    return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort, popCoverage })
+    return json({ masters, page, total, pageSize: PAGE, anomalyCount, sort, popCoverage, chips })
   }
 
   // Re-score one master from its persisted videos + current boost — shared by

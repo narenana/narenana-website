@@ -67,7 +67,7 @@ const fmtViews=(n)=>n==null?'—':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?Math.roun
 // opened as http://user:pass@host/admin the document base carries credentials
 // and fetch() refuses to construct the request — the panel dies looking empty.
 const api=async(p,body)=>{const r=await fetch(new URL('/api/'+p,location.origin),body?{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}:{});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));return d};
-let tab='review',F={status:'new',stock:'in',src:'',page:1,mfrChoices:{},mfrDataFilter:'all',mfrProfileDrafts:{},mfrProfileSaved:{},mfrProfileSaving:{},mfrProfileNotice:''},data=null,reqSeq=0;
+let tab='review',F={status:'new',stock:'in',src:'',page:1,cq:'',cstatus:'',cstock:'',mfrChoices:{},mfrDataFilter:'all',mfrProfileDrafts:{},mfrProfileSaved:{},mfrProfileSaving:{},mfrProfileNotice:''},data=null,reqSeq=0;
 
 // URL state: /admin?tab=&status=&stock=&src=&page= — filters are linkable and
 // survive refresh / back-button.
@@ -111,7 +111,7 @@ async function load(){
     let d;
     if(tab==='review')d=await api('review?status='+F.status+'&stock='+F.stock+'&src='+encodeURIComponent(F.src)+'&page='+F.page);
     else if(tab==='sources')d=await api('sources');
-    else if(tab==='catalog')d=await api('catalog?page='+F.page+(F.anomaly?'&anomaly=1':''));
+    else if(tab==='catalog')d=await api('catalog?page='+F.page+(F.anomaly?'&anomaly=1':'')+(F.cq?'&q='+encodeURIComponent(F.cq):'')+(F.cstatus?'&mstatus='+F.cstatus:'')+(F.cstock?'&stock='+F.cstock:''));
     else if(tab==='popularity')d=await api('catalog?sort=pop&page='+F.page);
     else if(tab==='dupes')d=await api('duplicates');
     else if(tab==='mfr')d=await api('mfr-matches?status='+(F.mfrStatus||'pending'));
@@ -220,23 +220,65 @@ function renderSources(){
 }
 
 // ------- Catalog -------
+const CAT_CSS='<style>'
+  +'.ct-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}'
+  +'.ct-search{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:.85rem;width:230px}'
+  +'.ct-row{display:grid;grid-template-columns:96px 1fr auto;gap:14px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px;align-items:start}'
+  +'.ct-row.is-flag{border-color:rgba(248,81,73,.5)}'
+  +'.ct-thumb{width:96px;height:72px;background:#fff;border-radius:8px;object-fit:contain}'
+  +'.ct-nothumb{width:96px;height:72px;background:var(--bg);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:.65rem}'
+  +'.ct-title{font-weight:700;font-size:.95rem}.ct-title a{color:var(--accent-bright);text-decoration:none;font-weight:500;font-size:.75rem;margin-left:6px}'
+  +'.ct-badge{font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border-radius:99px;margin-left:8px;vertical-align:2px}'
+  +'.ct-badge.rdy{background:rgba(63,185,80,.15);color:var(--ok)}.ct-badge.drf{background:rgba(210,153,34,.15);color:var(--warn)}'
+  +'.ct-meta{font-size:.76rem;color:var(--muted);margin:3px 0 9px}.ct-meta b{color:var(--fg)}.ct-meta .bad{color:var(--bad);font-weight:600}'
+  +'.ct-fields{display:grid;grid-template-columns:130px 1fr 110px;gap:6px;max-width:640px}'
+  +'.ct-f label{display:block;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 3px 2px}'
+  +'.ct-f input{width:100%}.ct-f.wide{grid-column:1/-1}'
+  +'.ct-acts{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:104px}'
+  +'</style>';
 function renderCatalog(){
-  $('#view').innerHTML='<table class="t"><thead><tr><th>Model</th><th>Status</th><th>Offers</th><th>Specs · Blurb</th><th></th></tr></thead><tbody>'
-    +data.masters.map((m)=>{
-      let sp={};try{sp=JSON.parse(m.specs||'{}')}catch(e){}
-      const specIn='<div style="display:flex;gap:4px;margin-bottom:4px">'
-        +'<input class="inline" style="width:70px" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'" placeholder="Brand"/>'
-        +'<input class="inline" style="flex:1" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'" placeholder="Name"/>'
-        +'<input class="inline" style="width:78px" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'" placeholder="span mm"/></div>';
-      const anom=(function(){if(!m.anomaly)return '';var a;try{a=JSON.parse(m.anomaly)}catch(e){return ''}return '<div class="unk" style="margin-top:3px;font-size:11px" title="detected by dedup finder">⚑ '+esc(a.detail||a.kind)+'</div>'})();
-      return '<tr'+(m.anomaly?' style="background:rgba(198,59,46,.06)"':'')+'><td style="min-width:120px"><span class="tag">'+esc(m.category_id)+'/'+esc(m.slug)+'</span>'+anom+'</td>'
-      +'<td>'+esc(m.status)+'</td><td>'+m.offers+' ('+m.live_offers+' live)</td>'
-      +'<td style="min-width:280px">'+specIn+'<input class="inline" style="width:100%" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="one-line blurb"/></td>'
-      +'<td style="white-space:nowrap"><button data-mm="'+m.id+'" data-st="'+(m.status==='ready'?'draft':'ready')+'">'+(m.status==='ready'?'Unpublish':'Publish')+'</button> '
-      +'<a class="tag" href="'+esc(m.path)+'" target="_blank">view ↗</a></td></tr>'}).join('')
-    +'</tbody></table><div style="margin:8px 0"><button id="anomToggle" class="chip'+(F.anomaly?' on':'')+'">⚑ '+(data.anomalyCount||0)+' flagged'+(F.anomaly?' — showing only these (clear)':' — show')+'</button></div>'
-    +'<p class="meta">Edit brand / name / wingspan / blurb inline — saves on blur. Publish requires the required specs (the API refuses otherwise). '+(data.total||0)+' models'+(F.anomaly?' flagged':' total')+'.</p>'+pager(data.total,data.pageSize,data.page||1);
+  const c=data.chips||{};
+  const chip=(key,val,label,n)=>'<button class="chip'+(F[key]===val?' on':'')+'" data-cf="'+key+'" data-cv="'+val+'">'+label+(n!=null?' <span>'+n+'</span>':'')+'</button>';
+  const bar='<div class="ct-bar">'
+    +'<input class="ct-search" id="ct-q" type="search" placeholder="Search brand, model or slug…" value="'+esc(F.cq||'')+'"/>'
+    +chip('cstatus','','All',(c.ready||0)+(c.draft||0))
+    +chip('cstatus','ready','Published',c.ready)
+    +chip('cstatus','draft','Drafts',c.draft)
+    +chip('cstock','none','No live stock',c.readyNoStock)
+    +'<button class="chip'+(F.anomaly?' on':'')+'" id="anomToggle">⚑ Flagged <span>'+(data.anomalyCount||0)+'</span></button>'
+    +'<span class="meta" style="margin-left:auto">'+(data.total||0)+' shown · newest edits first</span></div>';
+  const row=(m)=>{
+    let sp={};try{sp=JSON.parse(m.specs||'{}')}catch(e){}
+    let anom='';if(m.anomaly){var a={};try{a=JSON.parse(m.anomaly)}catch(e){}anom='<span class="bad" title="detected by the dedup finder"> · ⚑ '+esc(a.detail||a.kind||'flagged')+'</span>'}
+    const price=m.min_price?'from <b>'+inr(m.min_price)+'</b>':(m.status==='ready'?'<span class="bad">no live stock</span>':'—');
+    const pop=m.pop_score!=null?' · pop '+Math.round(m.pop_score):'';
+    return '<div class="ct-row'+(m.anomaly?' is-flag':'')+'" >'
+      +'<img class="ct-thumb" src="/img/master/'+m.id+'" loading="lazy" alt="" onerror="this.outerHTML=\\'<div class=ct-nothumb>no image</div>\\'"/>'
+      +'<div><div class="ct-title">'+esc(m.brand||'(no brand)')+' '+esc(m.name)
+        +'<span class="ct-badge '+(m.status==='ready'?'rdy':'drf')+'">'+(m.status==='ready'?'live':'draft')+'</span>'
+        +'<a href="'+esc(m.path)+'" target="_blank" rel="noopener">open page ↗</a></div>'
+      +'<div class="ct-meta">'+m.offers+' seller offer'+(m.offers===1?'':'s')+' · <b>'+m.live_offers+' in stock</b> · '+price+pop+anom+'</div>'
+      +'<div class="ct-fields">'
+        +'<div class="ct-f"><label>Brand</label><input class="inline" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'"/></div>'
+        +'<div class="ct-f"><label>Model name</label><input class="inline" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'"/></div>'
+        +'<div class="ct-f"><label>Wingspan mm</label><input class="inline" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'"/></div>'
+        +'<div class="ct-f wide"><label>One-line blurb (shows on the product page)</label><input class="inline" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="e.g. Stable 1400mm high-wing trainer with flaps"/></div>'
+      +'</div></div>'
+      +'<div class="ct-acts">'
+        +(m.status==='ready'
+          ?'<button class="no" data-mm="'+m.id+'" data-st="draft" title="Take the page off the public site">Unpublish</button>'
+          :'<button class="ok" data-mm="'+m.id+'" data-st="ready" title="Make the page public (needs required specs)">Publish</button>')
+      +'</div></div>';};
+  $('#view').innerHTML=CAT_CSS+bar
+    +(data.masters.length?data.masters.map(row).join(''):'<p class="empty">Nothing matches this filter.</p>')
+    +'<p class="meta">Fields save when you click away — green flash = saved, red = failed. Publish needs the required specs (the API refuses otherwise).</p>'
+    +pager(data.total,data.pageSize,data.page||1);
   wirePager();
+  document.querySelectorAll('button[data-cf]').forEach((b)=>b.onclick=()=>{F[b.dataset.cf]=(F[b.dataset.cf]===b.dataset.cv&&b.dataset.cv!=='')?'':b.dataset.cv;if(b.dataset.cf==='cstatus'&&b.dataset.cv==='')F.cstatus='';F.page=1;load()});
+  (function(){var q=$('#ct-q');if(!q)return;var t;q.oninput=()=>{clearTimeout(t);t=setTimeout(()=>{F.cq=q.value.trim();F.page=1;load()},350)};
+    q.onkeydown=(e)=>{if(e.key==='Enter'){clearTimeout(t);F.cq=q.value.trim();F.page=1;load()}};
+    // keep focus through the re-render triggered by a search load
+    if(F.cq){q.focus();try{q.setSelectionRange(q.value.length,q.value.length)}catch(e){}}})();
   (function(){var at=$('#anomToggle');if(at)at.onclick=()=>{F.anomaly=!F.anomaly;F.page=1;load()}})();
   document.querySelectorAll('button[data-mm]').forEach((b)=>b.onclick=async()=>{try{await api('master',{id:+b.dataset.mm,status:b.dataset.st});load()}catch(e){alert(e.message)}});
   document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{
