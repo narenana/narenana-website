@@ -13,8 +13,8 @@ import { popScores, availabilityFactor } from '../lib/popularity.mjs'
 import { renderGridNext } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 import { configAgreement as mfrConfigAgreement, configTypes as mfrConfigTypes, isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
-import { fetchStrategyPage } from '../lib/mfr-strategies.mjs'
-import { MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
+import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
+import { enqueueManufacturerHarvests, MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
 import { extractManufacturerFacts, mergeProfile, normalizeProfilePatch, PROFILE_FIELDS, validateProfileValues } from '../lib/mfr-profile.mjs'
 import { fetchWithAllowedRedirects, imageCacheHeaders } from '../lib/util.mjs'
 
@@ -123,8 +123,165 @@ test('Shopify manufacturer harvesting is cursor-paged', async () => {
   }
 })
 
+test('JSON-LD harvesting extracts an unlabelled wingspan from the product title before the long description', async () => {
+  const realFetch = globalThis.fetch
+  const productUrl = 'https://motionrc.com/products/fms-1400mm-p-40b-warhawk-pnp'
+  const product = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    sku: 'FMS081P',
+    name: 'FMS 1400mm P-40B Warhawk PNP',
+    brand: { name: 'FMS' },
+    // Deliberately long and full of unrelated dimensions. Passing title + body
+    // to spanOf() as one string makes its safe bare-number fallback unavailable.
+    description: 'Detailed scale aircraft with a 425 mm fuselage panel, 85 mm wheels, removable landing gear, lights, flaps, servos, motor, ESC, and ample battery access for field setup.',
+  }
+  globalThis.fetch = async (url) => ({
+    ok: true,
+    status: 200,
+    text: async () => String(url).endsWith('/sitemap.xml')
+      ? `<urlset><url><loc>${productUrl}</loc></url></urlset>`
+      : `<script type="application/ld+json">${JSON.stringify(product)}</script>`,
+  })
+  try {
+    const page = await fetchStrategyPage('motionrc.com', 'FMS', { offset: 0, limit: 1 })
+    assert.equal(page.products.length, 1)
+    assert.equal(page.products[0].span, 1400)
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
+test('Horizon JSON-LD discovery prefers the configured aircraft listing and filters terminal SKUs', async () => {
+  const realFetch = globalThis.fetch
+  const cfg = STRATEGIES['horizonhobby.com']
+  const realListingPageSize = cfg.listingPageSize
+  cfg.listingPageSize = 1
+  const listingUrl = (start) => {
+    const url = new URL(cfg.brandListingUrls.eflite, 'https://horizonhobby.com')
+    url.searchParams.set('start', String(start))
+    url.searchParams.set('sz', '1')
+    return url.href
+  }
+  const listingUrls = [listingUrl(0), listingUrl(1)]
+  const first = 'https://horizonhobby.com/product/alpha-trainer-bnf/EFL10010.html'
+  const second = 'https://horizonhobby.com/product/bravo-sport-pnp/EFL10020.html'
+  const accessory = 'https://horizonhobby.com/product/e-flite-control-arm/DUB930.html'
+  const requests = []
+  const fetchedProducts = []
+  const productHtml = (url) => `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    sku: url === first ? 'EFL10010' : 'EFL10020',
+    name: url === first ? 'E-flite Alpha Trainer BNF' : 'E-flite Bravo Sport PNP',
+    brand: { name: 'E-flite' },
+    description: 'A complete electric aircraft.',
+  })}</script>`
+  globalThis.fetch = async (url) => {
+    const href = String(url)
+    requests.push(href)
+    if (href === listingUrls[0]) return {
+      ok: true,
+      status: 200,
+      text: async () => `<div class="result-count">1-1 of 2 Results</div><div class="product-grid"><a href="/product/alpha-trainer-bnf/EFL10010.html">Alpha</a><a href='/product/e-flite-control-arm/DUB930.html'>Accessory</a></div>`,
+    }
+    if (href === listingUrls[1]) return {
+      ok: true,
+      status: 200,
+      text: async () => '<div class="result-count">2-2 of 2 Results</div><div class="product-grid"><a href="/product/bravo-sport-pnp/EFL10020.html">Bravo</a></div>',
+    }
+    if (href.includes('sitemap')) throw new Error('valid aircraft listing must not fall back to sitemaps')
+    fetchedProducts.push(href)
+    return { ok: true, status: 200, text: async () => productHtml(href) }
+  }
+  try {
+    const firstPage = await fetchStrategyPage('horizonhobby.com', 'E-flite', { offset: 0, limit: 1 })
+    assert.deepEqual(firstPage.cursorUrls, [first, second])
+    assert.deepEqual(fetchedProducts, [first])
+    assert.equal(firstPage.cursorUrls.includes(accessory), false, 'brand mention cannot override a foreign terminal SKU')
+    assert.equal(requests.some((url) => url.includes('sitemap')), false)
+
+    const listingFetchCount = requests.filter((url) => listingUrls.includes(url)).length
+    assert.equal(listingFetchCount, 2, 'discovery must visit both aircraft listing pages')
+    const secondPage = await fetchStrategyPage('horizonhobby.com', 'E-flite', {
+      offset: firstPage.nextOffset,
+      limit: 1,
+      cursorUrls: firstPage.cursorUrls,
+    })
+    assert.deepEqual(secondPage.products.map((product) => product.ext_id), ['ld:EFL10020'])
+    assert.deepEqual(fetchedProducts, [first, second])
+    assert.equal(secondPage.done, true)
+    assert.equal(requests.filter((url) => listingUrls.includes(url)).length, listingFetchCount, 'continuation must reuse the listing cursor')
+    assert.equal(requests.some((url) => url.includes('sitemap')), false)
+  } finally {
+    cfg.listingPageSize = realListingPageSize
+    globalThis.fetch = realFetch
+  }
+})
+
+test('Horizon required aircraft listing fails closed without consulting broad product sitemaps', async () => {
+  const realFetch = globalThis.fetch
+  const cfg = STRATEGIES['horizonhobby.com']
+  const listingUrl = new URL(cfg.brandListingUrls.eflite, 'https://horizonhobby.com').href
+  try {
+    for (const html of [
+      '',
+      '<div>1-2 Results</div><a href="/product/alpha-trainer-bnf/EFL10010.html">Alpha</a>',
+    ]) {
+      const requests = []
+      globalThis.fetch = async (url) => {
+        const href = String(url)
+        requests.push(href)
+        if (href === listingUrl) return { ok: true, status: 200, text: async () => html }
+        throw new Error('required listing failure must not fall back to a sitemap')
+      }
+      await assert.rejects(
+        () => fetchStrategyPage('horizonhobby.com', 'E-flite', { offset: 0, limit: 1 }),
+        /listing|result/i,
+      )
+      assert.equal(requests.some((url) => url.includes('sitemap')), false)
+    }
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
 test('manufacturer harvesting uses one weekly production trigger', () => {
   assert.equal(MFR_WEEKLY_CRON, '7 3 * * SUN')
+})
+
+test('weekly manufacturer enqueue skips manual-only strategies and still queues harvestable manufacturers', async () => {
+  const calls = []
+  const sent = []
+  const manufacturers = [
+    { id: 11, brand: 'FMS', domain: 'fmshobby.com', status: 'active' },
+    { id: 12, brand: 'HEEWING', domain: 'heewing.com', status: 'active' },
+  ]
+  const env = {
+    CATALOG_DB: {
+      prepare(sql) {
+        return {
+          bind(...params) {
+            calls.push({ sql, params })
+            return {
+              first: async () => null,
+              all: async () => ({ results: /FROM manufacturer/.test(sql) ? manufacturers : [] }),
+              run: async () => ({ success: true, meta: { changes: 1 } }),
+            }
+          },
+        }
+      },
+    },
+    MFR_HARVEST_QUEUE: {
+      async sendBatch(messages) { sent.push(...messages) },
+    },
+  }
+
+  const result = await enqueueManufacturerHarvests(env, { trigger: 'cron' })
+  assert.equal(result.queued, 1)
+  assert.deepEqual(sent.map((message) => message.body.manufacturerId), [12])
+  const queuedUpdate = calls.find(({ sql }) => /UPDATE manufacturer\s+SET last_harvest_status='queued'/.test(sql))
+  assert.deepEqual(JSON.parse(queuedUpdate.params[1]), [12], 'manual-only manufacturer must not be marked queued')
 })
 
 test('manufacturer profile schema has stable unique keys', () => {

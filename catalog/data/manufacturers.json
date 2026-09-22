@@ -12,7 +12,7 @@
   {"brand":"SIG","domain":"sigmfg.com","probed_platform":"shopify","pursue":true},
   {"brand":"XFly","domain":"xflymodel.com","probed_platform":"html","pursue":true},
   {"brand":"Pilot-RC","domain":"pilot-rc.com","probed_platform":"html","pursue":true},
-  {"brand":"FMS","domain":"motionrc.com","probed_platform":"html","pursue":true},
+  {"brand":"FMS","domain":"fmshobby.com","probed_platform":"protected","pursue":true},
   {"brand":"E-flite","domain":"horizonhobby.com","probed_platform":"html","pursue":true},
   {"brand":"Hangar 9","domain":"horizonhobby.com","probed_platform":"html","pursue":true}
 ]

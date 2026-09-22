@@ -232,10 +232,17 @@ export async function enqueueManufacturerHarvests(env, options = {}) {
   if (!env.MFR_HARVEST_QUEUE) throw new Error('manufacturer harvest queue is not configured')
 
   const manufacturerId = Number(options.manufacturerId) || null
-  const manufacturers = manufacturerId
+  const found = manufacturerId
     ? await all(env, `SELECT * FROM manufacturer WHERE id=? AND status='active'`, manufacturerId)
     : await all(env, `SELECT * FROM manufacturer WHERE status='active' ORDER BY id`)
-  if (manufacturerId && !manufacturers.length) throw new Error('unknown manufacturer')
+  if (manufacturerId && !found.length) throw new Error('unknown manufacturer')
+  const manufacturers = found.filter((manufacturer) => {
+    const cfg = STRATEGIES[manufacturer.domain]
+    return cfg?.via !== 'todo'
+  })
+  if (manufacturerId && !manufacturers.length) {
+    return { job: 'manufacturer', trigger: options.trigger || 'admin', queued: 0, skipped: 1, reason: 'manual refresh required' }
+  }
   if (!manufacturers.length) return { job: 'manufacturer', queued: 0 }
 
   const queuedAt = Date.now()
@@ -271,7 +278,7 @@ export async function harvestManufacturerPage(env, task, at = Date.now()) {
     throw error
   }
   const cfg = STRATEGIES[manufacturer.domain]
-  if (!cfg || cfg.via === 'todo') {
+  if (!cfg) {
     await run(
       env,
       `UPDATE manufacturer SET last_harvest_at=?,last_harvest_status='error',last_harvest_note=? WHERE id=?`,
@@ -282,6 +289,23 @@ export async function harvestManufacturerPage(env, task, at = Date.now()) {
     const error = new Error('no production harvesting strategy')
     error.permanent = true
     throw error
+  }
+  if (cfg.via === 'todo') {
+    await run(
+      env,
+      `UPDATE manufacturer SET last_harvest_status='manual',last_harvest_note=? WHERE id=?`,
+      cfg?.note || 'Manual refresh required',
+      manufacturer.id,
+    )
+    return {
+      job: 'manufacturer',
+      trigger,
+      brand: manufacturer.brand,
+      manufacturerId: manufacturer.id,
+      done: true,
+      skipped: true,
+      reason: 'manual refresh required',
+    }
   }
 
   try {
@@ -294,6 +318,7 @@ export async function harvestManufacturerPage(env, task, at = Date.now()) {
     const page = await fetchStrategyPage(manufacturer.domain, manufacturer.brand, {
       offset,
       limit: PAGE[cfg.via] || 8,
+      cursorUrls: Array.isArray(task?.cursorUrls) ? task.cursorUrls : undefined,
     })
     if (!page || !Number.isFinite(page.total) || page.total <= 0)
       throw new Error('strategy returned no discoverable products')
@@ -319,6 +344,7 @@ export async function harvestManufacturerPage(env, task, at = Date.now()) {
         nextOffset: page.nextOffset,
         total: page.total,
         harvested: aircraft.length,
+        cursorUrls: page.cursorUrls,
       }
     }
 
@@ -372,6 +398,7 @@ export async function consumeManufacturerHarvestQueue(batch, env) {
           ...message.body,
           manufacturerId: result.manufacturerId,
           offset: result.nextOffset,
+          cursorUrls: result.cursorUrls,
         })
       }
       message.ack()
