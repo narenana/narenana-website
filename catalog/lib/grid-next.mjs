@@ -29,6 +29,42 @@ const SITE = 'https://www.narenana.com'
 const ROLE_SLUG = { warbirds: 'Warbird', jets: 'Jet / EDF', fpv: 'FPV / Flying Wing', trainers: 'Trainer', gliders: 'Glider / Sailplane', 'scale-planes': 'Scale Civilian', aerobatic: 'Aerobatic / 3D', 'sport-planes': 'Sport / Park Flyer', airliners: 'Airliner' }
 const SLUG_OF_ROLE = Object.fromEntries(Object.entries(ROLE_SLUG).map(([s, r]) => [r, s]))
 const ROLE_H1 = { Warbird: 'Warbird', 'Jet / EDF': 'Jet & EDF', 'FPV / Flying Wing': 'FPV & flying-wing', Trainer: 'Trainer', 'Glider / Sailplane': 'Glider & sailplane', 'Scale Civilian': 'Scale civilian', 'Aerobatic / 3D': 'Aerobatic & 3D', 'Sport / Park Flyer': 'Sport & park flyer', Airliner: 'Airliner' }
+
+// ---- catalog search --------------------------------------------------------
+// A search token matches a model when it appears in the brand/name/slug text
+// (substring, so partial typing works and "heewing" matches via the flattened
+// form), OR names a craft type (mapped to a role tag), OR names a power class.
+// Every token must match SOMETHING — "nitro warbird" = warbirds with power gas.
+const SEARCH_ROLE_WORDS = {
+  trainer: 'Trainer', trainers: 'Trainer', beginner: 'Trainer',
+  warbird: 'Warbird', warbirds: 'Warbird',
+  jet: 'Jet / EDF', jets: 'Jet / EDF', edf: 'Jet / EDF',
+  fpv: 'FPV / Flying Wing', vtol: 'FPV / Flying Wing', flyingwing: 'FPV / Flying Wing',
+  glider: 'Glider / Sailplane', gliders: 'Glider / Sailplane', sailplane: 'Glider / Sailplane',
+  aerobatic: 'Aerobatic / 3D', '3d': 'Aerobatic / 3D',
+  civilian: 'Scale Civilian', cessna: 'Scale Civilian',
+  sport: 'Sport / Park Flyer', park: 'Sport / Park Flyer', parkflyer: 'Sport / Park Flyer',
+  airliner: 'Airliner', airliners: 'Airliner',
+}
+const SEARCH_POWER_WORDS = { electric: 'electric', nitro: 'gas', gas: 'gas', petrol: 'gas' }
+export function searchRows(rows, q) {
+  const toks = (q || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean).slice(0, 8)
+  if (!toks.length) return rows
+  return rows.filter((m) => {
+    const hay = ' ' + ((m.brand || '') + ' ' + (m.name || '') + ' ' + (m.slug || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ') + ' '
+    const flat = hay.replace(/ /g, '')
+    let tags = []
+    try { tags = JSON.parse(m.role_tags || '[]') } catch {}
+    return toks.every((t) => {
+      if (hay.includes(t) || flat.includes(t)) return true
+      const role = SEARCH_ROLE_WORDS[t]
+      if (role && tags.includes(role)) return true
+      const pw = SEARCH_POWER_WORDS[t]
+      if (pw) return (m.power || 'electric') === pw
+      return false
+    })
+  })
+}
 const POWER_SLUG = { electric: 'electric', nitro: 'gas', gas: 'gas' }
 export const LANDING_ROLE_SLUGS = Object.keys(ROLE_SLUG)
 
@@ -98,6 +134,10 @@ const BZ_CSS = `<style>
 .bz-crumbs a{color:var(--muted);text-decoration:none}.bz-crumbs a:hover{text-decoration:underline}
 .bz-h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
 .bz-lede{color:var(--muted);max-width:66ch;margin:0 0 26px}
+.bz-qform{display:flex;max-width:430px;margin:0 0 28px}
+.bz-q{flex:1;min-width:0;border:1.5px solid var(--faint);border-right:0;border-radius:10px 0 0 10px;background:var(--card,#fff);color:var(--ink);font:inherit;font-size:14px;padding:9px 13px}
+.bz-q:focus{border-color:var(--ink);outline:none}
+.bz-qbtn{border:1.5px solid var(--ink);border-radius:0 10px 10px 0;background:var(--ink);color:var(--paper,#fcf9f1);font:inherit;font-size:13px;font-weight:600;padding:9px 16px;cursor:pointer}
 .bz-sec{margin:0 0 30px}
 .bz-sec h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.15rem;font-weight:800;margin:0 0 12px;padding-bottom:6px;border-bottom:1.5px solid var(--faint);scroll-margin-top:70px}
 .bz-n{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--muted);font-weight:500;margin-left:5px}
@@ -149,6 +189,7 @@ export function renderBrowse(cat, masters, landings) {
 <nav class="bz-crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="${pfx}/">${esc(cat.name)}</a> › All models</nav>
 <h1 class="bz-h1">All RC plane models</h1>
 <p class="bz-lede">Every RC plane currently in stock — ${total} models — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
+<form class="bz-qform" role="search" action="${pfx}/" method="get"><input class="bz-q" type="search" name="q" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="bz-qbtn" type="submit">Search</button></form>
 <section class="bz-sec"><h2>Browse by category</h2><ul class="bz-land">${landingLinks}</ul></section>
 ${sections}
 </main>${BZ_CSS}`
@@ -226,6 +267,10 @@ export function renderGridNext(cat, rows, opts = {}) {
   const selSizes = (opts.sizes || []).filter((k) => SIZE_BUCKETS.some((s) => s[0] === k))
   const counts = opts.counts || { electric: 0, gas: 0 }
   const pref = cat.path_prefix
+  // Search mode: rows arrive power='all' and get filtered here; facet chips are
+  // built from the filtered items, so they narrow WITHIN the results.
+  const q = (opts.q || '').trim().slice(0, 60)
+  if (q) rows = searchRows(rows, q)
 
   const items = rows.map((m) => {
     let tags = []
@@ -291,7 +336,9 @@ export function renderGridNext(cat, rows, opts = {}) {
 
   // header: landing pages get their own H1 + breadcrumbs + intro; the main grid keeps the default.
   const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
-  const subTxt = Lmeta ? `${resultN} ${Lmeta.noun} in stock · live prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · live prices from Indian sellers`
+  const subTxt = q
+    ? `${resultN} result${resultN === 1 ? '' : 's'} for “${esc(q)}” · electric & nitro, in stock`
+    : Lmeta ? `${resultN} ${Lmeta.noun} in stock · live prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · live prices from Indian sellers`
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
   const introHtml = Lmeta ? `<p class="fx-intro">Compare live prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
   // Structured data on EVERY grid state, not just landings: BreadcrumbList
@@ -316,7 +363,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     <h1 class="shop-h1">${esc(h1)}</h1>
     <p class="shop-sub" id="fx-sub">${esc(subTxt)}</p>
     ${introHtml}
-    <div class="fx-bar">${powerSeg('fx-powmain')}<button class="fx-fbtn" id="fx-open" aria-haspopup="dialog" aria-expanded="false">Filter &amp; Sort<span class="fx-badge" id="fx-badge"${nActive ? '' : ' hidden'}>${nActive}</span></button></div>
+    <div class="fx-bar">${q ? `<a class="fx-qclear" href="${pref}/">← all models</a>` : powerSeg('fx-powmain')}<form class="fx-qform" role="search" action="${pref}/" method="get"><input class="fx-q" type="search" name="q" value="${esc(q)}" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="fx-qbtn" type="submit" aria-label="Search">Search</button></form><button class="fx-fbtn" id="fx-open" aria-haspopup="dialog" aria-expanded="false">Filter &amp; Sort<span class="fx-badge" id="fx-badge"${nActive ? '' : ' hidden'}>${nActive}</span></button></div>
   </div></div>
   <main class="shop">
     <div class="fx-summary">
@@ -344,14 +391,14 @@ export function renderGridNext(cat, rows, opts = {}) {
     </div>
   </main>
   <style>${FX_CSS}</style>
-  <script>var FX_DATA=${jsonSafe(fxData)},FX_POWER=${jsonSafe(power)},FX_SORT=${jsonSafe(sort)},FX_INIT=${jsonSafe({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${jsonSafe(pref)},FX_NOURL=${landing ? 'true' : 'false'};</script>
+  <script>var FX_DATA=${jsonSafe(fxData)},FX_POWER=${jsonSafe(power)},FX_SORT=${jsonSafe(sort)},FX_INIT=${jsonSafe({ roles: selRoles, sizes: selSizes, cond })},FX_PREF=${jsonSafe(pref)},FX_NOURL=${landing ? 'true' : 'false'},FX_Q=${jsonSafe(q)};</script>
   <script>${FX_JS}</script>`
 
   // Canonical discipline (mirrors the proven classic-grid rules): ?power=gas
   // duplicates the /nitro/ landing → canonical THERE, not to the electric grid
   // whose content is disjoint (the case where Google ignores the canonical).
   // Any other non-default filter/sort state is noindex — crawlable, not indexed.
-  const filtered = !landing && (selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== DEFAULT_SORT)
+  const filtered = !landing && (!!q || selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== DEFAULT_SORT)
   return page({
     title: Lmeta ? Lmeta.title : `${cat.name} in India — compare live prices | narenana`,
     desc: Lmeta ? Lmeta.desc : `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
@@ -381,6 +428,13 @@ const FX_CSS = `
 .fx-browse a{color:var(--orange-deep);text-decoration:none;font-weight:700}
 .fx-browse a:hover{text-decoration:underline}
 .fx-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
+.fx-qform{display:flex;flex:1;min-width:220px;max-width:430px}
+.fx-q{flex:1;min-width:0;border:1.5px solid var(--faint);border-right:0;border-radius:10px 0 0 10px;background:var(--card,#fff);color:var(--ink);font:inherit;font-size:14px;padding:9px 13px;outline-offset:-1.5px}
+.fx-q:focus{border-color:var(--ink)}
+.fx-qbtn{border:1.5px solid var(--ink);border-radius:0 10px 10px 0;background:var(--ink);color:var(--paper,#fcf9f1);font:inherit;font-size:13px;font-weight:600;padding:9px 16px;cursor:pointer}
+.fx-qbtn:hover{opacity:.88}
+.fx-qclear{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap}
+.fx-qclear:hover{color:var(--ink);text-decoration:underline}
 .fx-seg{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--card)}
 .fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
 .fx-seg-b:last-child{border-right:none}
@@ -480,7 +534,7 @@ const FX_JS = `(function(){
     var nA=state.roles.size+state.sizes.size+(state.cond!=='all'?1:0);
     document.getElementById('fx-clear').hidden=!nA;
     var badge=document.getElementById('fx-badge'); badge.hidden=!nA; badge.textContent=nA;
-    if(!FX_NOURL)try{var p=new URLSearchParams();if(FX_POWER!=='electric')p.set('power',FX_POWER);
+    if(!FX_NOURL)try{var p=new URLSearchParams();if(FX_Q)p.set('q',FX_Q);else if(FX_POWER!=='electric')p.set('power',FX_POWER);
       if(state.roles.size)p.set('role',Array.from(state.roles).join(','));
       if(state.sizes.size)p.set('size',Array.from(state.sizes).join(','));
       if(state.cond!=='all')p.set('cond',state.cond);

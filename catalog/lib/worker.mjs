@@ -135,8 +135,10 @@ async function publicCatalogPages(url, env) {
       const p = url.searchParams.get('power') === 'gas' ? 'gas' : 'electric'
       const roles = (url.searchParams.get('role') || '').split(',').filter(Boolean)
       const sizes = (url.searchParams.get('size') || '').split(',').filter(Boolean)
-      const [rows, counts] = await Promise.all([gridDataNext(env, cat, p), gridCounts(env, cat)])
-      return html(renderGridNext(cat, rows, { power: p, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts }))
+      // Search spans BOTH power classes — fetch 'all' and let the renderer filter.
+      const q = (url.searchParams.get('q') || '').trim().slice(0, 60)
+      const [rows, counts] = await Promise.all([gridDataNext(env, cat, q ? 'all' : p), gridCounts(env, cat)])
+      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts }))
     }
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
     const sort = ['price-desc', 'price-asc', 'span-desc', 'span-asc'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'price-desc'

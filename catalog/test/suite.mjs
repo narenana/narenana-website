@@ -10,7 +10,7 @@ import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct,
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
-import { renderGridNext } from '../lib/grid-next.mjs'
+import { renderGridNext, searchRows } from '../lib/grid-next.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 import { configAgreement as mfrConfigAgreement, configTypes as mfrConfigTypes, isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
 import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
@@ -676,6 +676,37 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   // fix #3: server hides non-matching cards so the no-JS count matches the grid
   const outWb = renderGridNext(cat, rows, { ...base, roles: ['Warbird'] })
   assert.ok(/id="fx-nres">1</.test(outWb) && outWb.includes('style="display:none"'), 'filtered link hides non-matching cards server-side')
+})
+
+test('catalog search: name/brand/type matching + search-mode grid', () => {
+  const rows = [
+    { id: 1, slug: 'volantex-ranger-600', brand: 'Volantex', name: 'RC Ranger 600', power: 'electric', role_tags: '["Trainer"]' },
+    { id: 2, slug: 'heewing-t1-ranger', brand: 'HEEWING', name: 'T1 Ranger', power: 'electric', role_tags: '["FPV / Flying Wing"]' },
+    { id: 3, slug: 'seagull-p51', brand: 'Seagull Models', name: 'P-51D Mustang', power: 'gas', role_tags: '["Warbird"]' },
+    { id: 4, slug: 'fms-viper', brand: 'FMS', name: 'Viper 70mm EDF Jet', power: 'electric', role_tags: '["Jet / EDF"]' },
+  ]
+  const ids = (q) => searchRows(rows, q).map((m) => m.id).join(',')
+  assert.equal(ids('ranger'), '1,2', 'name substring matches both Rangers')
+  assert.equal(ids('heewing ranger'), '2', 'brand + name narrows (flattened brand also matches "hee wing" style splits)')
+  assert.equal(ids('fms'), '4', 'manufacturer alone matches')
+  assert.equal(ids('warbird'), '3', 'craft-type word maps to the role tag')
+  assert.equal(ids('nitro warbird'), '3', 'power word + role word combine')
+  assert.equal(ids('electric trainer'), '1', 'trainer role + electric power')
+  assert.equal(ids('jet'), '4', 'jet maps to Jet / EDF role (also name hit)')
+  assert.equal(ids('mustang seagull'), '3', 'every token must match the same row')
+  assert.equal(ids('zzz'), '', 'no match → empty')
+  assert.equal(searchRows(rows, '').length, 4, 'empty query returns everything')
+
+  // Search-mode grid: rows arrive power=all, renderer filters + flags noindex.
+  const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings' }
+  const full = rows.map((m) => ({ ...m, specs: '{}', sellers: 1, hero_any: null, min_price: 5000, span_mm: 1000, new_stock: 1, preowned_stock: 0 }))
+  const out = renderGridNext(cat, full, { power: 'electric', q: 'ranger', counts: { electric: 3, gas: 1 } })
+  assert.ok(/id="fx-nres">2</.test(out), 'search result count reflects the query')
+  assert.ok(out.includes('name="robots" content="noindex"'), 'search pages are noindex')
+  assert.ok(out.includes('value="ranger"'), 'search box retains the query')
+  assert.ok(out.includes('class="fx-qclear"'), 'search mode offers a clear link')
+  const plain = renderGridNext(cat, full.filter((m) => m.power === 'electric'), { power: 'electric', counts: { electric: 3, gas: 1 } })
+  assert.ok(plain.includes('class="fx-qform"') && !plain.includes('class="fx-qclear"'), 'normal grid shows the search box, no clear link')
 })
 
 // The admin SPA is a huge inline <script> inside a backtick template. A stray
