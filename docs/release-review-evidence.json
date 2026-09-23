@@ -1,0 +1,1190 @@
+{
+  "checkedAt": "2026-09-23T15:43:09.515Z",
+  "dependencies": {
+    "website": {
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 4,
+        "critical": 0,
+        "total": 4
+      },
+      "packages": [
+        {
+          "name": "@cloudflare/puppeteer",
+          "severity": "high",
+          "isDirect": true,
+          "fixAvailable": {
+            "name": "@cloudflare/puppeteer",
+            "version": "0.0.11",
+            "isSemVerMajor": true
+          },
+          "advisories": []
+        },
+        {
+          "name": "@puppeteer/browsers",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": {
+            "name": "@cloudflare/puppeteer",
+            "version": "0.0.11",
+            "isSemVerMajor": true
+          },
+          "advisories": []
+        },
+        {
+          "name": "extract-zip",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": {
+            "name": "@cloudflare/puppeteer",
+            "version": "0.0.11",
+            "isSemVerMajor": true
+          },
+          "advisories": [
+            {
+              "title": "extract-zip unvalidated symlink path traversal",
+              "url": "https://github.com/advisories/GHSA-jmr9-qjv8-65gv"
+            },
+            {
+              "title": "extract-zip allows arbitrary file writes through symlink archive entries",
+              "url": "https://github.com/advisories/GHSA-7pqw-9j4j-h8q3"
+            }
+          ]
+        },
+        {
+          "name": "ip-address",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "ip-address: Address4 decodes leading-zero octets as decimal while resolvers decode them as octal, allowing SSRF and trust-boundary bypass",
+              "url": "https://github.com/advisories/GHSA-mwp4-54f8-5fhr"
+            },
+            {
+              "title": "ip-address: a CIDR suffix on the parsed address suppresses special-use classification and can bypass SSRF and trust-boundary checks",
+              "url": "https://github.com/advisories/GHSA-4xrf-jv44-h6hh"
+            },
+            {
+              "title": "ip-address: misclassification of IPv4-mapped/NAT64 IPv6 addresses can bypass SSRF and trust-boundary checks",
+              "url": "https://github.com/advisories/GHSA-22jq-vg5j-6vgg"
+            }
+          ]
+        }
+      ]
+    },
+    "fpvsim": {
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      },
+      "packages": []
+    },
+    "nanawing2": {
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 1,
+        "critical": 0,
+        "total": 1
+      },
+      "packages": [
+        {
+          "name": "undici",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "undici vulnerable to TLS certificate validation bypass via dropped requestTls in SOCKS5 ProxyAgent",
+              "url": "https://github.com/advisories/GHSA-vmh5-mc38-953g"
+            },
+            {
+              "title": "undici vulnerable to HTTP header injection via Set-Cookie percent-decoding",
+              "url": "https://github.com/advisories/GHSA-p88m-4jfj-68fv"
+            },
+            {
+              "title": "undici WebSocket client vulnerable to denial of service via fragment count bypass",
+              "url": "https://github.com/advisories/GHSA-vxpw-j846-p89q"
+            },
+            {
+              "title": "undici vulnerable to cross-origin request routing via SOCKS5 proxy pool reuse",
+              "url": "https://github.com/advisories/GHSA-hm92-r4w5-c3mj"
+            },
+            {
+              "title": "undici vulnerable to Set-Cookie SameSite attribute downgrade via permissive substring matching",
+              "url": "https://github.com/advisories/GHSA-g8m3-5g58-fq7m"
+            },
+            {
+              "title": "undici vulnerable to cross-user information disclosure via shared cache whitespace bypass",
+              "url": "https://github.com/advisories/GHSA-pr7r-676h-xcf6"
+            },
+            {
+              "title": "undici vulnerable to downstream response desynchronization via retry interceptor",
+              "url": "https://github.com/advisories/GHSA-8xcm-r25x-g524"
+            },
+            {
+              "title": "undici vulnerable to cross-user information disclosure and parse-time crash via degenerate private cache directives",
+              "url": "https://github.com/advisories/GHSA-4cwx-7wf7-3272"
+            },
+            {
+              "title": "undici vulnerable to CRLF Injection via blob-like body 'type' property",
+              "url": "https://github.com/advisories/GHSA-m8rv-5g2x-5cg5"
+            },
+            {
+              "title": "undici vulnerable to cross-user information disclosure via whitespace around equals in Cache-Control directives",
+              "url": "https://github.com/advisories/GHSA-jr45-8vmc-qm54"
+            },
+            {
+              "title": "undici vulnerable to cookie attribute injection via unsanitized domain and unparsed setCookie fields",
+              "url": "https://github.com/advisories/GHSA-v3r7-h72x-cjcm"
+            },
+            {
+              "title": "undici vulnerable to HTTP response queue poisoning via keep-alive socket reuse",
+              "url": "https://github.com/advisories/GHSA-35p6-xmwp-9g52"
+            }
+          ]
+        }
+      ]
+    },
+    "log-viewer": {
+      "counts": {
+        "info": 0,
+        "low": 1,
+        "moderate": 4,
+        "high": 6,
+        "critical": 0,
+        "total": 11
+      },
+      "packages": [
+        {
+          "name": "@babel/core",
+          "severity": "low",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "@babel/core: Arbitrary File Read via sourceMappingURL Comment",
+              "url": "https://github.com/advisories/GHSA-4x5r-pxfx-6jf8"
+            }
+          ]
+        },
+        {
+          "name": "@protobufjs/utf8",
+          "severity": "moderate",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "protobufjs has overlong UTF-8 decoding",
+              "url": "https://github.com/advisories/GHSA-q6x5-8v7m-xcrf"
+            }
+          ]
+        },
+        {
+          "name": "baseline-browser-mapping",
+          "severity": "moderate",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "baseline-browser-mapping process termination on invalid input causes denial of service",
+              "url": "https://github.com/advisories/GHSA-w5vr-8v7q-w6rv"
+            }
+          ]
+        },
+        {
+          "name": "brace-expansion",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "brace-expansion: Large numeric range defeats documented `max` DoS protection",
+              "url": "https://github.com/advisories/GHSA-jxxr-4gwj-5jf2"
+            },
+            {
+              "title": "brace-expansion: DoS via exponential-time expansion of consecutive non-expanding {} groups",
+              "url": "https://github.com/advisories/GHSA-3jxr-9vmj-r5cp"
+            },
+            {
+              "title": "brace-expansion: DoS via unbounded expansion length causing an out-of-memory process crash",
+              "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg"
+            },
+            {
+              "title": "brace-expansion: DoS via unbounded intermediate arrays, bypassing the CVE-2026-14257 mitigation",
+              "url": "https://github.com/advisories/GHSA-rgw5-rvv9-x895"
+            }
+          ]
+        },
+        {
+          "name": "browserslist",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "Browserslist: Unbounded memory growth (no cache eviction) via distinct query results, leading to eventual OOM",
+              "url": "https://github.com/advisories/GHSA-c83g-rgw3-j3cx"
+            },
+            {
+              "title": "Browserslist: Uncaught crash / prototype write via untrusted browserslist-stats.json custom stats (normalizeStats)",
+              "url": "https://github.com/advisories/GHSA-73wf-gq98-2v4g"
+            }
+          ]
+        },
+        {
+          "name": "dompurify",
+          "severity": "moderate",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "DOMPurify: Cross-realm IN_PLACE sanitization leaves executable markup intact via realm-bound `instanceof` checks",
+              "url": "https://github.com/advisories/GHSA-hpcv-96wg-7vj8"
+            },
+            {
+              "title": "DOMPurify: IN_PLACE mode preserves attributes of a clobbered root element, allowing XSS via attacker-controlled root DOM",
+              "url": "https://github.com/advisories/GHSA-r47g-fvhr-h676"
+            },
+            {
+              "title": "DOMPurify IN_PLACE Sanitization Bypass via Attached Shadow Root Inside <template>.content",
+              "url": "https://github.com/advisories/GHSA-rp9w-3fw7-7cwq"
+            },
+            {
+              "title": "DOMPurify: `CUSTOM_ELEMENT_HANDLING` bypasses `afterSanitizeElements` for allowed custom elements.",
+              "url": "https://github.com/advisories/GHSA-c2j3-45gr-mqc4"
+            },
+            {
+              "title": "DOMPurify: Permanent `ALLOWED_ATTR` pollution via `setConfig()` bypassing the hook clone-guard (incomplete fix of the 3.4.7 hook-pollution patch)",
+              "url": "https://github.com/advisories/GHSA-cmwh-pvxp-8882"
+            },
+            {
+              "title": "DOMPurify: Trusted Types policy survives `clearConfig()` and can poison later `RETURN_TRUSTED_TYPE` output",
+              "url": "https://github.com/advisories/GHSA-vxr8-fq34-vvx9"
+            },
+            {
+              "title": "DOMPurify: SAFE_FOR_TEMPLATES bypass - template expressions survive sanitization inside <template> content when using DOM output modes",
+              "url": "https://github.com/advisories/GHSA-gvmj-g25r-r7wr"
+            },
+            {
+              "title": "DOMPurify: `IN_PLACE` mode trusts attacker-controlled `nodeName` on live non-form nodes, allowing script retention and XSS via attacker-supplied DOM objects",
+              "url": "https://github.com/advisories/GHSA-x4vx-rjvf-j5p4"
+            },
+            {
+              "title": "DOMPurify: Hook mutation of `data.allowedTags` / `data.allowedAttributes` permanently pollutes `DEFAULT_ALLOWED_TAGS` / `DEFAULT_ALLOWED_ATTR`",
+              "url": "https://github.com/advisories/GHSA-76mc-f452-cxcm"
+            },
+            {
+              "title": "DOMPurify: IN_PLACE hook removal leaves a detached subtree executable, causing XSS",
+              "url": "https://github.com/advisories/GHSA-55q2-fjhq-7xh7"
+            }
+          ]
+        },
+        {
+          "name": "esbuild",
+          "severity": "moderate",
+          "isDirect": false,
+          "fixAvailable": {
+            "name": "vite",
+            "version": "8.3.0",
+            "isSemVerMajor": true
+          },
+          "advisories": [
+            {
+              "title": "esbuild enables any website to send any requests to the development server and read the response",
+              "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99"
+            }
+          ]
+        },
+        {
+          "name": "nanoid",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "nanoid: non-secure generators can loop indefinitely with negative size",
+              "url": "https://github.com/advisories/GHSA-28wg-ghj8-5hjv"
+            },
+            {
+              "title": "nanoid: custom generators can loop indefinitely when size is zero",
+              "url": "https://github.com/advisories/GHSA-2v37-7h3g-55p8"
+            }
+          ]
+        },
+        {
+          "name": "postcss",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "PostCSS: incomplete fix of GHSA-6g55-p6wh-862q — attacker-controlled sourceMappingURL reads arbitrary .map files when `from` is unset",
+              "url": "https://github.com/advisories/GHSA-fxqj-rqcc-2cmp"
+            },
+            {
+              "title": "PostCSS: Path Traversal in Previous Source Map Auto-Loading (sourceMappingURL) leads to Arbitrary .map File Disclosure",
+              "url": "https://github.com/advisories/GHSA-r28c-9q8g-f849"
+            }
+          ]
+        },
+        {
+          "name": "protobufjs",
+          "severity": "high",
+          "isDirect": false,
+          "fixAvailable": true,
+          "advisories": [
+            {
+              "title": "protobuf.js: Code injection through bytes field defaults in generated toObject code",
+              "url": "https://github.com/advisories/GHSA-66ff-xgx4-vchm"
+            },
+            {
+              "title": "protobuf.js: Denial of service from crafted field names in generated code",
+              "url": "https://github.com/advisories/GHSA-2pr8-phx7-x9h3"
+            },
+            {
+              "title": "protobuf.js: Prototype injection in generated message constructors",
+              "url": "https://github.com/advisories/GHSA-fx83-v9x8-x52w"
+            },
+            {
+              "title": "protobuf.js: Code generation gadget after prototype pollution",
+              "url": "https://github.com/advisories/GHSA-75px-5xx7-5xc7"
+            },
+            {
+              "title": "protobuf.js: Process-wide denial of service through unsafe option paths",
+              "url": "https://github.com/advisories/GHSA-jvwf-75h9-cwgg"
+            },
+            {
+              "title": "protobuf.js: Denial of service through unbounded protobuf recursion",
+              "url": "https://github.com/advisories/GHSA-685m-2w69-288q"
+            },
+            {
+              "title": "protobufjs has overlong UTF-8 decoding",
+              "url": "https://github.com/advisories/GHSA-q6x5-8v7m-xcrf"
+            },
+            {
+              "title": "protobufjs: Denial of Service via unbounded recursive JSON descriptor expansion",
+              "url": "https://github.com/advisories/GHSA-jggg-4jg4-v7c6"
+            },
+            {
+              "title": "protobufjs: Denial of service through unbounded Any expansion during JSON conversion",
+              "url": "https://github.com/advisories/GHSA-wcpc-wj8m-hjx6"
+            },
+            {
+              "title": "protobufjs : Schema-derived names can shadow runtime-significant properties",
+              "url": "https://github.com/advisories/GHSA-f38q-mgvj-vph7"
+            },
+            {
+              "title": "protobufjs: Denial of Service via infinite loop in .proto option parsing",
+              "url": "https://github.com/advisories/GHSA-j3f2-48v5-ccww"
+            }
+          ]
+        },
+        {
+          "name": "vite",
+          "severity": "high",
+          "isDirect": true,
+          "fixAvailable": {
+            "name": "vite",
+            "version": "8.3.0",
+            "isSemVerMajor": true
+          },
+          "advisories": [
+            {
+              "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+              "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9"
+            },
+            {
+              "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+              "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3"
+            },
+            {
+              "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+              "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "catalogLighthouse": {
+    "scores": {
+      "performance": 63,
+      "accessibility": 89,
+      "best-practices": 100,
+      "seo": 92
+    },
+    "lcp": "4.0 s",
+    "cls": "0.036",
+    "failedAudits": [
+      {
+        "id": "aria-required-children",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "subItemsHeading": {
+                "key": "relatedNode",
+                "valueType": "node"
+              },
+              "label": "Failing Elements"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-0-DIV",
+                "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV",
+                "selector": "div.shop-head > div.shop-head-in > div.fx-bar > div#fx-powmain",
+                "boundingRect": {
+                  "top": 295,
+                  "bottom": 340,
+                  "left": 16,
+                  "right": 272,
+                  "width": 256,
+                  "height": 44
+                },
+                "snippet": "<div class=\"fx-seg\" id=\"fx-powmain\" role=\"tablist\" aria-label=\"Power category\">",
+                "nodeLabel": "Electric 148\nNitro / Gas 36",
+                "explanation": "Fix any of the following:\n  Element has children which are not allowed: a"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-1-A",
+                      "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV,0,A",
+                      "selector": "div.shop-head-in > div.fx-bar > div#fx-powmain > a.fx-seg-b",
+                      "boundingRect": {
+                        "top": 297,
+                        "bottom": 338,
+                        "left": 18,
+                        "right": 138,
+                        "width": 120,
+                        "height": 40
+                      },
+                      "snippet": "<a class=\"fx-seg-b is-on\" href=\"/wings/\">",
+                      "nodeLabel": "Electric 148"
+                    }
+                  },
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-2-A",
+                      "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV,1,A",
+                      "selector": "div.shop-head-in > div.fx-bar > div#fx-powmain > a.fx-seg-b",
+                      "boundingRect": {
+                        "top": 297,
+                        "bottom": 338,
+                        "left": 138,
+                        "right": 270,
+                        "width": 132,
+                        "height": 40
+                      },
+                      "snippet": "<a class=\"fx-seg-b \" href=\"/wings/?power=gas\">",
+                      "nodeLabel": "Nitro / Gas 36"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "debugData": {
+            "type": "debugdata",
+            "impact": "critical",
+            "tags": [
+              "cat.aria",
+              "wcag2a",
+              "wcag131",
+              "EN-301-549",
+              "EN-9.1.3.1",
+              "RGAAv4",
+              "RGAA-9.3.1"
+            ]
+          }
+        }
+      },
+      {
+        "id": "color-contrast",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "subItemsHeading": {
+                "key": "relatedNode",
+                "valueType": "node"
+              },
+              "label": "Failing Elements"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-3-SPAN",
+                "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV,0,A,1,SPAN",
+                "selector": "div.fx-bar > div#fx-powmain > a.fx-seg-b > span",
+                "boundingRect": {
+                  "top": 311,
+                  "bottom": 325,
+                  "left": 98,
+                  "right": 118,
+                  "width": 20,
+                  "height": 14
+                },
+                "snippet": "<span>",
+                "nodeLabel": "148",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 3.35 (foreground color: #734411, background color: #ff8500, font size: 8.4pt (11.2px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-1-A",
+                      "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV,0,A",
+                      "selector": "div.shop-head-in > div.fx-bar > div#fx-powmain > a.fx-seg-b",
+                      "boundingRect": {
+                        "top": 297,
+                        "bottom": 338,
+                        "left": 18,
+                        "right": 138,
+                        "width": 120,
+                        "height": 40
+                      },
+                      "snippet": "<a class=\"fx-seg-b is-on\" href=\"/wings/\">",
+                      "nodeLabel": "Electric 148"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-4-SPAN",
+                "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV,1,A,1,SPAN",
+                "selector": "div.fx-bar > div#fx-powmain > a.fx-seg-b > span",
+                "boundingRect": {
+                  "top": 311,
+                  "bottom": 325,
+                  "left": 239,
+                  "right": 252,
+                  "width": 13,
+                  "height": 14
+                },
+                "snippet": "<span>",
+                "nodeLabel": "36",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 2.48 (foreground color: #9ba6af, background color: #ffffff, font size: 8.4pt (11.2px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-0-DIV",
+                      "path": "1,HTML,1,BODY,2,DIV,0,DIV,3,DIV,0,DIV",
+                      "selector": "div.shop-head > div.shop-head-in > div.fx-bar > div#fx-powmain",
+                      "boundingRect": {
+                        "top": 295,
+                        "bottom": 340,
+                        "left": 16,
+                        "right": 272,
+                        "width": 256,
+                        "height": 44
+                      },
+                      "snippet": "<div class=\"fx-seg\" id=\"fx-powmain\" role=\"tablist\" aria-label=\"Power category\">",
+                      "nodeLabel": "Electric 148\nNitro / Gas 36"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-5-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,1,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 68981,
+                  "bottom": 69003,
+                  "left": 142,
+                  "right": 198,
+                  "width": 57,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/warbirds/\">",
+                "nodeLabel": "Warbird",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-7-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,2,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 68981,
+                  "bottom": 69003,
+                  "left": 214,
+                  "right": 282,
+                  "width": 67,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/jets/\">",
+                "nodeLabel": "Jet & EDF",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-8-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,3,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69013,
+                  "bottom": 69035,
+                  "left": 24,
+                  "right": 150,
+                  "width": 126,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/fpv/\">",
+                "nodeLabel": "FPV & flying-wing",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-9-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,4,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69013,
+                  "bottom": 69035,
+                  "left": 166,
+                  "right": 216,
+                  "width": 50,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/trainers/\">",
+                "nodeLabel": "Trainer",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-10-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,5,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69013,
+                  "bottom": 69035,
+                  "left": 232,
+                  "right": 356,
+                  "width": 124,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/gliders/\">",
+                "nodeLabel": "Glider & sailplane",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-11-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,6,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69045,
+                  "bottom": 69068,
+                  "left": 24,
+                  "right": 116,
+                  "width": 92,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/scale-planes/\">",
+                "nodeLabel": "Scale civilian",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-12-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,7,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69045,
+                  "bottom": 69068,
+                  "left": 132,
+                  "right": 238,
+                  "width": 107,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/aerobatic/\">",
+                "nodeLabel": "Aerobatic & 3D",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-13-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,8,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69045,
+                  "bottom": 69068,
+                  "left": 254,
+                  "right": 379,
+                  "width": 124,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/sport-planes/\">",
+                "nodeLabel": "Sport & park flyer",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-14-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,9,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69078,
+                  "bottom": 69100,
+                  "left": 24,
+                  "right": 75,
+                  "width": 51,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/airliners/\">",
+                "nodeLabel": "Airliner",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-15-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,10,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69078,
+                  "bottom": 69100,
+                  "left": 91,
+                  "right": 146,
+                  "width": 54,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/electric/\">",
+                "nodeLabel": "Electric",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-16-A",
+                "path": "1,HTML,1,BODY,3,MAIN,3,NAV,11,A",
+                "selector": "body > main.shop > nav.fx-browse > a",
+                "boundingRect": {
+                  "top": 69078,
+                  "bottom": 69100,
+                  "left": 162,
+                  "right": 235,
+                  "width": 73,
+                  "height": 22
+                },
+                "snippet": "<a href=\"/wings/nitro/\">",
+                "nodeLabel": "Nitro / gas",
+                "explanation": "Fix any of the following:\n  Element has insufficient color contrast of 4.26 (foreground color: #087bc1, background color: #f4f8fc, font size: 10.8pt (14.4px), font weight: bold). Expected contrast ratio of 4.5:1"
+              },
+              "subItems": {
+                "type": "subitems",
+                "items": [
+                  {
+                    "relatedNode": {
+                      "type": "node",
+                      "lhId": "1-6-BODY",
+                      "path": "1,HTML,1,BODY",
+                      "selector": "body",
+                      "boundingRect": {
+                        "top": 0,
+                        "bottom": 69608,
+                        "left": 0,
+                        "right": 412,
+                        "width": 412,
+                        "height": 69608
+                      },
+                      "snippet": "<body>",
+                      "nodeLabel": "body"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "debugData": {
+            "type": "debugdata",
+            "impact": "serious",
+            "tags": [
+              "cat.color",
+              "wcag2aa",
+              "wcag143",
+              "TTv5",
+              "TT13.c",
+              "EN-301-549",
+              "EN-9.1.4.3",
+              "ACT",
+              "RGAAv4",
+              "RGAA-3.2.1"
+            ]
+          }
+        }
+      },
+      {
+        "id": "crawlable-anchors",
+        "details": {
+          "type": "table",
+          "headings": [
+            {
+              "key": "node",
+              "valueType": "node",
+              "label": "Uncrawlable Link"
+            }
+          ],
+          "items": [
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-193-A",
+                "path": "1,HTML,1,BODY,11,DIALOG,2,DIV,2,A",
+                "selector": "body > dialog#nn-share-dialog > div.nn-share-options > a",
+                "boundingRect": {
+                  "top": 0,
+                  "bottom": 0,
+                  "left": 0,
+                  "right": 0,
+                  "width": 0,
+                  "height": 0
+                },
+                "snippet": "<a data-service=\"whatsapp\" target=\"_blank\" rel=\"noopener noreferrer\">",
+                "nodeLabel": "WhatsApp ↗"
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-194-A",
+                "path": "1,HTML,1,BODY,11,DIALOG,2,DIV,3,A",
+                "selector": "body > dialog#nn-share-dialog > div.nn-share-options > a",
+                "boundingRect": {
+                  "top": 0,
+                  "bottom": 0,
+                  "left": 0,
+                  "right": 0,
+                  "width": 0,
+                  "height": 0
+                },
+                "snippet": "<a data-service=\"facebook\" target=\"_blank\" rel=\"noopener noreferrer\">",
+                "nodeLabel": "Facebook ↗"
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-195-A",
+                "path": "1,HTML,1,BODY,11,DIALOG,2,DIV,4,A",
+                "selector": "body > dialog#nn-share-dialog > div.nn-share-options > a",
+                "boundingRect": {
+                  "top": 0,
+                  "bottom": 0,
+                  "left": 0,
+                  "right": 0,
+                  "width": 0,
+                  "height": 0
+                },
+                "snippet": "<a data-service=\"linkedin\" target=\"_blank\" rel=\"noopener noreferrer\">",
+                "nodeLabel": "LinkedIn ↗"
+              }
+            },
+            {
+              "node": {
+                "type": "node",
+                "lhId": "1-196-A",
+                "path": "1,HTML,1,BODY,11,DIALOG,2,DIV,5,A",
+                "selector": "body > dialog#nn-share-dialog > div.nn-share-options > a",
+                "boundingRect": {
+                  "top": 0,
+                  "bottom": 0,
+                  "left": 0,
+                  "right": 0,
+                  "width": 0,
+                  "height": 0
+                },
+                "snippet": "<a data-service=\"x\" target=\"_blank\" rel=\"noopener noreferrer\">",
+                "nodeLabel": "X ↗"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

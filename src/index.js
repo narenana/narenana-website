@@ -37,6 +37,10 @@ export default {
       if (isApex) url.hostname = 'www.narenana.com'
       return Response.redirect(url.toString(), 301)
     }
+    if (url.pathname === '/index.html') {
+      url.pathname = '/'
+      return Response.redirect(url.toString(), 301)
+    }
 
     // /log-viewer/* is a separate proxied app — leave its responses untouched
     // (the delicate redirect + X-Robots-Tag handling lives in forward()).
@@ -49,7 +53,8 @@ export default {
         url.hostname === 'latest.narenana.com' && env.LOG_VIEWER_ORIGIN_LATEST
           ? env.LOG_VIEWER_ORIGIN_LATEST
           : env.LOG_VIEWER_ORIGIN
-      return forward(request, origin, '/log-viewer')
+      const response = await forward(request, origin, '/log-viewer')
+      return url.hostname === 'latest.narenana.com' ? harden(response, url, isLocal) : response
     }
 
     if (url.pathname === '/videos.json') {
@@ -140,6 +145,9 @@ async function videosResponse(env) {
 // would otherwise revalidate.
 function harden(response, url, isLocal) {
   const headers = new Headers(response.headers)
+  if (url.hostname === 'latest.narenana.com' || url.pathname.startsWith('/direction-b')) {
+    headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
   if (!isLocal) {
     // 2-year max-age + `preload` makes the domain eligible for the HSTS preload
     // list (still has to be submitted once at hstspreload.org — a one-way door:
@@ -183,23 +191,26 @@ async function renderHome(request, env) {
   }
 
   // Live catalog cards for the #shop-grid section. Fail-open on ANY D1
-  // problem — the static "Browse every wing" fallback card stays.
+  // problem — real catalog product links stay, without stale prices or stock claims.
   let wings = []
+  let sellerCount = 0
   try {
     if (env.CATALOG_DB) {
-      const cat = (await env.CATALOG_DB.prepare(`SELECT id, path_prefix FROM category WHERE live=1 LIMIT 1`).all()).results?.[0]
+      const cat = (await env.CATALOG_DB.prepare(`SELECT id, path_prefix FROM category WHERE live=1 AND path_prefix='/wings' LIMIT 1`).all()).results?.[0]
       if (cat) {
+        sellerCount = (await env.CATALOG_DB.prepare(`SELECT COUNT(DISTINCT k.source_id) AS n FROM sku k JOIN offer o ON o.sku_id=k.id JOIN master_model m ON m.id=o.master_model_id WHERE m.category_id=? AND m.status='ready' AND k.review_status='approved' AND k.dead=0`).bind(cat.id).first())?.n || 0
         wings = (
           await env.CATALOG_DB.prepare(
             `SELECT m.id, m.slug, m.brand, m.name, m.specs,
                 COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero,
-                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS price
+                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND (k.flagged IS NULL OR k.flagged='') AND o.pack_qty=1 THEN k.price_inr END) AS price,
+                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 THEN COALESCE(k.last_checked,k.last_seen) END) AS checked_at
              FROM master_model m
              JOIN offer o ON o.master_model_id=m.id
              JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
              WHERE m.category_id=? AND m.status='ready'
              GROUP BY m.id HAVING price IS NOT NULL AND hero IS NOT NULL
-             ORDER BY price DESC LIMIT 4`,
+             ORDER BY COALESCE(m.pop_score, 0) DESC, m.id ASC LIMIT 4`,
           ).bind(cat.id).all()
         ).results.map((m) => ({ ...m, prefix: cat.path_prefix }))
       }
@@ -207,7 +218,7 @@ async function renderHome(request, env) {
   } catch {
     // fallback card remains
   }
-  if (videos.length === 0 && wings.length === 0) return response
+  if (videos.length === 0 && wings.length === 0 && sellerCount === 0) return response
 
   const wingCard = (m) => {
     let span = ''
@@ -216,9 +227,9 @@ async function renderHome(request, env) {
     } catch {}
     return (
       `<a class="shopc" href="${esc(m.prefix)}/${esc(m.slug)}/">` +
-      `<div class="shopc-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" loading="lazy" /><span class="skel-tag">IN STOCK</span></div>` +
+      `<div class="shopc-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="400" height="300" loading="lazy" /><span class="skel-tag">IN STOCK</span></div>` +
       `<div class="shopc-body"><div class="shopc-brand">${esc(m.brand)}</div><div class="shopc-name">${esc(m.name)}</div>` +
-      `<div class="shopc-meta"><span class="shopc-price">from ₹${Number(m.price).toLocaleString('en-IN')}</span>${span ? `<span class="shopc-chip">${esc(span)}mm</span>` : ''}</div></div></a>`
+      `<div class="shopc-meta"><span class="shopc-price">from ₹${Number(m.price).toLocaleString('en-IN')}</span>${span ? `<span class="shopc-chip">${esc(span)}mm</span>` : ''}</div>${m.checked_at ? `<p class="shopc-checked">Oldest live listing check: <time datetime="${new Date(m.checked_at).toISOString()}">${new Date(m.checked_at).toISOString().slice(0,10)}</time></p>` : ''}</div></a>`
     )
   }
 
@@ -227,7 +238,7 @@ async function renderHome(request, env) {
     const thumb = v.thumbnail || `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
     return (
       `<a class="vid" href="${esc(href)}" target="_blank" rel="noopener">` +
-      `<div class="vid-thumb"><img src="${esc(thumb)}" alt="${esc(v.title)}" loading="lazy" />` +
+      `<div class="vid-thumb"><img src="${esc(thumb)}" alt="${esc(v.title)}" width="480" height="360" loading="lazy" />` +
       `<div class="vid-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-left:2px"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></div></div>` +
       `<div class="vid-body"><div class="vid-title">${esc(v.title)}</div>` +
       `<div class="vid-meta"><svg width="15" height="15" viewBox="0 0 24 24" fill="#C63B2E" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#FCF9F1"/></svg>YOUTUBE</div></div></a>`
@@ -235,6 +246,7 @@ async function renderHome(request, env) {
   }
 
   let rw = new HTMLRewriter()
+  if (sellerCount) rw = rw.on('#catalog-seller-count', { element(el) { el.setInnerContent(`Listings from ${sellerCount} Indian sellers`) } })
   if (videos.length)
     rw = rw.on('#vid-grid', {
       element(el) {
@@ -245,6 +257,10 @@ async function renderHome(request, env) {
     rw = rw.on('#shop-grid', {
       element(el) {
         el.setInnerContent(wings.map(wingCard).join(''), { html: true })
+      },
+    }).on('#shop-status', {
+      element(el) {
+        el.setInnerContent('Latest checked prices and stock. Confirm availability with the seller.')
       },
     })
   return rw.transform(response)

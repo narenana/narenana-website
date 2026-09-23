@@ -11,7 +11,8 @@
     "catalog:css": "node catalog/lib/gen-styles.mjs",
     "catalog:migrate": "wrangler d1 migrations apply CATALOG_DB --local",
     "catalog:migrate:remote": "wrangler d1 migrations apply CATALOG_DB --remote",
-    "catalog:test": "node --test catalog/test/suite.mjs"
+    "catalog:test": "node --test catalog/test/suite.mjs",
+    "seo:test": "node --test catalog/test/seo.mjs"
   },
   "devDependencies": {
     "png-to-ico": "^3.0.2",

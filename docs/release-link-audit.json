@@ -1,0 +1,31 @@
+{
+  "pages": 460,
+  "links": 479,
+  "bad": [
+    {
+      "url": "https://www.narenana.com/log-viewer/guides/open-bbl-file/",
+      "from": "https://www.narenana.com/log-viewer/betaflight-blackbox-viewer/",
+      "status": 404
+    },
+    {
+      "url": "https://www.narenana.com/log-viewer/how-to-read-a-blackbox-log/",
+      "from": "https://www.narenana.com/log-viewer/inav-blackbox-viewer/",
+      "status": 404
+    },
+    {
+      "url": "https://www.narenana.com/log-viewer/analyze-a-crash-log/",
+      "from": "https://www.narenana.com/log-viewer/inav-blackbox-viewer/",
+      "status": 404
+    },
+    {
+      "url": "https://www.narenana.com/log-viewer/enable-blackbox-inav/",
+      "from": "https://www.narenana.com/log-viewer/inav-blackbox-viewer/",
+      "status": 404
+    },
+    {
+      "url": "https://www.narenana.com/wings/nitro-gliders/",
+      "from": "https://www.narenana.com/wings/electric-gliders/",
+      "status": 404
+    }
+  ]
+}

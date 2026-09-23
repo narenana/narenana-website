@@ -655,7 +655,7 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
   assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
   assert.ok(!out.includes('name="robots" content="noindex"'), 'default grid must be indexable (not noindex)')
-  assert.ok(renderGridNext(cat, rows, { ...base, sort: 'price-desc' }).includes('name="robots" content="noindex"'), 'non-default sort state is noindex')
+  assert.ok(renderGridNext(cat, rows, { ...base, sort: 'price-desc' }).includes('name="robots" content="noindex,follow"'), 'non-default sort state is noindex')
   assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
   assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
 
@@ -673,9 +673,11 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   const outLarge = renderGridNext(cat, rows, { ...base, sizes: ['large'] })
   assert.ok(/id="fx-nres">1</.test(outLarge), '1500mm bucketed as medium → only the 1900mm plane is Large')
 
-  // fix #3: server hides non-matching cards so the no-JS count matches the grid
+  // Selected results are real HTML; other products remain filter metadata only.
   const outWb = renderGridNext(cat, rows, { ...base, roles: ['Warbird'] })
-  assert.ok(/id="fx-nres">1</.test(outWb) && outWb.includes('style="display:none"'), 'filtered link hides non-matching cards server-side')
+  assert.ok(/id="fx-nres">1</.test(outWb), 'filtered count matches the selected category')
+  assert.equal((outWb.match(/class="prod" data-id=/g) || []).length, 1, 'only matching cards are server-rendered')
+  assert.ok(outWb.includes('"n":"Sport Cub"'), 'other products remain available to client filters')
 })
 
 // The admin SPA is a huge inline <script> inside a backtick template. A stray

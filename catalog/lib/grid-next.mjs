@@ -72,10 +72,8 @@ export function validLandings(masters, min = 3) {
   return out
 }
 
-// Every IN-STOCK ready master (>=1 live approved offer). Powers the /browse/
-// HTML sitemap. In-stock only by design: we don't funnel crawl equity or
-// shoppers to products we can't currently sell. any_stock is kept for
-// validLandings (which filters on it) and is always 1 here.
+// Every ready master with approved offers, including temporarily OOS models.
+// This crawlable index preserves discovery while availability changes.
 export async function browseData(env, cat) {
   return all(
     env,
@@ -86,7 +84,6 @@ export async function browseData(env, cat) {
      JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready'
      GROUP BY m.id
-     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
      ORDER BY m.brand COLLATE NOCASE, m.name COLLATE NOCASE`,
     cat.id,
   )
@@ -96,10 +93,10 @@ const BZ_CSS = `<style>
 .bz{max-width:1000px;margin:0 auto;padding:22px 20px 60px}
 .bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:14px}
 .bz-crumbs a{color:var(--muted);text-decoration:none}.bz-crumbs a:hover{text-decoration:underline}
-.bz-h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
+.bz-h1{font-family:'Barlow Condensed',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
 .bz-lede{color:var(--muted);max-width:66ch;margin:0 0 26px}
 .bz-sec{margin:0 0 30px}
-.bz-sec h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.15rem;font-weight:800;margin:0 0 12px;padding-bottom:6px;border-bottom:1.5px solid var(--faint);scroll-margin-top:70px}
+.bz-sec h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.15rem;font-weight:800;margin:0 0 12px;padding-bottom:6px;border-bottom:1.5px solid var(--faint);scroll-margin-top:70px}
 .bz-n{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--muted);font-weight:500;margin-left:5px}
 .bz-list,.bz-land{list-style:none;margin:0;padding:0;columns:2;column-gap:26px}
 @media(min-width:760px){.bz-list,.bz-land{columns:3}}
@@ -138,7 +135,7 @@ export function renderBrowse(cat, masters, landings) {
     .map((role) => {
       const items = groups
         .get(role)
-        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a></li>`)
+        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a>${m.any_stock ? '' : ' <small>Currently unavailable</small>'}</li>`)
         .join('')
       return `<section class="bz-sec"><h2 id="${esc(SLUG_OF_ROLE[role] || 'other')}">${esc(ROLE_H1[role] || 'Other')}<span class="bz-n">${groups.get(role).length}</span></h2><ul class="bz-list">${items}</ul></section>`
     })
@@ -148,7 +145,7 @@ export function renderBrowse(cat, masters, landings) {
   const body = `<main class="bz">
 <nav class="bz-crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="${pfx}/">${esc(cat.name)}</a> › All models</nav>
 <h1 class="bz-h1">All RC plane models</h1>
-<p class="bz-lede">Every RC plane currently in stock — ${total} models — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
+<p class="bz-lede">${total} RC aircraft models from Indian sellers, including models currently out of stock. Browse by curated category, or by type below.</p>
 <section class="bz-sec"><h2>Browse by category</h2><ul class="bz-land">${landingLinks}</ul></section>
 ${sections}
 </main>${BZ_CSS}`
@@ -287,7 +284,10 @@ export function renderGridNext(cat, rows, opts = {}) {
   const activeTags = [...selRoles.map((t) => ['role', t, t]), ...selSizes.map((k) => ['size', k, SIZE_BUCKETS.find((s) => s[0] === k)[1]]), ...(cond !== 'all' ? [['cond', cond, condLabel(cond)]] : [])]
     .map(([f, v, label]) => `<span class="fx-atag" data-f="${f}" data-v="${esc(v)}">${esc(label)}<button aria-label="Remove">×</button></span>`).join('')
 
-  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price, o: it.pop }))
+  // Keep filter metadata compact; nonmatching cards are created only when a
+  // visitor selects them. Search engines receive the selected results as HTML.
+  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price, o: it.pop,
+    n: it.m.name, b: it.m.brand, u: it.m.slug, h: !!(it.m.hero_any ?? it.m.hero_image), ns: it.m.sellers, sl: specLine(it.m) }))
 
   // header: landing pages get their own H1 + breadcrumbs + intro; the main grid keeps the default.
   const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
@@ -324,7 +324,7 @@ export function renderGridNext(cat, rows, opts = {}) {
       <div class="fx-active" id="fx-active">${activeTags}</div>
       <button class="fx-clear" id="fx-clear"${nActive ? '' : ' hidden'}>Clear all</button>
     </div>
-    <ul class="prods" id="fx-grid">${ordered.map((it) => cardNext(it, pref, !visible(it))).join('')}</ul>
+    <ul class="prods" id="fx-grid">${ordered.filter(visible).map((it) => cardNext(it, pref, false)).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
     ${landing && landing.content ? `<section class="fx-content">${landing.content}</section>` : ''}
     ${browseHtml}
@@ -371,7 +371,7 @@ const FX_CSS = `
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
 .fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
 .fx-content{margin:40px 0 0;max-width:72ch}
-.fx-content h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.3rem;font-weight:800;margin:1.4em 0 .4em;color:var(--ink)}
+.fx-content h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.3rem;font-weight:800;margin:1.4em 0 .4em;color:var(--ink)}
 .fx-content h3{font-weight:800;font-size:1.05rem;margin:1.2em 0 .3em;color:var(--ink)}
 .fx-content p,.fx-content li{color:var(--muted);line-height:1.65;margin:0 0 .9em}
 .fx-content a{color:var(--orange-deep);text-decoration:none;font-weight:700}
@@ -382,22 +382,22 @@ const FX_CSS = `
 .fx-browse a:hover{text-decoration:underline}
 .fx-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
 .fx-seg{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--card)}
-.fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
+.fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'DM Sans',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
 .fx-seg-b:last-child{border-right:none}
 .fx-seg-b:hover{color:var(--ink)}
 .fx-seg-b.is-on{background:var(--orange);color:var(--ink-2)}
 .fx-seg-b span{font-family:'JetBrains Mono',monospace;font-size:.7rem;opacity:.6;margin-left:4px}
-.fx-fbtn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);background:var(--card);color:var(--ink);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:800;font-size:.9rem;padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.fx-fbtn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);background:var(--card);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-weight:800;font-size:.9rem;padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
 .fx-fbtn:hover,.fx-fbtn[aria-expanded="true"]{background:var(--ink);color:var(--card)}
 .fx-badge{background:var(--orange);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace}
 .fx-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .fx-rescount{color:var(--muted);font-size:.95rem}
-.fx-rescount b{color:var(--ink);font-size:1.1rem;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.fx-rescount b{color:var(--ink);font-size:1.1rem;font-family:'Barlow Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}
 .fx-active{display:flex;gap:6px;flex-wrap:wrap}
 .fx-atag{display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb,var(--orange) 15%,transparent);color:var(--orange-deep);border-radius:999px;padding:3px 6px 3px 11px;font-size:12px;font-weight:700}
 .fx-atag button{border:none;background:none;color:inherit;cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
 .fx-clear{border:none;background:none;color:var(--muted);font-family:inherit;font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer}
-.fx-chip{appearance:none;display:inline-flex;align-items:center;border:1.5px solid var(--faint);background:transparent;color:var(--muted);border-radius:999px;padding:6px 12px;font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.fx-chip{appearance:none;display:inline-flex;align-items:center;border:1.5px solid var(--faint);background:transparent;color:var(--muted);border-radius:999px;padding:6px 12px;font-family:'DM Sans',system-ui,sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
 .fx-chip .fx-n{opacity:.55;margin-left:5px;font-weight:700}
 .fx-chip:hover:not(:disabled){border-color:var(--ink);color:var(--ink)}
 .fx-chip.is-on{color:#fff;border-color:transparent;background:var(--ink)}
@@ -411,7 +411,7 @@ const FX_CSS = `
 .fx-backdrop[hidden]{display:none}
 .fx-modal{background:var(--card);border:2px solid var(--ink);border-radius:16px;width:100%;max-width:540px;max-height:85vh;min-height:min(664px,85vh);display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
 .fx-modal-head{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:2px solid var(--ink)}
-.fx-modal-head h2{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.15rem;font-weight:800}
+.fx-modal-head h2{margin:0;font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.15rem;font-weight:800}
 .fx-mx{border:none;background:none;color:var(--muted);font-size:26px;line-height:1;cursor:pointer;padding:0 4px}
 .fx-mx:hover{color:var(--ink)}
 .fx-modal-body{overflow-y:auto;flex:1 1 auto;min-height:0;padding:18px 20px;display:flex;flex-direction:column;gap:18px}
@@ -419,7 +419,7 @@ const FX_CSS = `
 .fx-fgl{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .fx-fgl em{font-style:normal;opacity:.7;text-transform:none;letter-spacing:0;font-weight:400}
 .fx-chips{display:flex;gap:6px;flex-wrap:wrap}
-.fx-sortsel{appearance:none;-webkit-appearance:none;font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:.85rem;font-weight:700;color:var(--ink);background-color:var(--card);border:2px solid var(--ink);border-radius:999px;padding:9px 34px 9px 16px;cursor:pointer;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%230F2C39' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 12px center}
+.fx-sortsel{appearance:none;-webkit-appearance:none;font-family:'DM Sans',system-ui,sans-serif;font-size:.85rem;font-weight:700;color:var(--ink);background-color:var(--card);border:2px solid var(--ink);border-radius:999px;padding:9px 34px 9px 16px;cursor:pointer;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%230F2C39' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 12px center}
 .fx-modal-foot{display:flex;align-items:center;gap:12px;padding:14px 20px;border-top:1.5px solid var(--faint)}
 .fx-mclear{border:none;background:none;color:var(--muted);font-family:inherit;font-weight:700;font-size:13px;text-decoration:underline;cursor:pointer}
 .fx-mshow{margin-left:auto;border:2px solid var(--orange-deep);background:var(--orange);color:#fff;border-radius:999px;padding:10px 24px;font-family:inherit;font-weight:800;cursor:pointer}
@@ -434,12 +434,25 @@ const FX_JS = `(function(){
   var CONDLABEL={'new':'New','pre-owned':'Pre-owned'};
   var grid=document.getElementById('fx-grid');
   var cardEls={}; [].slice.call(grid.querySelectorAll('.prod')).forEach(function(c){cardEls[c.getAttribute('data-id')]=c;});
+  function textEl(tag,cls,text){var el=document.createElement(tag);el.className=cls;el.textContent=text==null?'':text;return el;}
+  function ensureCard(d){
+    if(cardEls[d.i])return cardEls[d.i];
+    var li=textEl('li','prod','');li.setAttribute('data-id',d.i);
+    var link=textEl('a','prod-link','');link.href=FX_PREF+'/'+encodeURIComponent(d.u)+'/';
+    var picture=textEl('div','prod-img','');
+    if(d.h){var img=document.createElement('img');img.src='/img/master/'+d.i;img.alt=(d.b||'')+' '+d.n;img.width=800;img.height=600;img.loading='lazy';picture.appendChild(img);}else{picture.appendChild(textEl('div','prod-noimg','No image'));}
+    if(d.cp&&!d.cn){var badge=textEl('span','prod-tag','PRE-OWNED');picture.appendChild(badge);}
+    var body=textEl('div','prod-body','');body.appendChild(textEl('p','prod-brand',d.b));body.appendChild(textEl('h3','prod-name',d.n));body.appendChild(textEl('p','prod-spec',d.sl));
+    var price=textEl('div','prod-price','');price.appendChild(textEl('div',d.p?'price':'price is-muted',d.p?'from ₹'+Number(d.p).toLocaleString('en-IN'):'—'));
+    if(d.ns>1){var sellers=textEl('span','mrp',d.ns+' sellers');sellers.style.textDecoration='none';price.appendChild(sellers);}
+    body.appendChild(price);link.appendChild(picture);link.appendChild(body);link.appendChild(textEl('span','prod-cta',d.ns>1?'Compare '+d.ns+' sellers':'View & buy'));li.appendChild(link);cardEls[d.i]=li;return li;
+  }
   function mRoles(d){if(!state.roles.size)return true;for(var i=0;i<d.t.length;i++)if(state.roles.has(d.t[i]))return true;return false;}
   function mSizes(d){return state.sizes.size===0||state.sizes.has(d.s);}
   function mCond(d){return state.cond==='all'||(state.cond==='new'?d.cn:d.cp);}
   function results(){return FX_DATA.filter(function(d){return mRoles(d)&&mSizes(d)&&mCond(d);});}
   function cmp(a,b){
-    if(state.sort==='name'){return (cardEls[a.i].querySelector('.prod-name').textContent).localeCompare(cardEls[b.i].querySelector('.prod-name').textContent);}
+    if(state.sort==='name'){return a.n.localeCompare(b.n);}
     if(state.sort==='popular'){var oa=a.o==null?-1:a.o,ob=b.o==null?-1:b.o;return (ob-oa)||((b.p==null?-1:b.p)-(a.p==null?-1:a.p));}
     if(state.sort==='span-desc'){return (b.sp||0)-(a.sp||0);}
     if(state.sort==='span-asc'){return (a.sp||1e9)-(b.sp||1e9);}
@@ -468,7 +481,7 @@ const FX_JS = `(function(){
     var hint=document.getElementById('fx-rolehint'); if(hint)hint.textContent=state.roles.size?'· '+state.roles.size+' selected':'· tick any that apply';
     res.sort(cmp);
     for(var id in cardEls){cardEls[id].style.display=vis[id]?'':'none';}
-    res.forEach(function(d){grid.appendChild(cardEls[d.i]);});
+    res.forEach(function(d){var card=ensureCard(d);card.style.display='';grid.appendChild(card);});
     document.getElementById('fx-nres').textContent=res.length;
     document.getElementById('fx-mshown').textContent=res.length;
     document.getElementById('fx-empty').hidden=res.length>0;

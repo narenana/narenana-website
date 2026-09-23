@@ -1,3 +1,4 @@
+import { manufacturerReference } from './product-overview.mjs'
 // Catalog worker: public pages from D1, admin panel + API behind HTTP Basic
 // auth, image proxy, and the */15 job-slice dispatcher.
 
@@ -191,7 +192,11 @@ async function publicCatalogPages(url, env) {
          WHERE master_model_id=? AND excluded=0 ORDER BY pinned DESC, views DESC LIMIT 3`,
         m.id,
       )
-      return html(renderMaster(cat, m, offers, similar, videos))
+      const reference = await one(env, `SELECT p.url,p.title,p.body_text,p.span_mm,p.fetched_at,x.status AS match_status
+        FROM mfr_match x JOIN mfr_product p ON p.id=x.mfr_product_id
+        JOIN manufacturer mf ON mf.id=p.manufacturer_id
+        WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
+      return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
     }
   }
   // unknown slug → the REAL category grid (page 1, electric) with 404 status
@@ -315,7 +320,7 @@ async function sitemapResponse(env, cats) {
   // is on its own subdomain and ships its own sitemap.
   // lastmod comes from master_model.updated_at — bumped only on real edits (the
   // IndexNow cursor already relies on this), so it's an honest recrawl signal.
-  const urls = [{ u: `${SITE}/` }, { u: `${SITE}/log-viewer/` }]
+  const urls = ['/', '/log-viewer/', '/catalog-methodology/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/'].map(path => ({ u: SITE + path }))
   for (const cat of cats.filter((c) => c.live)) {
     urls.push({ u: `${SITE}${cat.path_prefix}/` })
     urls.push({ u: `${SITE}${cat.path_prefix}/browse/` })
@@ -329,9 +334,9 @@ async function sitemapResponse(env, cats) {
       cat.id,
     )
     for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
-    // In-stock only — don't feed Google product pages we can't currently sell.
-    // Regenerates live each request, so pages auto-drop/return with stock.
-    for (const m of masters) if (m.any_stock) urls.push({ u: `${SITE}${cat.path_prefix}/${m.slug}/`, lm: m.updated_at })
+    // Ready products with approved offers remain useful when temporarily OOS.
+    // Retired models are excluded by the query, not by fluctuating availability.
+    for (const m of masters) urls.push({ u: `${SITE}${cat.path_prefix}/${m.slug}/`, lm: m.updated_at })
   }
   const day = (ms) => (ms ? `<lastmod>${new Date(ms).toISOString().slice(0, 10)}</lastmod>` : '')
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(({ u, lm }) => `<url><loc>${esc(u)}</loc>${day(lm)}</url>`).join('\n')}\n</urlset>`

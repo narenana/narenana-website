@@ -36,11 +36,17 @@ export default {
     const website = env.WEBSITE_HOST || PROD_WEBSITE_HOST
 
     if (url.pathname === '/log-viewer' || url.pathname.startsWith('/log-viewer/')) {
-      return forward(request, viewer, '/log-viewer')
+      return noindex(await forward(request, viewer, '/log-viewer'))
     }
 
-    return forward(request, website, '')
+    return noindex(await forward(request, website, ''))
   },
+}
+
+function noindex(response) {
+  const headers = new Headers(response.headers)
+  headers.set('X-Robots-Tag', 'noindex, nofollow')
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers })
 }
 
 /**

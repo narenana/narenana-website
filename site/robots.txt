@@ -19,4 +19,6 @@ Disallow: /admin
 Disallow: /api/
 
 Sitemap: https://www.narenana.com/sitemap.xml
+Sitemap: https://www.narenana.com/log-viewer/sitemap.xml
 Sitemap: https://sim.narenana.com/sitemap.xml
+Sitemap: https://nanawing2.narenana.com/sitemap.xml

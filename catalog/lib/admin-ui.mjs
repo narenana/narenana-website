@@ -5,7 +5,7 @@ export const ADMIN_HTML = `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Catalog admin</title>
-<style>
+<link rel="stylesheet" href="/assets/family/fonts.css"><style>
 :root{--bg:#0e1117;--fg:#e6edf3;--muted:#8b949e;--accent:#1f9bd9;--accent-bright:#3eb5e8;--card:#161b22;--border:#30363d;--ok:#3fb950;--bad:#f85149;--warn:#d29922}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);line-height:1.5;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
 header{position:sticky;top:0;z-index:5;background:rgba(14,17,23,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -39,7 +39,7 @@ pre,#log{font-family:ui-monospace,monospace;font-size:.72rem;color:var(--muted);
 .empty{text-align:center;color:var(--muted);padding:44px 0}
 table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t th{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
-</style></head><body>
+body{font-family:"DM Sans",sans-serif}h1{font-family:"Barlow Condensed",sans-serif;font-size:26px}:root{--accent:#ff8500;--accent-bright:#80c9f5;--bg:#15191c;--card:#20272d}button{border-radius:3px}header:before{content:"";display:block;width:32px;height:32px;border-radius:50%;background:url(/assets/avatar.jpg) center/cover}</style></head><body>
 <header>
   <h1>Catalog <span style="opacity:.4;font-size:.7rem">v14</span></h1>
   <button class="on" data-tab="review">Review</button>

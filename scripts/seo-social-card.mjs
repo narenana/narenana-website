@@ -1,0 +1,6 @@
+// Typography-first social card: code-native SVG master, rasterized for sharing.
+import sharp from 'sharp';
+import { writeFile } from 'node:fs/promises';
+const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><rect width="1200" height="630" fill="#087bc1"/><path d="M730 630L1120 0H1200V630Z" fill="#0569a8"/><path d="M920 630L1200 180V630Z" fill="#15191c"/><text x="70" y="95" fill="white" font-family="Arial,sans-serif" font-size="33" font-weight="700">narenana<tspan fill="#ff8500">.</tspan></text><text x="65" y="260" fill="white" font-family="Arial,sans-serif" font-size="113" font-weight="900" letter-spacing="-6">NANAWING</text><text x="70" y="330" fill="#d2eaff" font-family="Arial,sans-serif" font-size="32">FREE BROWSER FPV SIMULATOR</text><rect x="70" y="384" width="70" height="6" fill="#ff8500"/><text x="70" y="460" fill="white" font-family="Arial,sans-serif" font-size="43" font-weight="700">Your first flight.</text><text x="70" y="520" fill="#ff8500" font-family="Arial,sans-serif" font-size="43" font-weight="700">Your fastest lap.</text><path d="M940 250l-125 170 110-32 25 48 27-61 140-55-133 10z" fill="#ff8500"/></svg>`;
+await writeFile('site/assets/og-nanawing.svg',svg);
+await sharp(Buffer.from(svg)).jpeg({quality:90}).toFile('site/assets/og-nanawing.jpg');
