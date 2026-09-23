@@ -91,7 +91,7 @@ function landingMeta(cat, L, slug) {
   const crumbs = [{ name: 'Home', url: '/' }, { name: cat.name, url: `${cat.path_prefix}/` }]
   if (L.power !== 'all' && L.roles.length) crumbs.push({ name: L.power === 'gas' ? 'Nitro / gas' : 'Electric', url: `${cat.path_prefix}/${L.power === 'gas' ? 'nitro' : 'electric'}/` })
   crumbs.push({ name: L.roles.length ? rl : (L.power === 'gas' ? 'Nitro / gas' : 'Electric'), url: `${cat.path_prefix}/${slug}/` })
-  return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare live prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
+  return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare latest checked prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
 }
 
 // landing slugs with >= min in-stock masters (for the sitemap). masters rows
@@ -193,7 +193,7 @@ ${sections}
 
   return page({
     title: `All RC plane models in India (${total}) | narenana`,
-    desc: `Complete index of every RC plane in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with live prices.`,
+    desc: `Complete index of every RC plane in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with latest checked prices.`,
     path: `${pfx}/browse/`,
     body,
     jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'All RC plane models', url: `${SITE}${pfx}/browse/` },
@@ -218,7 +218,7 @@ export async function gridDataNext(env, cat, power) {
     `SELECT m.id, m.slug, m.brand, m.name, m.power, m.role_tags, m.specs, m.hero_image, m.pop_score,
             COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND ${USED} THEN 1 ELSE 0 END) AS preowned_stock,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND NOT ${USED} THEN 1 ELSE 0 END) AS new_stock
@@ -236,17 +236,17 @@ const chip = (f, v, label, count, on, extra = '') =>
   `<button class="fx-chip ${extra} ${on ? 'is-on' : ''}" role="checkbox" aria-checked="${on ? 'true' : 'false'}" data-f="${f}" data-v="${esc(v)}">` +
   `${extra.includes('cb') ? '<span class="fx-cbx" aria-hidden="true"></span>' : ''}${esc(label)}<b class="fx-n">${count}</b></button>`
 
-function cardNext(it, pref, hidden) {
+function cardNext(it, pref, hidden, priority = false) {
   const m = it.m
   const hero = m.hero_any ?? m.hero_image
   const price = m.min_price
   const preOwnedOnly = it.cp && !it.cn // only obtainable pre-owned → surface the tag
   return `<li class="prod" data-id="${m.id}"${hidden ? ' style="display:none"' : ''}>
     <a class="prod-link" href="${pref}/${esc(m.slug)}/">
-      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
+      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="${priority ? 'eager' : 'lazy'}" fetchpriority="${priority ? 'high' : 'auto'}" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
       <div class="prod-body">
         <p class="prod-brand">${esc(m.brand)}</p>
-        <h3 class="prod-name">${esc(m.name)}</h3>
+        <h2 class="prod-name">${esc(m.name)}</h2>
         <p class="prod-spec">${esc(specLine(m))}</p>
         <div class="prod-price">${price ? `<div class="price"><span class="price-pre">from</span> ${inr(price)}</div>` : '<div class="price is-muted">—</div>'}${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
       </div>
@@ -304,17 +304,14 @@ export function renderGridNext(cat, rows, opts = {}) {
   const ordered = [...items].sort(cmp)
 
   const powerHref = (p) => {
-    if (landing) { // on a landing page, the tabs link to the sibling landing URLs
-      const ps = p === 'gas' ? 'nitro' : 'electric'
-      return `${pref}/${ps}${landing.L.roleSlug ? '-' + landing.L.roleSlug : ''}/`
-    }
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
+    if (landing?.L.roles.length) qs.set('role',landing.L.roles.join(','))
     if (sort !== DEFAULT_SORT) qs.set('sort', sort)
     const s = qs.toString()
     return `${pref}/${s ? '?' + s : ''}`
   }
-  const powerSeg = (id) => `<div class="fx-seg" id="${id}" role="tablist" aria-label="Power category">` +
+  const powerSeg = (id) => `<div class="fx-seg" id="${id}" role="navigation" aria-label="Power category">` +
     `<a class="fx-seg-b ${power === 'electric' ? 'is-on' : ''}" href="${powerHref('electric')}">Electric <span>${counts.electric}</span></a>` +
     `<a class="fx-seg-b ${power === 'gas' ? 'is-on' : ''}" href="${powerHref('gas')}">Nitro / Gas <span>${counts.gas}</span></a></div>`
 
@@ -338,9 +335,9 @@ export function renderGridNext(cat, rows, opts = {}) {
   const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
   const subTxt = q
     ? `${resultN} result${resultN === 1 ? '' : 's'} for “${esc(q)}” · electric & nitro, in stock`
-    : Lmeta ? `${resultN} ${Lmeta.noun} in stock · live prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · live prices from Indian sellers`
+    : Lmeta ? `${resultN} ${Lmeta.noun} in stock · latest checked prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · latest checked prices from Indian sellers`
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
-  const introHtml = Lmeta ? `<p class="fx-intro">Compare live prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
+  const introHtml = Lmeta ? `<p class="fx-intro">Compare latest checked prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
   // Structured data on EVERY grid state, not just landings: BreadcrumbList
   // (default Home › category when no landing) + an ItemList of the first
   // visible results (capped — the full list would bloat the page).
@@ -371,7 +368,7 @@ export function renderGridNext(cat, rows, opts = {}) {
       <div class="fx-active" id="fx-active">${activeTags}</div>
       <button class="fx-clear" id="fx-clear"${nActive ? '' : ' hidden'}>Clear all</button>
     </div>
-    <ul class="prods" id="fx-grid">${ordered.filter(visible).map((it) => cardNext(it, pref, false)).join('')}</ul>
+    <ul class="prods" id="fx-grid">${ordered.filter(visible).map((it,i) => cardNext(it, pref, false,i<2)).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
     ${landing && landing.content ? `<section class="fx-content">${landing.content}</section>` : ''}
     ${browseHtml}
@@ -400,8 +397,8 @@ export function renderGridNext(cat, rows, opts = {}) {
   // Any other non-default filter/sort state is noindex — crawlable, not indexed.
   const filtered = !landing && (!!q || selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== DEFAULT_SORT)
   return page({
-    title: Lmeta ? Lmeta.title : `${cat.name} in India — compare live prices | narenana`,
-    desc: Lmeta ? Lmeta.desc : `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
+    title: Lmeta ? Lmeta.title : `${cat.name} in India — compare latest checked prices | narenana`,
+    desc: Lmeta ? Lmeta.desc : `Compare latest checked prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
     path: Lmeta ? Lmeta.path : power === 'gas' ? `${pref}/nitro/` : `${pref}/`,
     body,
     jsonld: gridLd,
@@ -425,7 +422,7 @@ const FX_CSS = `
 .fx-content a:hover{text-decoration:underline}
 .fx-browse{margin:44px 0 0;padding-top:20px;border-top:1.5px solid var(--faint);display:flex;flex-wrap:wrap;gap:10px 16px;align-items:baseline;font-size:.9rem}
 .fx-browse>span{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
-.fx-browse a{color:var(--orange-deep);text-decoration:none;font-weight:700}
+.fx-browse a{color:#0669a6;text-decoration:none;font-weight:700}
 .fx-browse a:hover{text-decoration:underline}
 .fx-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
 .fx-qform{display:flex;flex:1;min-width:220px;max-width:430px}
@@ -440,7 +437,7 @@ const FX_CSS = `
 .fx-seg-b:last-child{border-right:none}
 .fx-seg-b:hover{color:var(--ink)}
 .fx-seg-b.is-on{background:var(--orange);color:var(--ink-2)}
-.fx-seg-b span{font-family:'JetBrains Mono',monospace;font-size:.7rem;opacity:.6;margin-left:4px}
+.fx-seg-b span{font-family:'JetBrains Mono',monospace;font-size:.7rem;opacity:1;margin-left:4px}
 .fx-fbtn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);background:var(--card);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-weight:800;font-size:.9rem;padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
 .fx-fbtn:hover,.fx-fbtn[aria-expanded="true"]{background:var(--ink);color:var(--card)}
 .fx-badge{background:var(--orange);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace}
@@ -452,7 +449,7 @@ const FX_CSS = `
 .fx-atag button{border:none;background:none;color:inherit;cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
 .fx-clear{border:none;background:none;color:var(--muted);font-family:inherit;font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer}
 .fx-chip{appearance:none;display:inline-flex;align-items:center;border:1.5px solid var(--faint);background:transparent;color:var(--muted);border-radius:999px;padding:6px 12px;font-family:'DM Sans',system-ui,sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
-.fx-chip .fx-n{opacity:.55;margin-left:5px;font-weight:700}
+.fx-chip .fx-n{opacity:1;margin-left:5px;font-weight:700}
 .fx-chip:hover:not(:disabled){border-color:var(--ink);color:var(--ink)}
 .fx-chip.is-on{color:#fff;border-color:transparent;background:var(--ink)}
 .fx-chip:disabled{opacity:.32;cursor:not-allowed;text-decoration:line-through}
@@ -565,12 +562,12 @@ const FX_JS = `(function(){
   document.getElementById('fx-conds').addEventListener('click',function(e){var b=e.target.closest('.fx-chip');if(b)toggle('cond',b.getAttribute('data-v'));});
   document.getElementById('fx-sort').addEventListener('change',function(e){state.sort=e.target.value;render();});
   var bd=document.getElementById('fx-backdrop'),ob=document.getElementById('fx-open');
-  function setModal(o){bd.hidden=!o;ob.setAttribute('aria-expanded',o?'true':'false');document.body.style.overflow=o?'hidden':'';if(o){var x=document.getElementById('fx-mx');if(x)x.focus();}}
+  function setModal(o){bd.hidden=!o;ob.setAttribute('aria-expanded',o?'true':'false');document.body.style.overflow=o?'hidden':'';if(o){var x=document.getElementById('fx-mx');if(x)x.focus();}else{ob.focus();}}
   ob.onclick=function(){setModal(true);};
   document.getElementById('fx-mx').onclick=function(){setModal(false);};
   document.getElementById('fx-mshow').onclick=function(){setModal(false);};
   bd.onclick=function(e){if(e.target===bd)setModal(false);};
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!bd.hidden)setModal(false);});
+  document.addEventListener('keydown',function(e){if(bd.hidden)return;if(e.key==='Escape'){e.preventDefault();setModal(false);}if(e.key==='Tab'){var items=Array.from(bd.querySelectorAll('button,input,select,a[href]')).filter(function(el){return !el.disabled&&el.getClientRects().length;});var first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
   var ca=function(){state.roles.clear();state.sizes.clear();state.cond='all';render();};
   document.getElementById('fx-clear').onclick=ca;
   document.getElementById('fx-mclear').onclick=ca;

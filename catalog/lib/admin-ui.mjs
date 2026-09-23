@@ -39,7 +39,10 @@ pre,#log{font-family:ui-monospace,monospace;font-size:.72rem;color:var(--muted);
 .empty{text-align:center;color:var(--muted);padding:44px 0}
 table.t{width:100%;border-collapse:collapse;font-size:.82rem}table.t td,table.t th{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
 input.inline{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.8rem}
-body{font-family:"DM Sans",sans-serif}h1{font-family:"Barlow Condensed",sans-serif;font-size:26px}:root{--accent:#ff8500;--accent-bright:#80c9f5;--bg:#15191c;--card:#20272d}button{border-radius:3px}header:before{content:"";display:block;width:32px;height:32px;border-radius:50%;background:url(/assets/avatar.jpg) center/cover}</style></head><body>
+body{font-family:"DM Sans",sans-serif}h1{font-family:"Barlow Condensed",sans-serif;font-size:26px}:root{--accent:#ff8500;--accent-bright:#80c9f5;--bg:#15191c;--card:#20272d}button{border-radius:3px}header:before{content:"";display:block;width:32px;height:32px;border-radius:50%;background:url(/assets/avatar.jpg) center/cover}
+a{color:var(--accent-bright);overflow-wrap:anywhere}.row>*{min-width:0}.fields{grid-template-columns:repeat(4,minmax(0,1fr))}.ct-f{min-width:0}input,select,textarea{max-width:100%}.table-scroll{max-width:100%;overflow-x:auto}.table-scroll table{min-width:620px}
+@media(max-width:640px){.row{grid-template-columns:72px minmax(0,1fr);gap:10px}.thumb,.noimg{width:72px;height:64px}.acts{grid-column:1/-1;flex-direction:row;flex-wrap:wrap}.acts button{width:auto;min-height:44px}.fields{grid-template-columns:repeat(2,minmax(0,1fr))}.ct-edit .fields,.ct-fields{grid-template-columns:1fr!important}.wrap{padding:12px 12px 90px}.ct-f input{width:100%}header{position:relative}}
+</style></head><body>
 <header>
   <h1>Catalog <span style="opacity:.4;font-size:.7rem">v14</span></h1>
   <button class="on" data-tab="review">Review</button>
@@ -54,10 +57,22 @@ body{font-family:"DM Sans",sans-serif}h1{font-family:"Barlow Condensed",sans-ser
   <span class="grow"></span>
   <button id="run" class="go">Run job slice</button>
 </header>
-<div id="log" hidden></div>
+<div id="log" hidden></div><p id="save-status" role="status" aria-live="polite" style="margin:0;padding:8px 16px"></p>
 <div class="bar" id="filters" style="display:none"></div>
 <div class="wrap"><div id="view">loading…</div></div>
 <script>
+function labelAdminControls(){
+ document.querySelectorAll('#view input,#view select,#view textarea').forEach(function(el,i){
+  if(el.labels&&el.labels.length||el.hasAttribute('aria-label'))return;
+  var caption=el.parentElement.classList.contains('ct-f')?el.parentElement.querySelector('label'):null;
+  if(caption){if(!el.id)el.id='admin-field-'+i;caption.htmlFor=el.id;return;}
+  var name=el.placeholder||el.dataset.f||(el.dataset.boost?'Popularity boost':null)||el.name||el.id;
+  if(name)el.setAttribute('aria-label',name);
+ });
+ document.querySelectorAll('#view table.t').forEach(function(table){if(table.parentElement.classList.contains('table-scroll'))return;var wrap=document.createElement('div');wrap.className='table-scroll';wrap.tabIndex=0;wrap.setAttribute('role','region');wrap.setAttribute('aria-label','Scrollable data table');table.before(wrap);wrap.append(table);});
+}
+new MutationObserver(labelAdminControls).observe(document.getElementById('view'),{childList:true,subtree:true});
+
 const $=(s)=>document.querySelector(s);
 const esc=(s)=>(s??'').toString().replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const inr=(n)=>'₹'+Number(n).toLocaleString('en-IN');
@@ -235,6 +250,7 @@ const CAT_CSS='<style>'
   +'.ct-f label{display:block;font-size:.62rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 3px 2px}'
   +'.ct-f input{width:100%}.ct-f.wide{grid-column:1/-1}'
   +'.ct-acts{display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:104px}'
+  +'@media(max-width:640px){.ct-row{grid-template-columns:60px minmax(0,1fr)!important}.ct-row>*{min-width:0}.ct-thumb,.ct-nothumb{width:60px!important;height:60px!important}.ct-acts{grid-column:1/-1;flex-direction:row;min-width:0}.ct-title{overflow-wrap:anywhere}.ct-search{min-width:0;width:100%}.ct-bar{min-width:0}}'
   +'</style>';
 function renderCatalog(){
   const c=data.chips||{};
@@ -286,8 +302,8 @@ function renderCatalog(){
     if(f.startsWith('spec:')){const row=data.masters.find((x)=>x.id===id);let sp={};try{sp=JSON.parse(row.specs||'{}')}catch(e){}sp[f.slice(5)]=i.value.trim();row.specs=JSON.stringify(sp);body.specs=row.specs}
     else body[f]=i.value;
     // Never lose an edit silently: flash saved/failed on the input itself.
-    try{await api('master',body);i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900)}
-    catch(e){i.style.outline='2px solid #f85149';alert('NOT saved: '+e.message)}
+    try{await api('master',body);$('#save-status').textContent='Saved '+(i.getAttribute('aria-label')||i.labels?.[0]?.textContent||f)+'.';i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900)}
+    catch(e){$('#save-status').textContent='Not saved: '+e.message;i.style.outline='2px solid #f85149';alert('NOT saved: '+e.message)}
   });
 }
 
@@ -661,7 +677,7 @@ function renderMfrProfiles(){
   var allCount=rows.length,completeCount=rows.filter(function(r){return completion(r).complete}).length,needsCount=allCount-completeCount,cur=F.mfrDataFilter||'all';
   var filtered=rows.filter(function(r){var c=completion(r).complete;return cur==='complete'?c:cur==='needs'?!c:true});
   var filter=function(k,l,n){return '<button class="chip'+(cur===k?' on':'')+'" data-mp-filter="'+k+'" aria-pressed="'+(cur===k?'true':'false')+'">'+l+' <span>'+n+'</span></button>'};
-  $('#view').innerHTML=MFR_PROFILE_CSS+'<div class="mp-intro"><div><p class="title">Aircraft data</p><p class="meta">Only published models with an accepted manufacturer mapping appear here. Harvested facts remain visibly sourced; fill the unknowns and save one model at a time.</p></div><span class="tag w">admin only</span></div>'
+  $('#view').innerHTML=MFR_PROFILE_CSS+'<div class="mp-intro"><div><p class="title">Aircraft data</p><p class="meta">Only published models with an accepted manufacturer mapping appear here. Harvested facts remain visibly sourced; fill the unknowns and save one model at a time. Explicit physical specifications and their saved corrections appear publicly; handling recommendations stay private.</p></div><span class="tag w">curated aircraft data</span></div>'
     +(F.mfrProfileNotice?'<p class="mp-notice'+(F.mfrProfileNotice.kind==='error'?' error':'')+'" role="status" aria-live="polite">'+esc(F.mfrProfileNotice.text||F.mfrProfileNotice)+'</p>':'')
     +'<div class="mp-filterbar">'+filter('all','All',allCount)+filter('needs','Needs input',needsCount)+filter('complete','Complete',completeCount)+'<span class="meta">'+filtered.length+' shown</span></div>'
     +(filtered.length?filtered.map(card).join(''):'<p class="empty">No models in this view.</p>');
@@ -708,7 +724,7 @@ function renderMfrProfiles(){
       document.querySelectorAll('header button[data-tab],#run,.mp-filterbar button,[data-mp-card] input,[data-mp-card] select,[data-mp-card] textarea,[data-mp-card] button').forEach(function(el){el.disabled=true});
       btn.textContent='Saving…';state.className='mp-save-state';state.textContent='Saving changes…';
       try{
-        var d=await api('mfr-profile',{masterId:id,mfrProductId:+r.mfr_product_id,overrides:over});
+        var d=await api('mfr-profile',{masterId:id,mfrProductId:+r.mfr_product_id,expectedUpdatedAt:r.updated_at??null,overrides:over});
         if(d.profile&&typeof d.profile==='object')Object.assign(r,d.profile);
         else if(d.row&&typeof d.row==='object')Object.assign(r,d.row);
         else {

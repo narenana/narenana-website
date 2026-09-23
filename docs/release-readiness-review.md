@@ -1,12 +1,54 @@
 # Redesign release-readiness review — 23 September 2026
 
-**Recommendation: hold production until the release blockers below are closed.**
+**24 September update: identified code fixes are implemented locally; final acceptance gates below remain open. Nothing pushed or deployed.**
 
 This is a review of the current local redesign across four repositories. No application code was changed for this audit; evidence and this report were added. Nothing was pushed, deployed, posted to social accounts, or written to a production database. Tests that mutate catalog data used the isolated local snapshot. Fetching Git remote references did not merge or change working files.
 
 Earlier completion statements covered implementation, individual previews and selected checks. They did not establish end-to-end release readiness. In particular, the old homepage Lighthouse scores predate the newest sharing controls, the sitemap crawl does not check every link, and standalone app previews do not exercise the main-site proxy.
 
-## Must resolve before release
+## Fix log — 24 September 2026
+
+Nothing is pushed or deployed. Historical findings below remain as the original checklist; this table tracks closure.
+
+| Item | Status | Change / evidence |
+|---|---|---|
+| Upstream integration | Verified | Website preserved in f89607e, search merged in 174ac7d. FPV saved-radio handoff merged in f41cbfb. Catalog 55/55, FPV 814/814 plus production build. |
+| Share/filter overlap | Verified for catalog | At 390px: Trainer → Show 22 closes the sheet, Share stays closed, focus returns to fx-open. Escape returns Share focus. Versioned imports/CSS resolve the reproduced warm-cache failure. Simulator cockpit hides marketing Share. |
+| Duplicate proxy Share | Verified | Actual local Worker → log app: one launcher, one dialog, zero legacy buttons. App and Worker must ship together. |
+| Log replay Share placement | Verified | Actual proxy at 390px: one visible header Share during sample replay, no timeline overlap, clean public canonical URL, Escape returns header focus. Welcome floating Share remains available. |
+| Prices | Verified | Headline/schema use one comparable-offer selector; grid SQL excludes flagged/nonpositive values and prefers new singles. New regressions cover flagged/invalid/used/pack/unknown/OOS/dead combinations. |
+| Manufacturer corrections | Verified unit/API contract | Public physical facts consult overrides for current accepted source only, including null clears; inferred handling stays private. Admin copy explains public scope. SEO suite 12/12. |
+| Cache/update | Verified | Stable assets revalidate; version chain and production cache key bumped. FPV update probe 8/8. Final Nanawing 2 offline boot/update 2/2; repeated build identity e930ddb1b1db098e62c8. Log Workbox incorrectly assigned revision:null to unhashed family files: fixed and guarded by postbuild verification. Existing cached browser upgraded without clearing data. |
+| Broken links | Verified | 460 source pages, 489 destinations, zero broken links. Link audit now exits nonzero on failure. |
+| Admin mobile/labels | Verified locally | Catalog fits 390px with 201 labelled inputs; Sources has no unlabelled inputs or horizontal overflow. Real typing saved a disposable local draft, visible save feedback appeared and reload retained it. Added stale-form version rejection (409); suite covers auth, source validation and approve/publish/unpublish lifecycle. Stats fixture verifies gated fail-soft layout; missing analytics render unavailable, not invented zero counts. |
+| Accessibility/SEO | Verified representative templates | Homepage, catalog, product and watch pages score 100 accessibility / 100 SEO in rendered Lighthouse checks. Corrected navigation semantics, contrast, heading order, visible-name matching and initialized share links. Automated checks do not certify all assistive technology. |
+| Performance | Improved; field gate remains | Catalog mobile performance 95 then 92 (LCP 2.4s / 3.3s); homepage 91, LCP 3.1s, CLS 0. Local results vary under software-rendered browser load; these do not establish field CWV or guarantee LCP below 2.5s. See final evidence below. |
+| Dependencies | Triaged; scoped exception | Nanawing runtime zero, Nanawing 2 full audit zero, log runtime zero. Website retains extract-zip installer-chain advisories absent from Worker bundle; log desktop packaging advisories are outside this web release. Details and restrictions in release-dependencies.md. |
+| Copy/design | Closed locally | Standard product names, no stale subscriber count, checked-price language, descriptive package names, page-specific watch social cards, one catalog footer. Rejected Direction B removed from production files. |
+| Generator/audit gates | Verified | Editorial generator preserves social tags. Sitemap audit fails on errors/empty or shrunken inventory; required link gate passes 460 pages / 489 destinations. |
+| Device/live-service checks | Pending external evidence | Physical radio and real phone/browser need devices; production bindings, social unfurls, Search Console and field CWV require an authorized release. No deployment permission requested or assumed. |
+
+## Local release revisions and remaining acceptance
+
+- Website: codex/redesign-release; implementation commit is the commit containing this updated checklist (resolve with git log). Prior integration 174ac7d.
+- Nanawing: codex/site-theme-seo, **7624cb0**; 814 tests, build, offline update probe 8/8.
+- Nanawing 2: codex/site-theme-seo, **381df71**; typecheck, 153 unit tests, headless/provenance/binary checks, 52 browser cases passed across full run plus targeted retries, final offline 2/2. Initial browser run: 47 passed, 5 failed; all five rerun successfully after two test selector/timing corrections. Not represented as a clean first run.
+- Log viewer: codex/site-theme-seo, **b19164a**; build, 44 tests, generated cache-revision gate, mobile proxy sharing/replay verified.
+- Website catalog 55/55 and SEO 12/12 pass; Worker dry-run succeeds without upload. Full metadata/link crawl is recorded in seo-local-crawl.json and release-link-audit.json.
+
+Remaining gates are **not silently marked fixed**:
+
+1. Owner's physical transmitter and actual phone/browser: calibration, saved profile, flight/reset/disconnect, native share/cancel, video playback. Browser mocks and WebKit engine tests do not replace these devices. Device question is pending.
+2. Production-only services: actual analytics bindings, live admin/cron/queue behavior, final social unfurls, Search Console/Rich Results and field CWV. These require a separately authorized release; none was requested or attempted.
+3. Review the scoped dependency exception in [release-dependencies.md](release-dependencies.md). The affected archive installer is not shipped in the website Worker; a future desktop installer release is separate.
+4. Performance sign-off remains open: final homepage mobile cold/warm runs were 90/89 (LCP 2.9s/2.5s, TBT 230ms/270ms); catalog valid cold/warm measurements were 87/100 (LCP 3.2s/1.3s). Earlier catalog runs scored 95/92. A stopped local server invalidated an intervening cold catalog run; it is excluded. Recheck on an otherwise idle machine/real target phone. Field CWV is not certified.
+5. Final embedded-review playback needs re-verification in the target browser. The in-app browser rendered an empty frame in the latest pass, although the embed endpoint returns 200 and earlier playback advanced to 15 seconds. The existing inline iframe and direct YouTube fallback remain; an experimental custom lazy loader was discarded because it did not establish reliable playback. Do not treat the earlier playback result as final sign-off.
+
+Final performance reports: `.wrangler/fixes-measured-home-cold.json`, `fixes-measured-home-warm.json`, `fixes-measured-catalog-warm.json`; prior valid catalog cold evidence is `.wrangler/fixes-lighthouse-catalog-final.json`. The parallax setup reads scroll position before style changes, avoiding a read-after-write layout flush. Browser launcher cleanup errors on Windows occurred after reports were written and are recorded in the local logs; null-category/interstitial reports are not passes.
+
+No product-direction decision is currently blocking local implementation. Deployment coordination and rollback are prepared in [release-runbook.md](release-runbook.md). Keep the original findings below as historical evidence, not the current status.
+
+## Original audit — must resolve before release
 
 | Priority | Finding and evidence | Completion criterion |
 |---|---|---|

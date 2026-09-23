@@ -155,12 +155,10 @@ function harden(response, url, isLocal) {
     headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   }
   // Cache static art for a day — but ONLY successful responses. Caching a 404 or
-  // 5xx here (e.g. a request that races a deploy before an asset propagates)
-  // would otherwise pin the error at the edge for the full TTL. Filenames aren't
-  // content-hashed, but Workers-Assets re-versions changed files on deploy so
-  // in-place edits still go live; stale-while-revalidate bounds the rest.
+  // Revalidate stable asset URLs, including imports and family styles.
+  // Never persist an asset error during a release propagation window.
   if (url.pathname.startsWith('/assets/') && response.ok) {
-    headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
+    headers.set('Cache-Control', 'public, max-age=0, must-revalidate')
   }
   return new Response(response.body, {
     status: response.status,
@@ -203,7 +201,7 @@ async function renderHome(request, env) {
           await env.CATALOG_DB.prepare(
             `SELECT m.id, m.slug, m.brand, m.name, m.specs,
                 COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero,
-                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND (k.flagged IS NULL OR k.flagged='') AND o.pack_qty=1 THEN k.price_inr END) AS price,
+                COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS price,
                 MIN(CASE WHEN k.in_stock=1 AND k.dead=0 THEN COALESCE(k.last_checked,k.last_seen) END) AS checked_at
              FROM master_model m
              JOIN offer o ON o.master_model_id=m.id
@@ -412,57 +410,6 @@ async function forward(request, origin, prefix) {
     })
   }
 
-  // Inject the site share widget into proxied HTML (the log-viewer app ships
-  // from its own repo; injecting at the edge keeps it on-brand without a
-  // cross-repo release). Floating pill, self-contained, utm-tagged.
-  if (prefix === '/log-viewer' && (out.headers.get('content-type') || '').includes('text/html') && out.status === 200) {
-    out = new HTMLRewriter()
-      .on('body', {
-        element(el) {
-          el.append(shareWidgetHtml('log-viewer', 'RC Log Viewer — replay EdgeTX / iNAV / Betaflight logs in 3D, free in your browser'), { html: true })
-        },
-      })
-      .transform(out)
-  }
-
+  // The upstream app owns its shared chrome, including the share dialog.
   return out
-}
-
-// Floating share pill injected into proxied apps. Every channel carries its
-// own utm_source (utm_medium=share, utm_campaign=<surface>) so GA4 and CF
-// analytics can attribute incoming traffic to these buttons.
-function shareWidgetHtml(campaign, title) {
-  return `
-<style>
-#nn-shr{position:fixed;right:16px;bottom:16px;z-index:2147483000;font-family:'Hanken Grotesk',system-ui,sans-serif}
-#nn-shr-btn{display:inline-flex;align-items:center;gap:7px;background:rgba(15,44,57,.88);border:1.5px solid rgba(252,249,241,.25);color:#FCF9F1;border-radius:999px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28);backdrop-filter:blur(6px)}
-#nn-shr-btn:hover{background:#EF7A25;border-color:#EF7A25;color:#12303D}
-#nn-shr-menu{display:none;position:absolute;right:0;bottom:calc(100% + 12px);background:#FCF9F1;border:2px solid #0F2C39;border-radius:12px;min-width:208px;padding:6px;box-shadow:0 18px 44px rgba(0,0,0,.3)}
-#nn-shr-menu.on{display:block}
-#nn-shr .nn-k{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(15,44,57,.55);margin:6px 10px 5px;font-weight:700}
-#nn-shr-menu a,#nn-shr-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;background:none;border:0;border-radius:8px;font-family:inherit;font-size:14px;font-weight:600;color:#0F2C39;text-align:left;text-decoration:none;cursor:pointer}
-#nn-shr-menu a:hover,#nn-shr-menu button:hover{background:#DDE9EE}
-</style>
-<div id="nn-shr">
-  <div id="nn-shr-menu">
-    <p class="nn-k">Share this page</p>
-    <a id="nn-shr-wa" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.3c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5.2.6.8 1.9.8 2 .1.1.1.3 0 .5-.3.6-.7.9-.5 1.2.7 1.2 1.6 2 2.8 2.6.3.2.5.1.7-.1l.9-1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.4 0 .1 0 .7-.2 1.3z"/></svg>WhatsApp</a>
-    <a id="nn-shr-x" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-6.8 7.8L23.3 22h-6.3l-4.9-6.4L6.5 22H3.4l7.3-8.3L1 2h6.4l4.4 5.9L18.9 2zm-1.1 18h1.7L7.3 3.7H5.5L17.8 20z"/></svg>X / Twitter</a>
-    <button id="nn-shr-cp"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>Copy link</button>
-    <button id="nn-shr-nt"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>More options</button>
-  </div>
-  <button id="nn-shr-btn" aria-haspopup="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>Share</button>
-</div>
-<script>(function(){var b=document.getElementById('nn-shr-btn'),m=document.getElementById('nn-shr-menu');if(!b)return;
-function u(s){var x=new URL(location.origin+location.pathname);x.searchParams.set('utm_source',s);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign',${JSON.stringify(campaign)});return x.toString()}
-var t=${JSON.stringify(title)};
-b.onclick=function(e){e.stopPropagation();m.style.display=m.style.display==='block'?'none':'block'};
-document.addEventListener('click',function(){m.style.display='none'});
-m.addEventListener('click',function(e){e.stopPropagation()});
-document.getElementById('nn-shr-wa').href='https://wa.me/?text='+encodeURIComponent(t+' — '+u('whatsapp'));
-document.getElementById('nn-shr-x').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(t)+'&url='+encodeURIComponent(u('x'));
-document.getElementById('nn-shr-cp').onclick=function(){var el=this;navigator.clipboard.writeText(u('copy')).then(function(){el.textContent='Copied ✓';setTimeout(function(){el.textContent='Copy link'},1400)})};
-var n=document.getElementById('nn-shr-nt');
-if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native')}).catch(function(){})}}else{n.style.display='none'}
-})()</script>`
 }

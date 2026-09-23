@@ -29,7 +29,7 @@ export function page({ title, desc, path, body, jsonld, noindex, image }) {
 <meta property="og:type" content="website" /><meta property="og:site_name" content="narenana" /><meta property="og:url" content="${url}" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" /><meta property="og:image" content="${esc(og)}" />
 <meta name="twitter:title" content="${esc(title)}" /><meta name="twitter:description" content="${esc(desc)}" /><meta property="og:image:alt" content="${esc(title)}" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="${esc(og)}" />
-<link rel="stylesheet" href="/assets/family/fonts.css" /><link rel="stylesheet" href="/assets/family/shell.css" />
+<link rel="preload" href="/assets/family/DMSans-400.woff2" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-700.woff2" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css" /><link rel="stylesheet" href="/assets/family/shell.css" />
 <script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
@@ -37,12 +37,10 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(
 ${familyNav({active:'wings',home:''})}
 <div class="catalog-toolbar"><a href="/wings/browse/">Wings / Browse the catalog</a><button type="button" class="shr-btn" data-share-page aria-haspopup="dialog">↥ Share</button></div>
 ${body}
-<footer class="foot"><p>Prices come from each seller's live listing and carry the date we last confirmed them — always check the seller's page before paying.</p>
-<p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p>
-<p><a class="wordmark" href="/">narenana</a> &nbsp;·&nbsp; <a href="${browsePath}">All models</a> · <a href="/log-viewer/">RC Log Viewer</a> · <a href="https://sim.narenana.com">Nanawing FPV simulator</a> · <a href="https://nanawing2.narenana.com/">Nanawing 2 line-of-sight simulator</a> · <a href="https://www.youtube.com/@narenana" rel="noopener">YouTube</a></p></footer>
+<aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
 ${familyFooter({home:''})}
 
-<script type="module" src="/assets/family/preview-links.js?v=share1"></script></body></html>`
+<script type="module" src="/assets/family/preview-links.js?v=release2"></script></body></html>`
 }
 
 // Power class from a listing's text. LOGIC is in code; the text (engine
@@ -292,20 +290,25 @@ function recipesFor(recipes, components) {
 
 // Compare only the same configuration, condition and pack size. Never publish
 // flagged, removed or unknown prices as a current structured offer.
-export function comparableOfferSchema(offers) {
+export function comparableOffers(offers) {
   const valid = offers.filter(o => !o.dead && !o.flagged && Number.isFinite(o.price_inr) && o.price_inr > 0)
   const live = valid.filter(o => o.in_stock)
   const pool = live.length ? live : valid
   const singles = pool.filter(o => o.pack_qty === 1 && conditionOf(o.title) === 'new')
   const seed = [...(singles.length ? singles : pool)].sort((a,b) => a.price_inr - b.price_inr)[0]
-  if (!seed) return null
+  if (!seed) return {seed:null,group:[]}
   const group = seed.config && seed.pack_qty > 0
     ? pool.filter(o => o.config === seed.config && o.pack_qty === seed.pack_qty && conditionOf(o.title) === conditionOf(seed.title))
     : [seed] // Unknown bundle details do not establish price comparability.
+  return {seed,group}
+}
+export function comparableOfferSchema(offers) {
+  const {seed,group} = comparableOffers(offers)
+  if (!seed) return null
   const individual = o => ({'@type':'Offer', url:o.url_canonical, price:o.price_inr, priceCurrency:'INR',
     availability:o.in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     itemCondition:conditionOf(o.title) === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
-    name:`${o.config || 'Aircraft'} · ${o.pack_qty || 1} unit(s)`, seller:{'@type':'Organization',name:o.source_name}})
+    name:`${o.config || 'Configuration not specified'} · ${o.pack_qty > 0 ? o.pack_qty+' unit(s)' : 'Quantity not specified'}`, seller:{'@type':'Organization',name:o.source_name}})
   if (group.length === 1) return individual(seed)
   return {'@type':'AggregateOffer', priceCurrency:'INR', lowPrice:Math.min(...group.map(o=>o.price_inr)),
     highPrice:Math.max(...group.map(o=>o.price_inr)), offerCount:group.length, offers:group.map(individual)}
@@ -328,26 +331,15 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
     }
   })()
 
-  const liveOffers = offers.filter((o) => !o.dead && o.in_stock)
   const configs = [...new Set(offers.map((o) => o.config))]
-  // Min over PRESENT prices only — data-poor offers (price NULL until a scan
-  // or verify fills it) must render as "—", never as ₹∞ from Math.min().
-  const minOf = (arr) => {
-    const v = arr.map((o) => o.price_inr).filter(Boolean)
-    return v.length ? Math.min(...v) : null
-  }
-  // The headline "from" price (and schema lowPrice) means a NEW, single unit —
-  // same rule as the grid (pack_qty=1). Multi-packs and pre-owned listings
-  // stay in the table but must not undercut the headline. Fall back to any
-  // live offer only when no single-unit new offer has a price.
-  const headlineOffers = liveOffers.filter((o) => o.pack_qty === 1 && conditionOf(o.title) !== 'used')
-  const liveMin = minOf(headlineOffers) ?? minOf(liveOffers)
-  const seenMin = minOf(offers)
+  const {seed: headlineOffer} = comparableOffers(offers)
+  const liveMin = headlineOffer?.in_stock ? headlineOffer.price_inr : null
+  const seenMin = headlineOffer && !headlineOffer.in_stock ? headlineOffer.price_inr : null
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
       <td>${esc(o.config)}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
-      <td>${o.flagged ? `<span title="price under review">${o.price_inr ? inr(o.price_inr) : '—'}*</span>` : o.price_inr ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
+      <td>${o.flagged ? `<span title="price under review">${Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}*</span>` : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
       <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
       <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>
     </tr>`
@@ -396,7 +388,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   const videoSection = vids.length ? `
     <section class="ytv" style="margin-top:44px"><h2 class="sec">Watch it fly</h2>
     <div class="ytv-grid">${vids.map((v) => `
-      <button class="ytv-card" data-yt="${v.video_id}" aria-label="Play video: ${esc(v.title || '')}">
+      <button class="ytv-card" data-yt="${v.video_id}" aria-label="Play video: ${esc((v.title || '').slice(0,80))} ${esc(v.channel || 'YouTube')}${v.views ? ' · '+fmtV(v.views)+' views' : ''}">
         <span class="ytv-thumb"><img src="https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg" alt="${esc(v.title || 'video thumbnail')}" loading="lazy" width="480" height="360" /><span class="ytv-play" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></span></span>
         <span class="ytv-meta"><span class="ytv-title">${esc((v.title || '').slice(0, 80))}</span><span class="ytv-sub">${esc(v.channel || 'YouTube')}${v.views ? ' · ' + fmtV(v.views) + ' views' : ''}</span></span>
       </button>`).join('')}
@@ -438,6 +430,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
         : seenMin
           ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
           : ''}
+      ${headlineOffer ? `<p class="price-context">${esc(headlineOffer.config || 'Configuration not specified')} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
       <dl class="spec">
         ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}
       </dl>

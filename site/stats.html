@@ -134,6 +134,7 @@
     const PROJECTS = [
       { id: 'lastcall', name: 'Last Call', host: 'lastcall.narenana.com', sub: 'reverse tower defence' },
       { id: 'nanawing', name: 'Nanawing', host: 'sim.narenana.com', sub: 'FPV wing simulator' },
+      { id: 'nanawing2', name: 'Nanawing 2', host: 'nanawing2.narenana.com', sub: 'line-of-sight RC simulator' },
       { id: 'hub', name: 'narenana.com', host: 'www.narenana.com', sub: 'hub · wings catalog · log viewer' },
       { id: 'agent', name: 'Agent', host: 'agent.narenana.com', sub: 'agent.narenana.com' },
     ]
@@ -282,8 +283,8 @@
         let series = hostDaily.has(p.host) ? dailySeries(hostDaily.get(p.host), days) : []
         let seriesLabel = 'sessions · 7d' // the big number is the 7-day sum
         // Without GA creds, fall back to game-native activity so cards stay live.
-        if (!series.length && p.id === 'lastcall') { series = lcStarts; seriesLabel = 'game starts · 7d' }
-        if (!series.length && p.id === 'nanawing') { series = nwFlights; seriesLabel = 'flights · 7d' }
+        if (!series.length && p.id === 'lastcall' && ok(data.lastcall)) { series = lcStarts; seriesLabel = 'game starts · 7d' }
+        if (!series.length && p.id === 'nanawing' && ok(data.nanawing)) { series = nwFlights; seriesLabel = 'flights · 7d' }
         const t = hostTotals.get(p.host)
         const facts = []
         if (p.id === 'lastcall' && ok(data.lastcall)) {

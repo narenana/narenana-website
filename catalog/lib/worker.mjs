@@ -102,9 +102,12 @@ export async function handleCatalog(request, url, env, ctx) {
   // running). The rendered page is cached at the edge per full URL for 15 min (s-maxage) with a
   // 5 min browser max-age — stock and prices move on ingest cadence, not per-view. Admin, /api,
   // and the image proxy above are never cached; non-200s (incl. the 404 grid) and non-GETs skip.
-  if (request.method === 'GET') {
+  if (request.method === 'GET' && !['localhost','127.0.0.1'].includes(url.hostname)) {
+    const cacheUrl = new URL(request.url)
+    cacheUrl.searchParams.set('__release','theme-20260923-2')
+    const cacheKey = new Request(cacheUrl, request)
     const cache = caches.default
-    const hit = await cache.match(request)
+    const hit = await cache.match(cacheKey)
     if (hit) return hit
     const res = await publicCatalogPages(url, env)
     if (
@@ -114,7 +117,7 @@ export async function handleCatalog(request, url, env, ctx) {
       const store = new Response(res.clone().body, res)
       store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
       store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
-      ctx.waitUntil(cache.put(request, store))
+      ctx.waitUntil(cache.put(cacheKey, store))
     }
     return res
   }
@@ -194,9 +197,10 @@ async function publicCatalogPages(url, env) {
          WHERE master_model_id=? AND excluded=0 ORDER BY pinned DESC, views DESC LIMIT 3`,
         m.id,
       )
-      const reference = await one(env, `SELECT p.url,p.title,p.body_text,p.span_mm,p.fetched_at,x.status AS match_status
+      const reference = await one(env, `SELECT p.url,p.title,p.body_text,p.span_mm,p.fetched_at,x.status AS match_status,pr.overrides_json
         FROM mfr_match x JOIN mfr_product p ON p.id=x.mfr_product_id
         JOIN manufacturer mf ON mf.id=p.manufacturer_id
+        LEFT JOIN mfr_profile pr ON pr.master_model_id=x.master_model_id AND pr.source_mfr_product_id=x.mfr_product_id
         WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
       return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
     }
@@ -227,7 +231,7 @@ async function gridMasters(env, cat, power = 'electric', page = 1, sort = 'price
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%'
                   OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%' THEN 1 ELSE 0 END) AS preowned,
@@ -258,7 +262,7 @@ async function similarMasters(env, cat, m) {
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
@@ -874,7 +878,7 @@ async function api(request, url, env, ep, actor) {
       : null
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
         SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers,
-        MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price
+        COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
       ${where} GROUP BY m.id ${having} ${orderBy} LIMIT ? OFFSET ?`, ...condParams, PAGE, (page - 1) * PAGE)
@@ -1217,6 +1221,8 @@ async function api(request, url, env, ep, actor) {
       masterId,
       mfrProductId,
     )
+    if (Object.hasOwn(body,'expectedUpdatedAt') && body.expectedUpdatedAt !== (stored?.updated_at ?? null))
+      return json({error:'aircraft data changed; reload before saving'},409)
     const previous = jsonObject(stored?.overrides_json)
     const overrides = { ...previous, ...patch }
     try {

@@ -33,6 +33,7 @@
     if (enabled && !document.hidden && !frame) frame = requestAnimationFrame(paint);
   }
   function configure() {
+    const hasScrolled = window.scrollY > 0;
     enabled = !preference.matches;
     document.documentElement.classList.toggle('motion-ready', enabled);
     if (frame) cancelAnimationFrame(frame);
@@ -44,7 +45,7 @@
         element.style.removeProperty('--depth-y');
       }
     });
-    if (window.scrollY > 0) schedule();
+    if (hasScrolled) schedule();
   }
   window.addEventListener('scroll', schedule, {passive: true});
   window.addEventListener('resize', schedule, {passive: true});

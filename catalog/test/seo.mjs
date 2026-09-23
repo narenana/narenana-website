@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { comparableOfferSchema } from '../lib/public.mjs'
+import { comparableOfferSchema, comparableOffers, renderMaster } from '../lib/public.mjs'
 import { manufacturerReference, productOverview } from '../lib/product-overview.mjs'
 
 const offer = (changes = {}) => ({ price_inr: 1000, in_stock: 1, config: 'KIT', pack_qty: 1, title: 'Test wing', url_canonical: 'https://seller.example/wing', source_name: 'Seller', ...changes })
@@ -66,7 +66,7 @@ test('redirect, genuine 404, staging-only preview exclusion and sitemap discover
   assert.equal(new URL(redirect.headers.get('location'), base).pathname, '/')
   assert.equal(new URL(redirect.headers.get('location'), base).search, '?source=test')
   assert.equal((await fetch(base + '/this-page-does-not-exist-seo-check')).status, 404)
-  assert.match((await fetch(base + '/direction-b/')).headers.get('x-robots-tag'), /noindex/)
+  assert.equal((await fetch(base + '/direction-b/')).status,404)
   const robots = await (await fetch(base + '/robots.txt')).text()
   assert.ok(robots.includes('log-viewer/sitemap.xml') && robots.includes('nanawing2.narenana.com/sitemap.xml'))
   const sitemap = await (await fetch(base + '/sitemap.xml')).text()
@@ -81,3 +81,28 @@ test('all inline homepage/watch-page JavaScript parses', async () => {
     }
   }
 })
+
+test('headline uses the same eligible seed as structured offers', () => {
+ const cases = [
+  [offer({flagged:'review',price_inr:1}),offer()],
+  [offer({price_inr:-1}),offer({price_inr:0}),offer()],
+  [offer({price_inr:100,title:'Pre-owned Wing'}),offer()],
+  [offer({price_inr:200,pack_qty:2}),offer()],
+  [offer({config:null}),offer({config:null,price_inr:1200})],
+  [offer({in_stock:0}),offer({dead:1,price_inr:2})],
+  [offer({dead:1})],
+ ];
+ for(const offers of cases){
+  const {seed}=comparableOffers(offers),schema=comparableOfferSchema(offers);
+  const html=renderMaster({name:'Wings',path_prefix:'/wings',spec_schema:'[]'}, {id:999,brand:'Test',name:'Wing',slug:'test',specs:'{}'},offers);
+  if(seed){assert.equal(schema.price??schema.lowPrice,seed.price_inr);assert.ok(html.includes(seed.price_inr.toLocaleString('en-IN')));}
+  else assert.equal(schema,null);
+  assert.ok(!html.includes('from</span> ₹1</div>'));
+ }
+});
+test('manufacturer physical overrides and explicit clears override harvested facts',()=>{
+ const row={match_status:'accepted',url:'https://manufacturer.example/wing',title:'Wing',body_text:'Minimum 4 channels.',overrides_json:JSON.stringify({channels:6,motorCount:null})};
+ assert.equal(manufacturerReference(row).properties.find(p=>p.name==='Minimum channels')?.value,6);
+ const cleared=manufacturerReference({...row,overrides_json:JSON.stringify({channels:null})});
+ assert.ok(!cleared.properties.some(p=>p.name==='Minimum channels'));
+});

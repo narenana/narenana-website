@@ -654,7 +654,7 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   const out = renderGridNext(cat, rows, base)
   assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
   assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
-  assert.ok(!out.includes('name="robots" content="noindex"'), 'default grid must be indexable (not noindex)')
+  assert.ok(!/name="robots" content="noindex(?:,|")/.test(out), 'default grid must be indexable (not noindex)')
   assert.ok(renderGridNext(cat, rows, { ...base, sort: 'price-desc' }).includes('name="robots" content="noindex,follow"'), 'non-default sort state is noindex')
   assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
   assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
@@ -704,7 +704,7 @@ test('catalog search: name/brand/type matching + search-mode grid', () => {
   const full = rows.map((m) => ({ ...m, specs: '{}', sellers: 1, hero_any: null, min_price: 5000, span_mm: 1000, new_stock: 1, preowned_stock: 0 }))
   const out = renderGridNext(cat, full, { power: 'electric', q: 'ranger', counts: { electric: 3, gas: 1 } })
   assert.ok(/id="fx-nres">2</.test(out), 'search result count reflects the query')
-  assert.ok(out.includes('name="robots" content="noindex"'), 'search pages are noindex')
+  assert.ok(/name="robots" content="noindex(?:,|")/.test(out), 'search pages are noindex')
   assert.ok(out.includes('value="ranger"'), 'search box retains the query')
   assert.ok(out.includes('class="fx-qclear"'), 'search mode offers a clear link')
   const plain = renderGridNext(cat, full.filter((m) => m.power === 'electric'), { power: 'electric', counts: { electric: 3, gas: 1 } })
@@ -755,7 +755,7 @@ test('aircraft-data admin exposes editable sourced facts and the full protected 
   assert.match(ADMIN_HTML, /Manufacturer text/)
   assert.match(ADMIN_HTML, /Unknown \/ needs input/)
   assert.match(ADMIN_HTML, /data-mp-save/)
-  assert.match(ADMIN_HTML, /mfrProductId:\+r\.mfr_product_id,overrides:over/)
+  assert.match(ADMIN_HTML, /mfrProductId:\+r\.mfr_product_id,expectedUpdatedAt:r\.updated_at\?\?null,overrides:over/)
   assert.match(ADMIN_HTML, /\/img\/mfr\/'?\+r\.mfr_product_id\+'?\/'?\+i/)
   assert.match(ADMIN_HTML, /Shared mapping:/)
   assert.match(ADMIN_HTML, /Mapping changed:/)
@@ -904,6 +904,7 @@ test('aircraft-data save rejects invalid and stale requests without writing', as
   const profiles = (await api('mfr-profiles')).body.profiles
   if (!profiles.length) return
   const row = profiles[0]
+  assert.equal((await api('mfr-profile',{masterId:row.master_model_id,mfrProductId:row.mfr_product_id,expectedUpdatedAt:-1,overrides:{channels:4}})).status,409)
   assert.equal((await api('mfr-profile', {
     masterId: row.master_model_id,
     mfrProductId: row.mfr_product_id,
