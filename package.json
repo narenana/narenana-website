@@ -13,7 +13,8 @@
     "catalog:migrate:remote": "wrangler d1 migrations apply CATALOG_DB --remote",
     "catalog:test": "node --test catalog/test/suite.mjs",
     "seo:test": "node --test catalog/test/seo.mjs",
-    "seo:audit": "node scripts/seo-audit.mjs --local && node scripts/release-link-audit.mjs"
+    "seo:audit": "node scripts/sitemap-audit.mjs && node scripts/seo-audit.mjs --local && node scripts/release-link-audit.mjs",
+    "sitemap:audit": "node scripts/sitemap-audit.mjs"
   },
   "devDependencies": {
     "png-to-ico": "^3.0.2",

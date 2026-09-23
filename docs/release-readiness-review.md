@@ -8,6 +8,8 @@ Earlier completion statements covered implementation, individual previews and se
 
 ## Fix log — 24 September 2026
 
+**Sitemap follow-up:** all four maps checked against indexable source pages and robots.txt, with valid XML. Main website/Wings: 436 URLs; Nanawing: 12; Nanawing 2: 2; log viewer: 11; 460 unique URLs across the property. Log-viewer build-day lastmod removed; product lastmod remains tied to real model edits. New `npm run sitemap:audit` checks canonical coverage, duplicates, host/path scope, discovery and modification dates, and is required by `seo:audit`. Evidence: [sitemap-readiness.json](sitemap-readiness.json). Rebuilt the log viewer and confirmed stable repeated sitemap generation. No submission, push or deployment.
+
 Nothing is pushed or deployed. Historical findings below remain as the original checklist; this table tracks closure.
 
 | Item | Status | Change / evidence |
@@ -33,7 +35,7 @@ Nothing is pushed or deployed. Historical findings below remain as the original 
 - Website: codex/redesign-release; implementation commit is the commit containing this updated checklist (resolve with git log). Prior integration 174ac7d.
 - Nanawing: codex/site-theme-seo, **7624cb0**; 814 tests, build, offline update probe 8/8.
 - Nanawing 2: codex/site-theme-seo, **381df71**; typecheck, 153 unit tests, headless/provenance/binary checks, 52 browser cases passed across full run plus targeted retries, final offline 2/2. Initial browser run: 47 passed, 5 failed; all five rerun successfully after two test selector/timing corrections. Not represented as a clean first run.
-- Log viewer: codex/site-theme-seo, **b19164a**; build, 44 tests, generated cache-revision gate, mobile proxy sharing/replay verified.
+- Log viewer: codex/site-theme-seo, **649347d** (sitemap follow-up to b19164a); build, 44 tests, generated cache-revision gate, mobile proxy sharing/replay verified.
 - Website catalog 55/55 and SEO 12/12 pass; Worker dry-run succeeds without upload. Full metadata/link crawl is recorded in seo-local-crawl.json and release-link-audit.json.
 
 Remaining gates are **not silently marked fixed**:

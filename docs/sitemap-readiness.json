@@ -1,0 +1,30 @@
+{
+  "checkedAt": "2026-09-23T19:59:57.447Z",
+  "reports": [
+    {
+      "name": "Website and Wings",
+      "sitemap": "https://www.narenana.com/sitemap.xml",
+      "urls": 436,
+      "staticCanonicalPages": 4
+    },
+    {
+      "name": "Nanawing",
+      "sitemap": "https://sim.narenana.com/sitemap.xml",
+      "urls": 12,
+      "staticCanonicalPages": 12
+    },
+    {
+      "name": "Nanawing 2",
+      "sitemap": "https://nanawing2.narenana.com/sitemap.xml",
+      "urls": 2,
+      "staticCanonicalPages": 2
+    },
+    {
+      "name": "Log viewer",
+      "sitemap": "https://www.narenana.com/log-viewer/sitemap.xml",
+      "urls": 11,
+      "staticCanonicalPages": 11
+    }
+  ],
+  "errors": []
+}
