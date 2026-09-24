@@ -118,8 +118,8 @@ export async function browseData(env, cat) {
     `SELECT m.slug, m.brand, m.name, m.role_tags, COALESCE(m.power,'electric') AS power,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id=m.id
-     JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready'
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -196,7 +196,7 @@ ${sections}
 
   return page({
     title: `All RC plane models in India (${total}) | narenana`,
-    desc: `Complete index of every RC plane in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with latest checked prices.`,
+    desc: `Index of every RC plane currently in stock in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with latest checked prices.`,
     path: `${pfx}/browse/`,
     body,
     jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'All RC plane models', url: `${SITE}${pfx}/browse/` },
@@ -226,8 +226,8 @@ export async function gridDataNext(env, cat, power) {
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND ${USED} THEN 1 ELSE 0 END) AS preowned_stock,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND NOT ${USED} THEN 1 ELSE 0 END) AS new_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id = m.id
-     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready' ${power === 'all' ? '' : "AND COALESCE(m.power,'electric')=?"}
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1`,

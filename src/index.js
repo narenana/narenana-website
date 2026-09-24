@@ -10,7 +10,7 @@
 // KV under key "feed". Page reloads naturally pick up the new payload. Also
 // runs the Wings pipeline (availability refresh + discovery), gated internally.
 
-import { handleCatalog, catalogScheduled, PUBLIC_CACHE_RELEASE } from '../catalog/lib/worker.mjs'
+import { handleCatalog, catalogScheduled, publicCacheKey, forMethod } from '../catalog/lib/worker.mjs'
 import { consumeManufacturerHarvestQueue } from '../catalog/lib/mfr-jobs.mjs'
 import { homeCatalogQueries } from '../catalog/lib/home-queries.mjs'
 import { ASSET_VERSIONS } from './asset-versions.mjs'
@@ -48,7 +48,12 @@ export default {
     // /log-viewer/* is a separate proxied app — leave its responses untouched
     // (the delicate redirect + X-Robots-Tag handling lives in forward()).
     // Cloudflare-dashboard edge HSTS covers those hosts belt-and-suspenders.
-    if (url.pathname === '/log-viewer' || url.pathname.startsWith('/log-viewer/')) {
+    // No trailing slash: the app's relative asset URLs would resolve against
+    // the site root (/assets/...) and the viewer would load blank.
+    if (url.pathname === '/log-viewer') {
+      return new Response(null, { status: 301, headers: { Location: '/log-viewer/' + url.search } })
+    }
+    if (url.pathname.startsWith('/log-viewer/')) {
       // latest.narenana.com mirrors the LATEST log-viewer preview build (the
       // `latest` Pages branch alias); www / apex stay on the production
       // origin. Falls back to production if the staging var is unset.
@@ -169,7 +174,9 @@ function harden(response, url, isLocal) {
   //   today's bytes under it, so it falls through to the short rule.
   // - Anything else (unversioned or stale): 5 min, then revalidated in the
   //   background — never render-blocking, at most briefly stale after a release.
-  if (url.pathname.startsWith('/assets/') && response.ok) {
+  // 304s get the same header: a 304 replaces the stored response's headers
+  // (RFC 9111 4.3.4), so the Workers-Assets default on it would undo this.
+  if (url.pathname.startsWith('/assets/') && (response.ok || response.status === 304)) {
     const v = url.searchParams.get('v')
     headers.set('Cache-Control', v && ASSET_VERSIONS[url.pathname] === v
       ? 'public, max-age=31536000, immutable'
@@ -193,18 +200,19 @@ function harden(response, url, isLocal) {
 // HTML at the edge like catalog pages (same release key, same TTLs) so traffic
 // and crawlers cost one render per ~15 minutes per location, not one per view.
 async function cachedHome(request, env, ctx, isLocal) {
-  if (request.method !== 'GET' || isLocal) return renderHome(request, env)
+  if ((request.method !== 'GET' && request.method !== 'HEAD') || isLocal) return renderHome(request, env)
   // Key on host + path only: the rendered homepage never depends on the query
   // string, and keying on it would let ?utm=/?fbclid=/random params bypass the
-  // cache and force a D1 render each.
-  const cacheUrl = new URL('/', request.url)
-  cacheUrl.searchParams.set('__release', PUBLIC_CACHE_RELEASE)
-  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
+  // cache and force a D1 render each. The key carries the deployed version.
+  const cacheKey = publicCacheKey(new URL(request.url), env, { path: '/', params: [], tag: 'home' })
   const cache = caches.default
   const hit = await cache.match(cacheKey)
-  if (hit) return hit
+  // HEAD (uptime monitors, link checkers) is answered from the GET entry, and a
+  // miss renders the GET once so monitors can't run D1 on every probe.
+  if (hit) return forMethod(request, hit)
   const state = { degraded: false }
-  const res = await renderHome(request, env, state)
+  const get = request.method === 'HEAD' ? new Request(request.url, { method: 'GET', headers: request.headers }) : request
+  const res = await renderHome(get, env, state)
   // A render that fell back because KV or D1 failed is served, never cached:
   // one blip must not pin a homepage without prices/videos for 15 minutes.
   if (!state.degraded && res.status === 200 && (res.headers.get('content-type') || '').includes('text/html')) {
@@ -213,7 +221,7 @@ async function cachedHome(request, env, ctx, isLocal) {
     store.headers.set('x-home-cache', 'HIT') // only ever seen on responses served FROM the cache
     ctx.waitUntil(cache.put(cacheKey, store))
   }
-  return res
+  return forMethod(request, res)
 }
 
 async function renderHome(request, env, state = {}) {

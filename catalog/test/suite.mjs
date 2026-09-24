@@ -790,6 +790,30 @@ test('in-stock only: sitemap and /browse/ list exactly the grid\'s in-stock mode
   assert.ok(!/Currently unavailable|out of stock/i.test(browse), '/browse/ must not advertise unavailable models')
 })
 
+// Live data: every in-stock flagged listing (admin "flagged" queue) must show
+// "Price under review" in its product-page row and never its stored amount.
+test('flagged live listings: product pages withhold the flagged amount', async () => {
+  const { status, body } = await api('review?status=flagged')
+  assert.equal(status, 200)
+  const live = (body.skus || []).filter((k) => k.in_stock === 1 && k.review_status === 'approved' && k.master && k.price_inr > 0)
+  if (!live.length) return // nothing flagged right now
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const browse = await (await get('/wings/browse/')).text()
+  let checked = 0
+  for (const k of live) {
+    const at = browse.indexOf('/">' + esc(k.master) + '</a>')
+    if (at < 0) continue // master not public (draft) — nothing to check
+    const slug = browse.slice(browse.lastIndexOf('href="/wings/', at) + 'href="/wings/'.length, at)
+    const html = await (await get(`/wings/${slug}/`)).text()
+    const row = html.split('<tr').find((r) => r.includes(`href="${esc(k.url_canonical)}"`))
+    assert.ok(row, `${slug}: row for flagged listing ${k.id} is on the page`)
+    assert.ok(row.includes('Price under review'), `${slug}: flagged listing ${k.id} is labelled Price under review`)
+    assert.ok(!row.includes(k.price_inr.toLocaleString('en-IN')), `${slug}: flagged amount of listing ${k.id} is not shown`)
+    checked++
+  }
+  assert.ok(checked > 0, 'at least one public model has a flagged live listing to check')
+})
+
 // One header everywhere: the homepage's static header must be exactly the
 // shared familyNav() output (plus its homepage-only "Fly FPV" button), and
 // catalog pages must render the same header without the button.
@@ -819,6 +843,7 @@ test('asset versions are current (run npm run assets:version)', () => {
   assert.deepEqual(plan.changes.map((f) => f.split(/[\\/]/).slice(-3).join('/')), [], 'files with stale asset versions')
   assert.equal(plan.manifestStale, false, 'src/asset-versions.mjs is stale')
   assert.deepEqual(plan.missing, [], 'references to assets that do not exist')
+  assert.deepEqual(plan.unhashed, [], 'asset references with a hand-written ?v= label')
 })
 
 test('asset cache headers: current hash immutable, anything else short-lived', async () => {
@@ -831,10 +856,29 @@ test('asset cache headers: current hash immutable, anything else short-lived', a
     assert.equal(r.status, 200)
     assert.equal(r.headers.get('cache-control'), 'public, max-age=300, stale-while-revalidate=86400', p + ' must not be immutable')
   }
-  const home = await (await get('/')).text()
-  const refs = [...home.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1])
-  assert.ok(refs.length > 5, 'homepage links assets')
-  for (const r of refs) assert.match(r, /\?v=[0-9a-f]{10}$/, 'homepage asset link is versioned: ' + r)
+  // A 304 replaces the stored response's headers, so it must carry the same rule.
+  for (const [p, cc] of [['/assets/family/fonts.css?v=' + current, 'public, max-age=31536000, immutable'], ['/assets/family/fonts.css', 'public, max-age=300, stale-while-revalidate=86400']]) {
+    const etag = (await get(p)).headers.get('etag')
+    assert.ok(etag, p + ' has an ETag')
+    const revalidated = await get(p, { 'if-none-match': etag })
+    assert.equal(revalidated.status, 304)
+    assert.equal(revalidated.headers.get('cache-control'), cc, p + ' 304 keeps its cache rule')
+  }
+  // Every page template links versioned assets only (header avatar included).
+  const browse = await (await get('/wings/browse/')).text()
+  const product = (browse.match(/href="(\/wings\/[a-z0-9-]+\/)">/g) || []).map((m) => m.slice(6, -2)).find((p) => !resolveLanding(p.split('/')[2]))
+  for (const path of ['/', '/wings/', product]) {
+    const html = await (await get(path)).text()
+    const refs = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1])
+    assert.ok(refs.length > 3, path + ' links assets')
+    for (const r of refs) assert.match(r, /\?v=[0-9a-f]{10}$/, `${path} asset link is versioned: ${r}`)
+  }
+})
+
+test('/log-viewer without a trailing slash redirects into the app', async () => {
+  const r = await get('/log-viewer?from=test')
+  assert.equal(r.status, 301)
+  assert.equal(r.headers.get('location'), '/log-viewer/?from=test')
 })
 
 // Owner rule: manufacturer-sourced content is ADMIN-ONLY until the owner decides
@@ -865,6 +909,19 @@ test('homepage catalog queries: pinned join order, live-priced sellers, cards re
   const sellers = +(html.match(/id="catalog-seller-count"[^>]*>Listings from (\d+) Indian sellers/) || [])[1]
   assert.ok(sellers > 0, 'homepage shows a live seller count')
   assert.equal([...html.matchAll(/class="shopc-name"/g)].length, 4, 'homepage shows four catalog cards')
+})
+
+// D1 rows-read guard. Left to itself SQLite drives master→offer→sku from sku,
+// which read ~240k rows per grid/browse/sitemap/404 render (measured on the
+// production snapshot) against ~2–4k with the order pinned. Admin LEFT JOINs
+// are not reorderable and are out of scope.
+test('catalog master→offer→sku joins stay pinned with CROSS JOIN', async () => {
+  const { readFile } = await import('node:fs/promises')
+  for (const f of ['worker.mjs', 'grid-next.mjs', 'jobs.mjs', 'home-queries.mjs']) {
+    const src = await readFile(new URL('../lib/' + f, import.meta.url), 'utf8')
+    const loose = src.match(/FROM master_model m\s+(?:INNER\s+)?JOIN offer o ON o\.master_model_id\s*=\s*m\.id\s+(?:INNER\s+|CROSS\s+)?JOIN sku k\b/g) || []
+    assert.deepEqual(loose, [], f + ': pin the join order (FROM master_model m CROSS JOIN offer o … CROSS JOIN sku k …)')
+  }
 })
 
 test('category grid renders (SSR), stylesheet served', async () => {

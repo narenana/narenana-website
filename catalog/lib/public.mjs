@@ -29,12 +29,12 @@ export function page({ title, desc, path, body, jsonld, noindex, image }) {
 <meta property="og:type" content="website" /><meta property="og:site_name" content="narenana" /><meta property="og:url" content="${url}" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" /><meta property="og:image" content="${esc(og)}" />
 <meta name="twitter:title" content="${esc(title)}" /><meta name="twitter:description" content="${esc(desc)}" /><meta property="og:image:alt" content="${esc(title)}" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="${esc(og)}" />
-<link rel="preload" href="/assets/family/DMSans-400.woff2?v=9fea608a94" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-700.woff2?v=3787a5a419" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css?v=c848c473a8" /><link rel="stylesheet" href="/assets/family/shell.css?v=79d618fb95" />
+<link rel="preload" href="/assets/family/DMSans-400.woff2?v=9fea608a94" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-800.woff2?v=2515494e8c" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css?v=c848c473a8" /><link rel="stylesheet" href="/assets/family/shell.css?v=79d618fb95" />
 <script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
 </head><body>
-${familyNav({active:'wings',home:''})}
+${familyNav({active:'wings',home:'',avatar:'/assets/family/avatar.jpg?v=49424a6497'})}
 <div class="catalog-toolbar"><a href="/wings/browse/">Wings / Browse the catalog</a></div>
 ${body}
 <aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
@@ -132,7 +132,7 @@ function masterCard(m, prefix) {
           <p class="prod-brand">${esc(m.brand)}</p>
           <h3 class="prod-name">${esc(m.name)}</h3>
           <p class="prod-spec">${esc(specLine(m))}</p>
-          <div class="prod-price">${price ? `<div class="price"><span class="price-pre">${oos ? 'was' : 'from'}</span> ${inr(price)}</div>` : '<div class="price is-muted">—</div>'}
+          <div class="prod-price">${price ? `<div class="price"><span class="price-pre">${oos ? 'was' : 'from'}</span> ${inr(price)}</div>` : `<div class="price is-muted">${oos ? '—' : 'Price under review'}</div>`}
             ${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
         </div>
         <span class="prod-cta ${oos ? 'is-off' : ''}">${oos ? 'See details' : m.sellers > 1 ? `Compare ${m.sellers} sellers` : 'View & buy'}</span>
@@ -341,11 +341,17 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   const liveMin = headlineOffer?.in_stock ? headlineOffer.price_inr : null
   const priceUnderReview = liveAny && !liveMin
   const seenMin = !liveAny && headlineOffer && !headlineOffer.in_stock ? headlineOffer.price_inr : null
+  // A flagged listing (price jump / identity mismatch awaiting review) keeps its
+  // stock badge but never shows its amount: the number may be wrong. Rows keep
+  // the query's order (live first, cheapest first) with flagged rows after the
+  // priced ones of the same availability, so a withheld low price can't top it.
+  const offerOrder = (list) => list.map((o, i) => [o, i]).sort(([a, i], [b, j]) =>
+    (a.dead - b.dead) || (b.in_stock - a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
       <td>${esc(o.config)}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
-      <td>${o.flagged ? `<span title="price under review">${Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}*</span>` : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
+      <td>${o.flagged ? '<span style="color:var(--muted);font-weight:600">Price under review</span>' : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
       <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
       <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>
     </tr>`
@@ -448,7 +454,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
     </div>
     <h2 class="sec">Where to buy${configs.length > 1 ? ' <span class="count">by configuration</span>' : ''}</h2>
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
-      <tbody>${offers.map(offerRow).join('')}</tbody></table>
+      <tbody>${offerOrder(offers).map(offerRow).join('')}</tbody></table>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
     ${manufacturer?.properties.length ? `<section class="manufacturer-reference"><h2 class="sec">Manufacturer reference</h2><p>Specifications from the accepted manufacturer listing. Seller packages can differ.</p><dl class="spec">${manufacturer.properties.map(p=>`<div><dt>${esc(p.name)}</dt><dd>${esc(String(p.value))}${p.unit?' '+esc(p.unit):''}</dd></div>`).join('')}</dl><p class="source"><a href="${esc(manufacturer.url)}" target="_blank" rel="noopener">View the manufacturer's listing ↗</a>${manufacturer.checked?' · Retrieved '+dateOf(manufacturer.checked):''}</p></section>` : ''}
     ${videoSection}

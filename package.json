@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
-    "assets": "node scripts/gen-assets.mjs",
+    "assets": "node scripts/gen-assets.mjs && node scripts/version-assets.mjs",
     "deploy": "wrangler deploy",
     "catalog:css": "node catalog/lib/gen-styles.mjs",
     "catalog:migrate": "wrangler d1 migrations apply CATALOG_DB --local",

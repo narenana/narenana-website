@@ -54,16 +54,33 @@ const html = (body, status = 200) =>
 // Yandex accept our URL submissions). Not a secret; safe in the repo.
 const INDEXNOW_KEY = '7f3e9a1c5b8d4260e94a1f7c3b0d8e62'
 
-// Part of every edge-cache key for public HTML (catalog pages + homepage).
-// Change it in any release that changes page markup, so pages cached from the
-// previous build are not served after deploy. See docs/release-runbook.md.
+// Edge-cache release tag for public HTML (catalog pages + homepage). The key
+// also carries the deployed Worker version (the CF_VERSION_METADATA binding),
+// so every deploy and every rollback reads and writes its own entries with no
+// manual step: a build never serves HTML another build cached. The constant
+// only names the key format; changing it is never required for a release.
 export const PUBLIC_CACHE_RELEASE = 'theme-20260924-1'
+export const cacheRelease = (env) => `${PUBLIC_CACHE_RELEASE}.${env?.CF_VERSION_METADATA?.id || 'dev'}`
+
+// The only query parameters a public catalog page reads. The cache key keeps
+// these and drops the rest, so tracking and junk parameters (?utm_*, ?fbclid,
+// a hand-made ?__release) share the real entry instead of forcing a D1 render
+// each, and can never select another build's entry.
+const PAGE_PARAMS = ['ui', 'power', 'role', 'size', 'q', 'cond', 'sort', 'page']
+export function publicCacheKey(url, env, { path = url.pathname, params = PAGE_PARAMS, tag = null } = {}) {
+  const key = new URL(path, url.origin)
+  for (const k of params) { const v = url.searchParams.get(k); if (v !== null) key.searchParams.set(k, v) }
+  if (tag) key.searchParams.set('__entry', tag) // a key no page URL can produce
+  key.searchParams.set('__release', cacheRelease(env))
+  return new Request(key.toString(), { method: 'GET' })
+}
+// HEAD shares the GET entry; it just never carries the body.
+export const forMethod = (request, res) => (request.method === 'HEAD' ? new Response(null, res) : res)
 
 // Manufacturer-sourced facts (harvested specs, manufacturer link, retrieval
 // date) on public product pages and in their JSON-LD. OFF by owner decision
 // (2026-09-24): manufacturer content stays admin-only until the owner settles
-// how descriptions are used and how conflicting wingspans are handled. When it
-// is switched on, bump PUBLIC_CACHE_RELEASE in the same change.
+// how descriptions are used and how conflicting wingspans are handled.
 export const PUBLIC_MANUFACTURER_FACTS = false
 
 export async function handleCatalog(request, url, env, ctx) {
@@ -113,32 +130,45 @@ export async function handleCatalog(request, url, env, ctx) {
   // was reading ~8.5M D1 rows/day against the account's 5M/day free cap (Cloudflare alert, two days
   // running). The rendered page is cached at the edge per full URL for 15 min (s-maxage) with a
   // 5 min browser max-age — stock and prices move on ingest cadence, not per-view. Admin, /api,
-  // and the image proxy above are never cached; non-200s (incl. the 404 grid) and non-GETs skip.
-  if (request.method === 'GET' && !['localhost','127.0.0.1'].includes(url.hostname)) {
-    const cacheUrl = new URL(request.url)
-    cacheUrl.searchParams.set('__release', PUBLIC_CACHE_RELEASE)
-    const cacheKey = new Request(cacheUrl, request)
+  // and the image proxy above are never cached. HEAD is answered from the GET entry. Every
+  // unknown slug in a category shares ONE cached 404 grid, so scanners and stale links can't
+  // force a grid render per junk URL.
+  // Paths the catalog doesn't own (the homepage, /assets/*, static pages) leave here, before
+  // any cache lookup. categories() is per-isolate cached, so this costs no D1 read.
+  const cats = await categories(env)
+  if (path !== '/sitemap.xml' && !cats.some((c) => c.live && (path === c.path_prefix || path.startsWith(c.path_prefix + '/')))) return null
+  if ((request.method === 'GET' || request.method === 'HEAD') && !['localhost','127.0.0.1'].includes(url.hostname)) {
     const cache = caches.default
-    const hit = await cache.match(cacheKey)
-    if (hit) return hit
-    const res = await publicCatalogPages(url, env)
-    if (
-      res && res.status === 200
-      && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
-    ) {
-      const store = new Response(res.clone().body, res)
-      store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
-      store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
-      ctx.waitUntil(cache.put(cacheKey, store))
+    const cached = async (key, render, status = 200) => {
+      const hit = await cache.match(key)
+      if (hit) return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
+      const res = await render()
+      if (
+        res && res.status === status
+        && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
+      ) {
+        // Stored as 200 whatever it is served as: the Cache API need not keep error statuses.
+        const store = new Response(res.clone().body, { status: 200, headers: res.headers })
+        store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
+        store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
+        ctx.waitUntil(cache.put(key, store))
+      }
+      return res
     }
-    return res
+    const notFound = (cat) => cached(publicCacheKey(url, env, { path: cat.path_prefix + '/', params: [], tag: 'not-found' }), () => notFoundGrid(env, cat), 404)
+    const res = await cached(publicCacheKey(url, env), () => publicCatalogPages(url, env, notFound))
+    return res && forMethod(request, res)
   }
   return publicCatalogPages(url, env)
 }
 
+// Unknown slug → the REAL category grid (page 1, electric) with a 404 status.
+const notFoundGrid = async (env, cat) =>
+  html(renderGrid(cat, await gridMasters(env, cat, 'electric', 1), { power: 'electric', page: 1, counts: await gridCounts(env, cat) }), 404)
+
 // The public catalog surface (grids, landings, browse hub, product pages, sitemap) — everything
 // here may run heavy D1 aggregations, so it is only ever reached through the edge cache above.
-async function publicCatalogPages(url, env) {
+async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env, cat)) {
   const path = url.pathname.replace(/\/+$/, '') || '/' // same normalization as handleCatalog
   const cats = await categories(env)
   if (path === '/sitemap.xml') return sitemapResponse(env, cats)
@@ -219,8 +249,7 @@ async function publicCatalogPages(url, env) {
       return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
     }
   }
-  // unknown slug → the REAL category grid (page 1, electric) with 404 status
-  return html(renderGrid(cat, await gridMasters(env, cat, 'electric', 1), { power: 'electric', page: 1, counts: await gridCounts(env, cat) }), 404)
+  return notFound(cat)
 }
 
 const GRID_PAGE = 24
@@ -251,8 +280,8 @@ async function gridMasters(env, cat, power = 'electric', page = 1, sort = 'price
                   OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%' THEN 1 ELSE 0 END) AS preowned,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id = m.id
-     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready' ${powerClause}
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -280,8 +309,8 @@ async function similarMasters(env, cat, m) {
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id = m.id
-     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready' AND m.id<>? AND (${like})
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -307,8 +336,8 @@ async function gridCounts(env, cat) {
     env,
     `SELECT COALESCE(p,'electric') power, COUNT(*) n FROM (
        SELECT m.id, m.power AS p
-       FROM master_model m JOIN offer o ON o.master_model_id=m.id
-       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+       CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready'
        GROUP BY m.id
        HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1
@@ -348,8 +377,8 @@ async function sitemapResponse(env, cats) {
       env,
       `SELECT m.slug, COALESCE(m.power,'electric') AS power, m.role_tags, m.updated_at,
               MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
-       FROM master_model m JOIN offer o ON o.master_model_id=m.id
-       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+       CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
       cat.id,
     )
@@ -398,8 +427,8 @@ async function indexNowPing(env) {
     const rows = await all(
       env,
       `SELECT m.slug FROM master_model m
-       JOIN offer o ON o.master_model_id=m.id
-       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       CROSS JOIN offer o ON o.master_model_id=m.id
+       CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready' AND COALESCE(m.updated_at,0) > ?
        GROUP BY m.id
        HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -416,8 +445,8 @@ async function indexNowPing(env) {
         env,
         `SELECT COALESCE(m.power,'electric') AS power, m.role_tags,
                 MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
-         FROM master_model m JOIN offer o ON o.master_model_id=m.id
-         JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+         FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+         CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
          WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
         cat.id,
       )
@@ -878,8 +907,8 @@ async function api(request, url, env, ep, actor) {
         `WITH visible AS (
            SELECT m.id,m.pop_score,m.pop_updated_at
            FROM master_model m
-           JOIN offer o ON o.master_model_id=m.id
-           JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+           CROSS JOIN offer o ON o.master_model_id=m.id
+           CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
            WHERE m.status='ready'
            GROUP BY m.id
            HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1

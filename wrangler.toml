@@ -15,6 +15,23 @@ compatibility_date = "2024-12-01"
 # @cloudflare/puppeteer (Browser Rendering) imports node:buffer.
 compatibility_flags = ["nodejs_compat"]
 
+# Deploy gate. Wrangler runs this before every deploy, version upload and dev
+# session, including the Workers Builds deploy on every push to master. It fails
+# the build when any /assets reference or src/asset-versions.mjs is stale,
+# broken or hand-labelled, because the Worker serves current-hash asset URLs as
+# immutable for a year. Fix with: npm run assets:version
+[build]
+command = "node scripts/version-assets.mjs --check"
+# With a custom build, `wrangler dev` only reloads on changes under watch_dir
+# (default ./src); the catalog and shared shell code live outside it.
+watch_dir = ["src", "catalog/lib", "scripts"]
+
+# The deployed version id. It is part of every public HTML edge-cache key
+# (cacheRelease in catalog/lib/worker.mjs), so each deploy and each rollback
+# reads and writes only its own cached pages, with no manual cache step.
+[version_metadata]
+binding = "CF_VERSION_METADATA"
+
 [assets]
 directory = "./site"
 binding = "ASSETS"
