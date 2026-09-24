@@ -53,7 +53,7 @@ The main robots.txt lists the main sitemap and the FPV simulator sitemap, but om
 
 Add the log sitemap to root robots.txt or a suitable sitemap index, and submit/verify it in Search Console. Nanawing 2 already advertises its own sitemap through its own robots.txt; ensure that property is covered in Search Console too. Its absence from the main robots.txt is not itself a blocking defect.
 
-Review sitemap generation for temporarily out-of-stock products: the current catalog sitemap uses an in-stock condition. Useful product pages should not lose sitemap discovery simply because stock temporarily disappears. Keep their availability honest; retired or empty pages need a separate policy.
+Review sitemap generation for temporarily out-of-stock products: the current catalog sitemap uses an in-stock condition. Useful product pages should not lose sitemap discovery simply because stock temporarily disappears. Keep their availability honest; retired or empty pages need a separate policy. **Decision (owner, 24 September 2026): declined. The sitemap and `/wings/browse/` stay in-stock only.**
 
 ### 4. Strengthen the catalog's price-comparison proposition
 

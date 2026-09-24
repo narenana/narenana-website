@@ -9,9 +9,9 @@ Local implementation complete; nothing pushed, deployed or submitted to search e
 - Homepage metadata, social artwork, manifest, canonicals, sitemap discovery, truthful availability and comparable-product Offer/AggregateOffer data.
 - Dedicated review and log-video watch pages with verified VideoObject dates/durations, prominent embedded players and fallback links.
 - FPV leaderboard canonical corrected to sim.narenana.com and visible H1 added. Nanawing 2 title explicitly identifies line-of-sight; hidden boot title is no longer a second marketing H1.
-- Published out-of-stock models remain discoverable; retired models remain excluded. Category SSR renders selected cards while filters can reveal the remaining models.
+- Sitemap and `/wings/browse/` list in-stock models only (owner decision, 24 September 2026; an earlier version of this branch listed out-of-stock models too and was reverted). Out-of-stock product pages stay reachable and keep honest OutOfStock schema. Retired models remain excluded. Category SSR renders selected cards while filters can reveal the remaining models.
 - Product introductions derived from existing catalog facts. Accepted manufacturer mappings expose source-linked, explicitly extracted specifications; inferred handling claims and pending/rejected mappings are excluded. Editorial enrichment beyond available source facts is not fabricated.
-- Seller counts derive from approved published listings. Methodology explains verification, refresh batches and price/stock limitations.
+- Seller counts derive from approved, in-stock, priced listings on published models. Methodology explains verification, refresh batches and price/stock limitations.
 - Genuine branded 404 responses, index.html canonical redirect, staging/alternative-preview noindex protection.
 - Responsive hero/race images, matching preload, deduplicated variable fonts, reduced initial parallax layout work, production-only homepage analytics and contrast fixes.
 
