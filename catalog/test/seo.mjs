@@ -55,6 +55,38 @@ test('main Worker: staging and workers.dev hosts are noindex, www is not', async
   assert.ok(!www.headers.get('x-robots-tag')?.includes('noindex'), 'www stays indexable')
 })
 
+// The homepage is edge-cached, but a render that fell back because KV or D1
+// failed must never be cached (it would pin a page with no prices/videos).
+test('homepage edge cache: healthy renders cached, degraded renders not', async () => {
+  const { default: worker } = await import('../../src/index.js')
+  const puts = []
+  const saved = { caches: globalThis.caches, HTMLRewriter: globalThis.HTMLRewriter }
+  globalThis.caches = { default: { match: async () => undefined, put: async (k) => { puts.push(k.url) } } }
+  globalThis.HTMLRewriter = class { on() { return this } transform(r) { return r } }
+  const html = () => new Response('<html><body></body></html>', { status: 200, headers: { 'content-type': 'text/html' } })
+  const db = (fail) => ({
+    prepare: () => { if (fail) throw new Error('D1 down'); return { bind() { return this }, all: async () => ({ results: [{ id: 'wings', path_prefix: '/wings' }] }) } },
+    batch: async () => [{ results: [{ n: 3 }] }, { results: [{ id: 1, slug: 'a', brand: 'B', name: 'N', specs: '{}', hero: 'x', price: 100, checked_at: 1 }] }],
+  })
+  const run = async (env) => {
+    const waits = []
+    const r = await worker.fetch(new Request('https://www.narenana.com/'), { ASSETS: { fetch: async () => html() }, ...env }, { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    await run({ VIDEOS_KV: { get: async () => JSON.stringify({ videos: [{ id: 'abc', title: 't' }] }) }, CATALOG_DB: db(false) })
+    assert.equal(puts.length, 1, 'healthy render is cached')
+    await run({ VIDEOS_KV: { get: async () => { throw new Error('KV down') } }, CATALOG_DB: db(false) })
+    await run({ VIDEOS_KV: { get: async () => null }, CATALOG_DB: db(true) })
+    assert.equal(puts.length, 1, 'KV or D1 failure renders are not cached')
+    assert.ok(puts[0].includes('__release='), 'cache key carries the release tag')
+  } finally {
+    globalThis.caches = saved.caches
+    globalThis.HTMLRewriter = saved.HTMLRewriter
+  }
+})
+
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
 const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/']
 for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, async () => {

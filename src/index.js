@@ -200,8 +200,11 @@ async function cachedHome(request, env, ctx, isLocal) {
   const cache = caches.default
   const hit = await cache.match(cacheKey)
   if (hit) return hit
-  const res = await renderHome(request, env)
-  if (res.status === 200 && (res.headers.get('content-type') || '').includes('text/html')) {
+  const state = { degraded: false }
+  const res = await renderHome(request, env, state)
+  // A render that fell back because KV or D1 failed is served, never cached:
+  // one blip must not pin a homepage without prices/videos for 15 minutes.
+  if (!state.degraded && res.status === 200 && (res.headers.get('content-type') || '').includes('text/html')) {
     const store = new Response(res.clone().body, res)
     store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
     store.headers.set('x-home-cache', 'HIT') // only ever seen on responses served FROM the cache
@@ -210,7 +213,7 @@ async function cachedHome(request, env, ctx, isLocal) {
   return res
 }
 
-async function renderHome(request, env) {
+async function renderHome(request, env, state = {}) {
   const response = await env.ASSETS.fetch(request)
   if (!(response.headers.get('content-type') || '').includes('text/html')) {
     return response
@@ -222,6 +225,7 @@ async function renderHome(request, env) {
     if (json) videos = (JSON.parse(json).videos || []).slice(0, 6)
   } catch {
     // Leave the page untransformed rather than inject garbage on a KV blip.
+    state.degraded = true
   }
 
   // Live catalog cards for the #shop-grid section. Fail-open on ANY D1
@@ -239,6 +243,7 @@ async function renderHome(request, env) {
     }
   } catch {
     // fallback card remains
+    state.degraded = true
   }
   if (videos.length === 0 && wings.length === 0 && sellerCount === 0) return response
 
