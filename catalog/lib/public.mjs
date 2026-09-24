@@ -29,7 +29,7 @@ export function page({ title, desc, path, body, jsonld, noindex, image }) {
 <meta property="og:type" content="website" /><meta property="og:site_name" content="narenana" /><meta property="og:url" content="${url}" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" /><meta property="og:image" content="${esc(og)}" />
 <meta name="twitter:title" content="${esc(title)}" /><meta name="twitter:description" content="${esc(desc)}" /><meta property="og:image:alt" content="${esc(title)}" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="${esc(og)}" />
-<link rel="preload" href="/assets/family/DMSans-400.woff2?v=9fea608a94" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-700.woff2?v=3787a5a419" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css?v=feeaa74c77" /><link rel="stylesheet" href="/assets/family/shell.css?v=f1a8773eb1" />
+<link rel="preload" href="/assets/family/DMSans-400.woff2?v=9fea608a94" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-700.woff2?v=3787a5a419" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css?v=c848c473a8" /><link rel="stylesheet" href="/assets/family/shell.css?v=fe6e80c3d6" />
 <script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
@@ -40,7 +40,7 @@ ${body}
 <aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
 ${familyFooter({home:''})}
 
-<script type="module" src="/assets/family/preview-links.js?v=8745dd5cf9"></script></body></html>`
+<script type="module" src="/assets/family/preview-links.js?v=d4d9cb46a4"></script></body></html>`
 }
 
 // Power class from a listing's text. LOGIC is in code; the text (engine

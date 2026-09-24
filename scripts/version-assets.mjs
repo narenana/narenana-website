@@ -51,7 +51,15 @@ export function planAssetVersions() {
   const files = referrers()
   const text = new Map(files.map((f) => [f, readFileSync(f, 'utf8')]))
   const assetFiles = walk(ASSETS, () => true)
-  const bytes = (abs) => (text.has(abs) ? Buffer.from(text.get(abs)) : readFileSync(abs))
+  // Hash text with LF line endings: a Windows checkout (core.autocrlf) holds
+  // CRLF while the repo and the Linux deploy build hold LF, and the same file
+  // must get the same version on every machine. Binary files hash raw.
+  const TEXT = /\.(css|js|mjs|svg|json|html|txt)$/
+  const bytes = (abs) => {
+    if (!TEXT.test(abs)) return readFileSync(abs)
+    const s = text.has(abs) ? text.get(abs) : readFileSync(abs, 'utf8')
+    return Buffer.from(s.replace(/\r\n/g, '\n'))
+  }
   const missing = new Set()
   let versions = {}
   for (let pass = 0; pass < 12; pass++) {
@@ -82,7 +90,7 @@ export function planAssetVersions() {
     'export const ASSET_VERSIONS = ' + JSON.stringify(Object.fromEntries(Object.entries(versions).sort()), null, 2) + '\n'
   const changes = files.filter((f) => text.get(f) !== readFileSync(f, 'utf8'))
   let manifestStale = true
-  try { manifestStale = readFileSync(MANIFEST, 'utf8') !== manifest } catch {}
+  try { manifestStale = readFileSync(MANIFEST, 'utf8').replace(/\r\n/g, '\n') !== manifest } catch {}
   return { text, changes, manifest, manifestStale, missing: [...missing].sort(), versions }
 }
 
