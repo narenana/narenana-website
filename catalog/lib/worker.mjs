@@ -362,7 +362,7 @@ async function setMasterPower(env, masterId) {
 const SITE = 'https://www.narenana.com'
 
 // sitemap.xml: homepage + each live category + its valid landing pages (>=3
-// in-stock) + every ready product page.
+// in-stock) + every IN-STOCK ready product page.
 async function sitemapResponse(env, cats) {
   // Main site + the /log-viewer/ tool (this route shadows the static
   // site/sitemap.xml, so those entries must live here now). The FPV simulator
@@ -383,8 +383,8 @@ async function sitemapResponse(env, cats) {
       cat.id,
     )
     for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
-    // Ready products with approved offers remain useful when temporarily OOS.
-    // Retired models are excluded by the query, not by fluctuating availability.
+    // Retired models are excluded by the query. Out-of-stock product pages stay
+    // reachable (honest OutOfStock schema) but are not listed here.
     // In-stock only (owner decision) — don't feed Google product pages we can't
     // currently sell. Regenerates each request, so pages drop/return with stock.
     // Same rule as /wings/browse/ and IndexNow.
