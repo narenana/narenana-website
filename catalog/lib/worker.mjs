@@ -228,8 +228,8 @@ async function gridMasters(env, cat, power = 'electric', page = 1, sort = 'price
                   OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%' THEN 1 ELSE 0 END) AS preowned,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id = m.id
-     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready' ${powerClause}
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -257,8 +257,8 @@ async function similarMasters(env, cat, m) {
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id = m.id
-     JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready' AND m.id<>? AND (${like})
      GROUP BY m.id
      HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -284,8 +284,8 @@ async function gridCounts(env, cat) {
     env,
     `SELECT COALESCE(p,'electric') power, COUNT(*) n FROM (
        SELECT m.id, m.power AS p
-       FROM master_model m JOIN offer o ON o.master_model_id=m.id
-       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+       CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready'
        GROUP BY m.id
        HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1
@@ -325,8 +325,8 @@ async function sitemapResponse(env, cats) {
       env,
       `SELECT m.slug, COALESCE(m.power,'electric') AS power, m.role_tags, m.updated_at,
               MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
-       FROM master_model m JOIN offer o ON o.master_model_id=m.id
-       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+       CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
       cat.id,
     )
@@ -372,8 +372,8 @@ async function indexNowPing(env) {
     const rows = await all(
       env,
       `SELECT m.slug FROM master_model m
-       JOIN offer o ON o.master_model_id=m.id
-       JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+       CROSS JOIN offer o ON o.master_model_id=m.id
+       CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
        WHERE m.category_id=? AND m.status='ready' AND COALESCE(m.updated_at,0) > ?
        GROUP BY m.id
        HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
@@ -390,8 +390,8 @@ async function indexNowPing(env) {
         env,
         `SELECT COALESCE(m.power,'electric') AS power, m.role_tags,
                 MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
-         FROM master_model m JOIN offer o ON o.master_model_id=m.id
-         JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+         FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+         CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
          WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
         cat.id,
       )
@@ -852,8 +852,8 @@ async function api(request, url, env, ep, actor) {
         `WITH visible AS (
            SELECT m.id,m.pop_score,m.pop_updated_at
            FROM master_model m
-           JOIN offer o ON o.master_model_id=m.id
-           JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+           CROSS JOIN offer o ON o.master_model_id=m.id
+           CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
            WHERE m.status='ready'
            GROUP BY m.id
            HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END)=1

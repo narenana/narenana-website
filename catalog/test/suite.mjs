@@ -760,6 +760,19 @@ test('aircraft-data admin exposes editable sourced facts and the full protected 
 })
 
 // ---------------------------------------------------------------- public
+// D1 rows-read guard. Left to itself SQLite drives master→offer→sku from sku,
+// which read ~240k rows per grid/browse/sitemap/404 render (measured on the
+// production snapshot) against ~2–4k with the order pinned. Admin LEFT JOINs
+// are not reorderable and are out of scope.
+test('catalog master→offer→sku joins stay pinned with CROSS JOIN', async () => {
+  const { readFile } = await import('node:fs/promises')
+  for (const f of ['worker.mjs', 'grid-next.mjs', 'jobs.mjs']) {
+    const src = await readFile(new URL('../lib/' + f, import.meta.url), 'utf8')
+    const loose = src.match(/FROM master_model m\s+(?:INNER\s+)?JOIN offer o ON o\.master_model_id\s*=\s*m\.id\s+(?:INNER\s+|CROSS\s+)?JOIN sku k\b/g) || []
+    assert.deepEqual(loose, [], f + ': pin the join order (FROM master_model m CROSS JOIN offer o … CROSS JOIN sku k …)')
+  }
+})
+
 test('category grid renders (SSR), stylesheet served', async () => {
   const res = await get('/wings/')
   assert.equal(res.status, 200)

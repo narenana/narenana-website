@@ -536,8 +536,8 @@ async function popularitySlice(env, trigger) {
     env,
     `SELECT m.id
      FROM master_model m
-     JOIN offer o ON o.master_model_id=m.id
-     JOIN sku k ON k.id=o.sku_id
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id=o.sku_id
      WHERE m.status='ready' AND m.pop_score IS NULL
        AND k.review_status='approved' AND k.in_stock=1 AND k.dead=0
      LIMIT 1`,
@@ -557,8 +557,8 @@ async function popularitySlice(env, trigger) {
             COUNT(DISTINCT k.source_id) AS sellers,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
-     JOIN offer o ON o.master_model_id=m.id
-     JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+     CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
      LEFT JOIN category c ON c.id=m.category_id
      WHERE m.status='ready' AND ${due}
      GROUP BY m.id
