@@ -790,6 +790,27 @@ test('in-stock only: sitemap and /browse/ list exactly the grid\'s in-stock mode
   assert.ok(!/Currently unavailable|out of stock/i.test(browse), '/browse/ must not advertise unavailable models')
 })
 
+// One header everywhere: the homepage's static header must be exactly the
+// shared familyNav() output (plus its homepage-only "Fly FPV" button), and
+// catalog pages must render the same header without the button.
+test('homepage and catalog use the same shared header (homepage adds only Fly FPV)', async () => {
+  const { familyNav } = await import('../../scripts/brand-shell.mjs')
+  const { readFile } = await import('node:fs/promises')
+  const unversion = (s) => s.replace(/\?v=[0-9a-f]{10}/g, '')
+  const home = unversion(await readFile(new URL('../../site/index.html', import.meta.url), 'utf8'))
+  const homeHeader = (home.match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0]
+  const HOME_CTA = { label: 'Fly FPV', href: 'https://sim.narenana.com', newTab: true }
+  assert.equal(homeHeader, familyNav({ home: '', cta: HOME_CTA }), 'homepage header must be regenerated from familyNav()')
+  assert.equal((home.match(/<header\b/g) || []).length, 1, 'homepage has exactly one header')
+  const grid = await (await get('/wings/')).text()
+  const catalogHeader = unversion((grid.match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0] || '')
+  const links = (h) => [...h.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1])
+  assert.deepEqual(links(catalogHeader), links(homeHeader).filter((u) => u !== HOME_CTA.href), 'same links apart from the homepage button')
+  assert.ok(!catalogHeader.includes('nn-cta'), 'catalog pages have no Fly FPV button')
+  const homeJs = await readFile(new URL('../../site/assets/home.js', import.meta.url), 'utf8')
+  assert.ok(!/menu-toggle|getElementById\('navigation'\)/.test(homeJs), 'home.js must not wire the removed header')
+})
+
 // Every reference to site/assets/* carries its current content hash, and the
 // manifest the Worker reads matches. Fails when someone edits an asset or page
 // and forgets `npm run assets:version`.

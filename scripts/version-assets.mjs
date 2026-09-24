@@ -45,7 +45,7 @@ const referrers = () => [
 // site/assets files, relative (./x.woff2, ../x.js) references, with any
 // existing ?v= label.
 const ABS = new RegExp(`(?<![A-Za-z0-9_.\\-/])(https://www\\.narenana\\.com)?/assets/([A-Za-z0-9_./-]+?\\.(?:${EXT}))(\\?v=[A-Za-z0-9._-]*)?(?![A-Za-z0-9_./-])`, 'g')
-const REL = new RegExp(`(?<=url\\(\\s*['"]?|from\\s*['"]|import\\s*['"]|import\\(\\s*['"])(\\.{1,2}/[A-Za-z0-9_./-]+?\\.(?:${EXT}))(\\?v=[A-Za-z0-9._-]*)?(?![A-Za-z0-9_./-])`, 'g')
+const REL = new RegExp(`(?<=url\\(\\s*['"]?|from\\s*['"]|import\\s*['"]|import\\(\\s*['"]|new\\s+URL\\(\\s*['"])(\\.{1,2}/[A-Za-z0-9_./-]+?\\.(?:${EXT}))(\\?v=[A-Za-z0-9._-]*)?(?![A-Za-z0-9_./-])`, 'g')
 
 export function planAssetVersions() {
   const files = referrers()

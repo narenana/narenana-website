@@ -1,16 +1,13 @@
 (() => {
   'use strict';
   document.getElementById('year').textContent = new Date().getFullYear();
-  const menu = document.getElementById('menu-toggle');
-  const navigation = document.getElementById('navigation');
-  function closeMenu() { navigation.classList.remove('is-open'); menu.setAttribute('aria-expanded', 'false'); }
-  menu.addEventListener('click', () => {
-    const open = menu.getAttribute('aria-expanded') !== 'true';
-    menu.setAttribute('aria-expanded', String(open));
-    navigation.classList.toggle('is-open', open);
+  // The site header is the shared family header (scripts/brand-shell.mjs). Its
+  // mobile menu is a native <details>; close it after a link is chosen, since
+  // in-page links (Get in touch → #contact) don't navigate away.
+  document.querySelectorAll('.nn-mobile').forEach(menu => {
+    menu.addEventListener('click', event => { if (event.target.closest('a')) menu.open = false; });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && menu.open) { menu.open = false; menu.querySelector('summary').focus(); } });
   });
-  navigation.addEventListener('click', event => { if (event.target.closest('a')) closeMenu(); });
-  document.addEventListener('keydown', event => { if (event.key === 'Escape' && menu.getAttribute('aria-expanded') === 'true') { closeMenu(); menu.focus(); } });
 
   const buttons = [...document.querySelectorAll('[data-video-panel]')];
   const latest = document.getElementById('vid-grid');

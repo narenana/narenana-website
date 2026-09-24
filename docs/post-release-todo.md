@@ -10,6 +10,8 @@ Deferred from the 24 September 2026 pre-production review (see `release-readines
 
 ## Low-priority fixes from the review
 
+- [ ] **Sync the shared header copies** (`scripts/brand-shell.mjs`, `site/assets/family/shell.css`) into the Nanawing, Nanawing 2 and log-viewer repos. The only change is the optional `cta` button (unused there, output unchanged), so this is housekeeping, not a release dependency.
+
 - [ ] Catalog link previews (grid, landings, browse, search) use the Nanawing simulator social card as their default `og:image`. Give `/wings/` pages a catalog card (`page()` in `catalog/lib/public.mjs`).
 - [ ] Electric/Nitro tabs on landing pages link to noindex filter URLs, not the sibling landing page (`grid-next.mjs` `powerHref`). Link to the sibling landing when it is valid.
 - [ ] The generated product lede calls the default `kit` config an "airframe" even when it was never detected (`catalog/lib/product-overview.mjs`). Show the label only when the config was detected or set by an admin.

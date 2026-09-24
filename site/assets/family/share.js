@@ -9,7 +9,7 @@ export function shareData(doc = document) {
 export function installShare() {
   if (!shareData() || document.getElementById('nn-share-launcher')) return;
   const css = document.createElement('link');
-  css.rel = 'stylesheet'; css.href = new URL('./share.css?v=release2', import.meta.url).href;
+  css.rel = 'stylesheet'; css.href = new URL('./share.css?v=10c221c1dc', import.meta.url).href;
   document.head.append(css);
   const button = document.createElement('button');
   button.id = 'nn-share-launcher'; button.type = 'button';
