@@ -10,7 +10,7 @@ The owner authorized pushing the redesign to feature branches on 24 September. M
 2. Run website catalog and SEO tests, sitemap + link audits, and Worker dry-run. Start all four local previews before crawling. Do not rebuild an app while crawling it.
 3. Run both simulator suites/typechecks/builds, Nanawing 2 browser/offline gates, FPV offline update probe, and log parser tests/build. Verify Nanawing 2's committed build is identical after a second build.
 4. Review dependency exceptions in `release-dependencies.md`, remaining real-device checks, and the final preview.
-5. Confirm release revisions have incorporated current upstream work. Fetching refs is read-only; any new changes require revalidation.
+5. Confirm release revisions have incorporated current upstream work. The owner specifically requires pulling Nanawing 2 origin before deployment: fetch origin, integrate origin/main into the release branch, resolve generated output through a rebuild and repeat validation. Recheck immediately before any future authorized release; a previously fetched revision is not sufficient if origin has advanced. Never pull into or push main as part of this preparation.
 
 ## Authorized deployment order (not executed)
 
