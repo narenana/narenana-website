@@ -68,19 +68,22 @@ test('homepage edge cache: healthy renders cached, degraded renders not', async 
     prepare: () => { if (fail) throw new Error('D1 down'); return { bind() { return this }, all: async () => ({ results: [{ id: 'wings', path_prefix: '/wings' }] }) } },
     batch: async () => [{ results: [{ n: 3 }] }, { results: [{ id: 1, slug: 'a', brand: 'B', name: 'N', specs: '{}', hero: 'x', price: 100, checked_at: 1 }] }],
   })
-  const run = async (env) => {
+  const run = async (env, path = '/') => {
     const waits = []
-    const r = await worker.fetch(new Request('https://www.narenana.com/'), { ASSETS: { fetch: async () => html() }, ...env }, { waitUntil: (p) => waits.push(p) })
+    const r = await worker.fetch(new Request('https://www.narenana.com' + path), { ASSETS: { fetch: async () => html() }, ...env }, { waitUntil: (p) => waits.push(p) })
     await Promise.all(waits)
     return r
   }
+  const healthy = { VIDEOS_KV: { get: async () => JSON.stringify({ videos: [{ id: 'abc', title: 't' }] }) }, CATALOG_DB: db(false) }
   try {
-    await run({ VIDEOS_KV: { get: async () => JSON.stringify({ videos: [{ id: 'abc', title: 't' }] }) }, CATALOG_DB: db(false) })
+    await run(healthy)
     assert.equal(puts.length, 1, 'healthy render is cached')
     await run({ VIDEOS_KV: { get: async () => { throw new Error('KV down') } }, CATALOG_DB: db(false) })
     await run({ VIDEOS_KV: { get: async () => null }, CATALOG_DB: db(true) })
     assert.equal(puts.length, 1, 'KV or D1 failure renders are not cached')
     assert.ok(puts[0].includes('__release='), 'cache key carries the release tag')
+    await run(healthy, '/?fbclid=abc&utm_source=x')
+    assert.equal(puts[1], puts[0], 'query strings share one cache key (no cache-busting via random params)')
   } finally {
     globalThis.caches = saved.caches
     globalThis.HTMLRewriter = saved.HTMLRewriter

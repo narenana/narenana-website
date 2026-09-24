@@ -194,7 +194,10 @@ function harden(response, url, isLocal) {
 // and crawlers cost one render per ~15 minutes per location, not one per view.
 async function cachedHome(request, env, ctx, isLocal) {
   if (request.method !== 'GET' || isLocal) return renderHome(request, env)
-  const cacheUrl = new URL(request.url)
+  // Key on host + path only: the rendered homepage never depends on the query
+  // string, and keying on it would let ?utm=/?fbclid=/random params bypass the
+  // cache and force a D1 render each.
+  const cacheUrl = new URL('/', request.url)
   cacheUrl.searchParams.set('__release', PUBLIC_CACHE_RELEASE)
   const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
   const cache = caches.default
