@@ -1,6 +1,6 @@
 # Redesign release-readiness review — 23 September 2026
 
-**24 September update: redesign fixes are implemented; user has authorized feature-branch pushes only. No deployment or main-branch merge is authorized. Owner reports the production FPV throttle issue is no longer reproducing; no code fix was applied. Nanawing 2 origin/main 9d5ff76 is integrated and verified in pushed feature-branch commit 62ec4a5.**
+**24 September update: redesign fixes are implemented; user has authorized feature-branch pushes only. No deployment or main-branch merge is authorized. Owner reports the production FPV throttle issue is no longer reproducing; no code fix was applied. Nanawing 2 origin/main 9d5ff76 is integrated and verified in pushed feature-branch commit 62ec4a5. Later the same day Nanawing 2 origin/main moved to 0c113cf (new verify-before-promote deploy workflow), which must be integrated before release; see release-runbook.md.**
 
 The original audit reviewed the local redesign across four repositories; its original evidence collection did not change application code or production. Subsequent fixes and owner-authorized feature-branch pushes are recorded below. Nothing was deployed, posted to social accounts, or written to a production database. Tests that mutate catalog data used the isolated local snapshot. Fetching Git remote references did not merge or change working files.
 
@@ -20,13 +20,40 @@ The website branch was reviewed against `master` (`c3d95f3`), with the branch ru
 | Hero loaded the 768px image on 1280–1440px laptops | Fixed (attribute) | Corrected `sizes` on the preload and the img. A 1366×768 browser now loads the 1536px file, rendered at 1406px. A larger source for high-DPI screens is logged in `post-release-todo.md`. |
 | Rollback not durable; `[skip ci]` tips; order and gates unstated; latest-router never deployed | Fixed (runbook + code) | `release-runbook.md`: merge-commit rule, push freeze, build-success gates, log viewer before website, `git revert -m 1` rollback, and a latest-router step. Code: the main Worker marks its `*.workers.dev` host noindex, which is what latest.narenana.com forwards to (new SEO test). The `/index.html` 301 is now relative. |
 
-Tests on the fix branch against the local worker: catalog **60/60** (including the mutating lifecycle test), SEO **14/14**, `assets:check` clean. Remaining low-priority findings are tracked in [post-release-todo.md](post-release-todo.md).
+Tests at that point: catalog 60/60, SEO 14/14. Current results are below the next table.
+
+### Verification pass on the fixes — 24 September 2026
+
+A second adversarial pass reviewed the fixes above: 60 agents, 34 findings raised, 31 upheld, plus a completeness critic. Every upheld finding is fixed in code revision **9d29abd** or later on `fix/redesign-release-review`, or recorded below as remaining.
+
+| Finding | Status | Change / evidence |
+|---|---|---|
+| **Critic (high):** catalog grid, landings, browse, sitemap and the 404 grid still used the unpinned join, about 240,000 D1 rows per render (≈21 cache misses would use the day's 5M) | Fixed | Pinned `master_model → offer → sku` with CROSS JOIN in every public and cron query. Measured on the production snapshot: `/wings/` 240,260 → 3,730 rows; browse 238,676 → 2,146; sitemap 238,492 → 1,962; 404 240,407 → 3,877. Rendered output is byte-identical on 9 routes. A suite test fails on any unpinned master→offer→sku join. |
+| **High:** flagged prices still printed in the product offers table; the regression test could not fail | Fixed | Flagged rows show "Price under review", keep their stock badge and sort after priced rows. The SEO test now fails on the amount in any form (verified to fail on the old code). A live suite test checks every in-stock flagged listing's row. Methodology copy updated. |
+| **High:** runbook pointed at the unfixed revision | Fixed | `release-runbook.md` now has an exact release-revision table. Never merge `codex/redesign-release` directly. |
+| **High:** homepage and /wings/ headers differ | Fixed | Shared `familyNav()` header on the homepage (plus its Fly FPV button); suite test compares them. |
+| **Medium:** junk URLs and tracking parameters forced uncached renders | Fixed | Catalog cache keys keep only the parameters pages read. Every unknown slug shares one cached 404 grid. Paths the catalog doesn't own skip the cache lookup. |
+| **Medium:** immutable caching trusted the manifest, with no deploy check | Fixed | `wrangler.toml` `[build]` runs `version-assets --check` before every deploy, including Workers Builds. Verified: a stale asset fails the dry run. `--check` also fails on missing files and hand-written `?v=` labels, and every extension under site/assets is versioned. The generators re-stamp versions. |
+| **Medium:** re-release after a `git revert -m 1` rollback | Documented | New "Re-release after a rollback" section in the runbook: revert the revert, then re-run preflight on the resulting tree. |
+| **Medium:** `seo:audit` always failed (link audit floor 450) | Fixed | Same 150 floor as `seo-audit.mjs`. |
+| **Low:** HEAD `/` bypassed the cache (a 1-minute HEAD monitor alone ≈5.9M rows/day) | Fixed | HEAD is answered from the GET entry, and a miss renders the GET once. Covers the homepage and catalog; unit tests plus a real-workerd probe. |
+| **Low:** hand-bumped cache key; stale homepage after deploys | Fixed | Cache keys carry the deployed version id (`version_metadata`). Deploys and rollbacks never share cached HTML, and an incoming `__release` is ignored. |
+| **Low:** 304s reset asset Cache-Control | Fixed | 304s get the same rule; suite asserts both the immutable and the short-lived case. |
+| **Low:** unversioned header avatar on catalog pages; share.css label | Fixed | `familyNav({avatar})` gets a stamped URL; suite scans `/`, `/wings/` and a product page for unversioned `/assets` links. |
+| **Low:** classic grid / similar rail showed "—" | Fixed | "Price under review" for in-stock models with no publishable price. |
+| **Low:** log-viewer 404 page linked the website's `/assets/family/*` | Fixed in log viewer | `fix/log-viewer-404-assets` 231ee2a points it at `/log-viewer/assets/family/*` (44/44 tests, build passes). Runbook corrected. |
+| **Low:** `/log-viewer` without a slash loaded blank | Fixed | 301 to `/log-viewer/`, keeping the query string. |
+| **Low:** catalog preloaded Barlow 700 but uses 800 | Fixed | Preloads 800. |
+| **Low:** runbook post-deploy checks gave false failures | Fixed | Exact read-only sitemap command; same-data-centre (`cf-ray`) rule for cache HITs. |
+| **Low:** stale docs and copy | Fixed | `seo-completion.md`, the sitemap comments, the browse description and the admin Aircraft data copy now match the owner decisions. Counts are marked historical or updated. |
+
+Current results on the fix branch against the local worker: catalog **64/64** (with the mutating lifecycle test), SEO **16/16**, `assets:check` clean, `wrangler deploy --dry-run` passes, including the new asset gate. Remaining low-priority findings are tracked in [post-release-todo.md](post-release-todo.md).
 
 ## Fix log — 24 September 2026
 
 Initial preflight found Nanawing 2 production at 288838c, newer than the family branch baseline. Integrated that revision and main 1bef30a (including flight sound) in 0ea86e3. The final owner-requested origin refresh incorporates main 9d5ff76 in 62ec4a5: 201 unit tests, typecheck, stable double build f25ce9118daf90f0dd6d (87 assets), and all nine Chromium audio/radio/offline checks pass. Do not release the old 381df71 build. Existing production health passed nine read-only checks; rollback metadata is recorded in the release runbook.
 
-**Sitemap follow-up:** all four maps checked against indexable source pages and robots.txt, with valid XML. Main website/Wings: 436 URLs; Nanawing: 12; Nanawing 2: 2; log viewer: 11; 460 unique URLs across the property. Log-viewer build-day lastmod removed; product lastmod remains tied to real model edits. New `npm run sitemap:audit` checks canonical coverage, duplicates, host/path scope, discovery and modification dates, and is required by `seo:audit`. Evidence: [sitemap-readiness.json](sitemap-readiness.json). Rebuilt the log viewer and confirmed stable repeated sitemap generation. No sitemap submission or deployment; the later feature-branch push includes these changes.
+**Sitemap follow-up (23 September; historical — the website sitemap is now in-stock only, 214 URLs on the local snapshot):** all four maps checked against indexable source pages and robots.txt, with valid XML. Main website/Wings: 436 URLs; Nanawing: 12; Nanawing 2: 2; log viewer: 11; 460 unique URLs across the property. Log-viewer build-day lastmod removed; product lastmod remains tied to real model edits. New `npm run sitemap:audit` checks canonical coverage, duplicates, host/path scope, discovery and modification dates, and is required by `seo:audit`. Evidence: [sitemap-readiness.json](sitemap-readiness.json). Rebuilt the log viewer and confirmed stable repeated sitemap generation. No sitemap submission or deployment; the later feature-branch push includes these changes.
 
 All four feature branches have been pushed: website codex/redesign-release; FPV, Nanawing 2 and log viewer codex/site-theme-seo. No main merge, pull request or deployment was performed by this task. Historical findings below remain as the original checklist; this table tracks closure.
 
@@ -37,7 +64,7 @@ All four feature branches have been pushed: website codex/redesign-release; FPV,
 | Duplicate proxy Share | Verified | Actual local Worker → log app: one launcher, one dialog, zero legacy buttons. New app also suppresses the previous Worker's injected widget during a staggered release; app and guide verified through a legacy-injection fixture (log commit 74cf4ca). |
 | Log replay Share placement | Verified | Actual proxy at 390px: one visible header Share during sample replay, no timeline overlap, clean public canonical URL, Escape returns header focus. Welcome floating Share remains available. |
 | Prices | Verified | Headline/schema use one comparable-offer selector; grid SQL excludes flagged/nonpositive values and prefers new singles. New regressions cover flagged/invalid/used/pack/unknown/OOS/dead combinations. |
-| Manufacturer corrections | Verified unit/API contract | Public physical facts consult overrides for current accepted source only, including null clears; inferred handling stays private. Admin copy explains public scope. SEO suite 12/12. |
+| Manufacturer corrections | Superseded (24 Sep) | Manufacturer facts are now admin-only by owner decision (`PUBLIC_MANUFACTURER_FACTS = false`). The override logic still holds for when they are published. Original record: public physical facts consult overrides for the current accepted source only, including null clears; inferred handling stays private. SEO suite 12/12. |
 | Cache/update | Verified | Stable assets revalidate; version chain and production cache key bumped. FPV update probe 8/8. Final Nanawing 2 offline cases 4/4; repeated build identity f25ce9118daf90f0dd6d. Log Workbox incorrectly assigned revision:null to unhashed family files: fixed and guarded by postbuild verification. Existing cached browser upgraded without clearing data. |
 | Broken links | Verified | 460 source pages, 489 destinations, zero broken links. Link audit now exits nonzero on failure. |
 | Admin mobile/labels | Verified locally | Catalog fits 390px with 201 labelled inputs; Sources has no unlabelled inputs or horizontal overflow. Real typing saved a disposable local draft, visible save feedback appeared and reload retained it. Added stale-form version rejection (409); suite covers auth, source validation and approve/publish/unpublish lifecycle. Stats fixture verifies gated fail-soft layout; missing analytics render unavailable, not invented zero counts. |
@@ -52,11 +79,20 @@ All four feature branches have been pushed: website codex/redesign-release; FPV,
 
 ## Local release revisions and remaining acceptance
 
-- Website: codex/redesign-release; implementation commit is the commit containing this updated checklist (resolve with git log). Prior integration 174ac7d.
+**Current release revisions (24 September, after the pre-production review):** see the exact table in `release-runbook.md`.
+
+- Website: `fix/redesign-release-review`, code revision 9d29abd. Later commits on it may touch `docs/` only.
+- Log viewer: `fix/log-viewer-404-assets` 231ee2a.
+- Nanawing: unchanged.
+- Nanawing 2 must first integrate `origin/main` 0c113cf, which has moved since 9d5ff76.
+
+The entries below are the original 23–24 September records.
+
+- Website: codex/redesign-release (4d751ed); superseded by the fix branch above. Prior integration 174ac7d.
 - Nanawing: codex/site-theme-seo, pushed **c60e87a** (runtime 7624cb0); 814 tests, build, offline update probe 8/8.
 - Nanawing 2: codex/site-theme-seo, pushed **62ec4a5**; incorporates origin/main **9d5ff76**. Typecheck, 201 unit tests and headless/provenance/binary checks passed. Two identical builds: **f25ce9118daf90f0dd6d**, 87 verified assets. All nine Chromium audio/radio/offline browser cases passed. See its family-origin-refresh-2026-09-24.md record; refetch origin before any future deployment.
 - Log viewer: codex/site-theme-seo, pushed **a79165d**, runtime **74cf4ca** (legacy proxy compatibility, following sitemap revision 649347d); build, 44 tests, generated cache-revision gate, mobile proxy sharing/replay verified.
-- Website catalog 55/55 and SEO 12/12 pass; Worker dry-run succeeds without upload. Full metadata/link crawl is recorded in seo-local-crawl.json and release-link-audit.json.
+- Website catalog 55/55 and SEO 12/12 passed at the time (now 64/64 and 16/16); Worker dry-run succeeds without upload. Full metadata/link crawl is recorded in seo-local-crawl.json and release-link-audit.json.
 
 Remaining gates are **not silently marked fixed**:
 
