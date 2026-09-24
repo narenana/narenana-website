@@ -78,3 +78,8 @@
 .hero-strip b,.catalog-method a,.nav-links a:first-child{color:#0669a6}
 
 .los-copy .release{color:#0669a6}
+
+.video-poster{display:block;position:relative;width:100%;height:100%;color:#fff;background:#15191c;text-decoration:none}.video-poster img{display:block;width:100%;height:100%;object-fit:cover}.video-poster>span{position:absolute;inset:auto 0 0;padding:36px 18px 18px;background:linear-gradient(transparent,rgba(0,0,0,.9));font-weight:700;display:flex;align-items:center;gap:14px}.video-poster b{display:grid;place-items:center;width:48px;height:40px;border-radius:8px;background:#d71920;color:#fff}.video-poster:hover b,.video-poster:focus-visible b{background:#a51015}.video-poster:focus-visible{outline:4px solid #ff8500;outline-offset:-4px}
+/* Defer layout/paint of distant sections while preserving their scroll space. */
+@supports(content-visibility:auto){main>section:not(.hero){content-visibility:auto;contain-intrinsic-size:auto 850px}main>section:target{content-visibility:visible}}
+@media print{main>section{content-visibility:visible!important}}

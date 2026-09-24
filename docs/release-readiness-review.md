@@ -1,6 +1,6 @@
 # Redesign release-readiness review — 23 September 2026
 
-**24 September update: identified code fixes are implemented locally; final acceptance gates below remain open. Nothing pushed or deployed.**
+**24 September update: redesign fixes are implemented; user has authorized feature-branch pushes only. No deployment or main-branch merge is authorized. A newly reported production FPV throttle fault is open and blocks release approval.**
 
 This is a review of the current local redesign across four repositories. No application code was changed for this audit; evidence and this report were added. Nothing was pushed, deployed, posted to social accounts, or written to a production database. Tests that mutate catalog data used the isolated local snapshot. Fetching Git remote references did not merge or change working files.
 
@@ -8,15 +8,17 @@ Earlier completion statements covered implementation, individual previews and se
 
 ## Fix log — 24 September 2026
 
+Latest preflight found Nanawing 2 production at 288838c, newer than the family branch baseline. Integrated that revision and current main 1bef30a (including flight sound); final local candidate is 0ea86e3. Do not release the old 381df71 build. Existing production health passed nine read-only checks; rollback metadata is recorded in the release runbook.
+
 **Sitemap follow-up:** all four maps checked against indexable source pages and robots.txt, with valid XML. Main website/Wings: 436 URLs; Nanawing: 12; Nanawing 2: 2; log viewer: 11; 460 unique URLs across the property. Log-viewer build-day lastmod removed; product lastmod remains tied to real model edits. New `npm run sitemap:audit` checks canonical coverage, duplicates, host/path scope, discovery and modification dates, and is required by `seo:audit`. Evidence: [sitemap-readiness.json](sitemap-readiness.json). Rebuilt the log viewer and confirmed stable repeated sitemap generation. No submission, push or deployment.
 
 Nothing is pushed or deployed. Historical findings below remain as the original checklist; this table tracks closure.
 
 | Item | Status | Change / evidence |
 |---|---|---|
-| Upstream integration | Verified | Website preserved in f89607e, search merged in 174ac7d. FPV saved-radio handoff merged in f41cbfb. Catalog 55/55, FPV 814/814 plus production build. |
+| Upstream integration | Verified against fetched refs | Website preserved in f89607e, search merged in 174ac7d. FPV saved-radio handoff merged in f41cbfb. Catalog 55/55, FPV 814/814 plus production build. Nanawing 2 integrates production 288838c and current main 1bef30a in 0ea86e3; 196 unit cases, stable build and final audio/offline checks pass. |
 | Share/filter overlap | Verified for catalog | At 390px: Trainer → Show 22 closes the sheet, Share stays closed, focus returns to fx-open. Escape returns Share focus. Versioned imports/CSS resolve the reproduced warm-cache failure. Simulator cockpit hides marketing Share. |
-| Duplicate proxy Share | Verified | Actual local Worker → log app: one launcher, one dialog, zero legacy buttons. App and Worker must ship together. |
+| Duplicate proxy Share | Verified | Actual local Worker → log app: one launcher, one dialog, zero legacy buttons. New app also suppresses the previous Worker's injected widget during a staggered release; app and guide verified through a legacy-injection fixture (log commit 74cf4ca). |
 | Log replay Share placement | Verified | Actual proxy at 390px: one visible header Share during sample replay, no timeline overlap, clean public canonical URL, Escape returns header focus. Welcome floating Share remains available. |
 | Prices | Verified | Headline/schema use one comparable-offer selector; grid SQL excludes flagged/nonpositive values and prefers new singles. New regressions cover flagged/invalid/used/pack/unknown/OOS/dead combinations. |
 | Manufacturer corrections | Verified unit/API contract | Public physical facts consult overrides for current accepted source only, including null clears; inferred handling stays private. Admin copy explains public scope. SEO suite 12/12. |
@@ -28,25 +30,29 @@ Nothing is pushed or deployed. Historical findings below remain as the original 
 | Dependencies | Triaged; scoped exception | Nanawing runtime zero, Nanawing 2 full audit zero, log runtime zero. Website retains extract-zip installer-chain advisories absent from Worker bundle; log desktop packaging advisories are outside this web release. Details and restrictions in release-dependencies.md. |
 | Copy/design | Closed locally | Standard product names, no stale subscriber count, checked-price language, descriptive package names, page-specific watch social cards, one catalog footer. Rejected Direction B removed from production files. |
 | Generator/audit gates | Verified | Editorial generator preserves social tags. Sitemap audit fails on errors/empty or shrunken inventory; required link gate passes 460 pages / 489 destinations. |
-| Device/live-service checks | Pending external evidence | Physical radio and real phone/browser need devices; production bindings, social unfurls, Search Console and field CWV require an authorized release. No deployment permission requested or assumed. |
+| Physical transmitter | Reopened: production throttle fault | Owner initially confirmed flight, then reported throttle remaining at 100% while reducing the radio stick on sim.narenana.com. The live profile is “poket”, CH4 throttle / CH3 launch; diagnosis is pending a physical low-stick sample. Earlier local evidence: e502:bbab detected, roll capture observed, saved RC radio Mode 2 profile visible after calibration. Owner says it is working. After unplugging, paused-flight UI and keyboard fallback warning were visible. Physical reconnect/reload and Nanawing 2 cross-origin transfer are not certified by this check. |
+| Video playback | Verified in Chrome | Click-to-play review reached 40 seconds; log walkthrough reached 1:35. Posters remain visible before play; ordinary YouTube fallback works without JavaScript. In-app browser still limits embedded content; actual phone/Safari checks remain separate. |
+| Live-service preflight | Existing service passes | Nine read-only production checks passed. Candidate-only social unfurls, analytics/cron health and search indexing remain authorized-release steps. |
 
 ## Local release revisions and remaining acceptance
 
 - Website: codex/redesign-release; implementation commit is the commit containing this updated checklist (resolve with git log). Prior integration 174ac7d.
 - Nanawing: codex/site-theme-seo, **7624cb0**; 814 tests, build, offline update probe 8/8.
-- Nanawing 2: codex/site-theme-seo, **381df71**; typecheck, 153 unit tests, headless/provenance/binary checks, 52 browser cases passed across full run plus targeted retries, final offline 2/2. Initial browser run: 47 passed, 5 failed; all five rerun successfully after two test selector/timing corrections. Not represented as a clean first run.
-- Log viewer: codex/site-theme-seo, **649347d** (sitemap follow-up to b19164a); build, 44 tests, generated cache-revision gate, mobile proxy sharing/replay verified.
+- Nanawing 2: codex/site-theme-seo, **0ea86e3**; incorporates main 1bef30a. Typecheck, 196 unit cases, headless/provenance/binary checks passed. Two identical builds: **4d8f115b879b05ca1dca**, 87 verified assets. Six final audio/offline browser cases passed. Prior integration landing/fleet cases passed; radio-sharing cases passed isolated after an offline-suite state failure. Detailed evidence is in the Nanawing 2 family integration/current-main records.
+- Log viewer: codex/site-theme-seo, **74cf4ca** (legacy proxy compatibility, following sitemap revision 649347d); build, 44 tests, generated cache-revision gate, mobile proxy sharing/replay verified.
 - Website catalog 55/55 and SEO 12/12 pass; Worker dry-run succeeds without upload. Full metadata/link crawl is recorded in seo-local-crawl.json and release-link-audit.json.
 
 Remaining gates are **not silently marked fixed**:
 
-1. Owner's physical transmitter and actual phone/browser: calibration, saved profile, flight/reset/disconnect, native share/cancel, video playback. Browser mocks and WebKit engine tests do not replace these devices. Device question is pending.
-2. Production-only services: actual analytics bindings, live admin/cron/queue behavior, final social unfurls, Search Console/Rich Results and field CWV. These require a separately authorized release; none was requested or attempted.
-3. Review the scoped dependency exception in [release-dependencies.md](release-dependencies.md). The affected archive installer is not shipped in the website Worker; a future desktop installer release is separate.
-4. Performance sign-off remains open: final homepage mobile cold/warm runs were 90/89 (LCP 2.9s/2.5s, TBT 230ms/270ms); catalog valid cold/warm measurements were 87/100 (LCP 3.2s/1.3s). Earlier catalog runs scored 95/92. A stopped local server invalidated an intervening cold catalog run; it is excluded. Recheck on an otherwise idle machine/real target phone. Field CWV is not certified.
-5. Final embedded-review playback needs re-verification in the target browser. The in-app browser rendered an empty frame in the latest pass, although the embed endpoint returns 200 and earlier playback advanced to 15 seconds. The existing inline iframe and direct YouTube fallback remain; an experimental custom lazy loader was discarded because it did not establish reliable playback. Do not treat the earlier playback result as final sign-off.
+0. **New release blocker: production Nanawing throttle stays at 100% when the radio throttle is reduced.** Do not treat the earlier radio flight confirmation as throttle-range acceptance. Diagnose the active saved profile and live channel movement; keep main/production unchanged.
 
-Final performance reports: `.wrangler/fixes-measured-home-cold.json`, `fixes-measured-home-warm.json`, `fixes-measured-catalog-warm.json`; prior valid catalog cold evidence is `.wrangler/fixes-lighthouse-catalog-final.json`. The parallax setup reads scroll position before style changes, avoiding a read-after-write layout flush. Browser launcher cleanup errors on Windows occurred after reports were written and are recorded in the local logs; null-category/interstitial reports are not passes.
+1. Actual phone/browser acceptance: native share/cancel and video playback. Basic physical transmitter acceptance is recorded above; automated profile reload/transfer checks are separate evidence. A phone is not connected to this browser session, so those hardware cases remain unverified.
+2. Production-only services: actual analytics bindings, live admin/cron/queue behavior, final social unfurls, Search Console/Rich Results and field CWV. These require a separately authorized release; none was requested or attempted.
+3. Scoped dependency exception documented in [release-dependencies.md](release-dependencies.md). The affected archive installer is not shipped in the website Worker; a future desktop installer release is separate.
+4. Performance: final homepage mobile cold/warm **91/90** (LCP **3.4s/2.1s**, TBT **0ms/310ms**); catalog **92/100** (LCP **3.2s/1.2s**, TBT **0ms/0ms**). Accessibility/SEO **100/100** in all four runs. Click-to-play video posters remove initial third-party player work; distant homepage sections defer layout/paint with reserved scroll space. Cold LCP remains above 2.5s, so real-device/field performance remains a limitation rather than a certified pass.
+5. Both homepage players verified in Chrome after the lightweight poster change: Giz FPV review at 0:40, log walkthrough at 1:35. Actual phone/Safari playback remains part of device acceptance.
+
+Final reports: `.wrangler/deferred-layout-measured-home-{cold,warm}.json` and `.wrangler/inline-video-measured-catalog-{cold,warm}.json`. Desktop leaderboard anchor rendering checked after the layout change. Chrome playback verified after the poster change. Windows temporary-profile cleanup reported EPERM after complete reports were written; failed/interstitial runs are not counted. Full sitemap/link crawl remains 460 pages / 489 destinations / zero issues.
 
 No product-direction decision is currently blocking local implementation. Deployment coordination and rollback are prepared in [release-runbook.md](release-runbook.md). Keep the original findings below as historical evidence, not the current status.
 

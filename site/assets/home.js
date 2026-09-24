@@ -57,3 +57,22 @@
     if (showLatest) loadLatest();
   }));
 })();
+
+// Keep the real video visible without loading two third-party players at startup.
+// The ordinary YouTube link remains usable if scripting is unavailable.
+document.querySelectorAll('[data-inline-video]').forEach(poster => {
+  poster.addEventListener('click', event => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const id = poster.dataset.inlineVideo;
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return;
+    const player = document.createElement('iframe');
+    player.title = poster.getAttribute('aria-label');
+    player.src = `https://www.youtube-nocookie.com/embed/${id}?rel=0&autoplay=1&playsinline=1`;
+    player.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+    player.referrerPolicy = 'strict-origin-when-cross-origin';
+    player.allowFullscreen = true;
+    event.preventDefault();
+    poster.replaceWith(player);
+    player.focus();
+  });
+});

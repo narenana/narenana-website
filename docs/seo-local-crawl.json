@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-23T20:00:08.658Z",
+  "checkedAt": "2026-09-23T20:37:19.712Z",
   "inventories": [
     {
       "url": "https://www.narenana.com/sitemap.xml",
@@ -506,7 +506,7 @@
       "h1": 1,
       "noindex": false,
       "schemaErrors": 0,
-      "htmlBytes": 24121
+      "htmlBytes": 24176
     },
     {
       "url": "https://nanawing2.narenana.com/guides/how-to-play",
@@ -526,7 +526,7 @@
       "h1": 1,
       "noindex": false,
       "schemaErrors": 0,
-      "htmlBytes": 9925
+      "htmlBytes": 10033
     },
     {
       "url": "https://sim.narenana.com/",
@@ -786,7 +786,7 @@
       "h1": 1,
       "noindex": false,
       "schemaErrors": 0,
-      "htmlBytes": 37994
+      "htmlBytes": 38011
     },
     {
       "url": "https://www.narenana.com/catalog-methodology/",
