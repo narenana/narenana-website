@@ -108,8 +108,10 @@ export function validLandings(masters, min = 3) {
   return out
 }
 
-// Every ready master with approved offers, including temporarily OOS models.
-// This crawlable index preserves discovery while availability changes.
+// Every IN-STOCK ready master (>=1 live approved offer). Powers the /browse/
+// HTML sitemap. In-stock only by owner decision: we don't funnel crawl equity
+// or shoppers to products we can't currently sell. Same rule as the grid and
+// the XML sitemap. any_stock is kept for validLandings and is always 1 here.
 export async function browseData(env, cat) {
   return all(
     env,
@@ -120,6 +122,7 @@ export async function browseData(env, cat) {
      JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
      WHERE m.category_id=? AND m.status='ready'
      GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1
      ORDER BY m.brand COLLATE NOCASE, m.name COLLATE NOCASE`,
     cat.id,
   )
@@ -175,7 +178,7 @@ export function renderBrowse(cat, masters, landings) {
     .map((role) => {
       const items = groups
         .get(role)
-        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a>${m.any_stock ? '' : ' <small>Currently unavailable</small>'}</li>`)
+        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a></li>`)
         .join('')
       return `<section class="bz-sec"><h2 id="${esc(SLUG_OF_ROLE[role] || 'other')}">${esc(ROLE_H1[role] || 'Other')}<span class="bz-n">${groups.get(role).length}</span></h2><ul class="bz-list">${items}</ul></section>`
     })
@@ -185,7 +188,7 @@ export function renderBrowse(cat, masters, landings) {
   const body = `<main class="bz">
 <nav class="bz-crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="${pfx}/">${esc(cat.name)}</a> › All models</nav>
 <h1 class="bz-h1">All RC plane models</h1>
-<p class="bz-lede">${total} RC aircraft models from Indian sellers, including models currently out of stock. Browse by curated category, or by type below.</p>
+<p class="bz-lede">Every RC plane currently in stock — ${total} models — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
 <form class="bz-qform" role="search" action="${pfx}/" method="get"><input class="bz-q" type="search" name="q" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="bz-qbtn" type="submit">Search</button></form>
 <section class="bz-sec"><h2>Browse by category</h2><ul class="bz-land">${landingLinks}</ul></section>
 ${sections}
@@ -248,7 +251,7 @@ function cardNext(it, pref, hidden, priority = false) {
         <p class="prod-brand">${esc(m.brand)}</p>
         <h2 class="prod-name">${esc(m.name)}</h2>
         <p class="prod-spec">${esc(specLine(m))}</p>
-        <div class="prod-price">${price ? `<div class="price"><span class="price-pre">from</span> ${inr(price)}</div>` : '<div class="price is-muted">—</div>'}${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
+        <div class="prod-price">${price ? `<div class="price"><span class="price-pre">from</span> ${inr(price)}</div>` : '<div class="price is-muted">Price under review</div>'}${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
       </div>
       <span class="prod-cta">${m.sellers > 1 ? `Compare ${m.sellers} sellers` : 'View & buy'}</span>
     </a></li>`
@@ -494,7 +497,7 @@ const FX_JS = `(function(){
     if(d.h){var img=document.createElement('img');img.src='/img/master/'+d.i;img.alt=(d.b||'')+' '+d.n;img.width=800;img.height=600;img.loading='lazy';picture.appendChild(img);}else{picture.appendChild(textEl('div','prod-noimg','No image'));}
     if(d.cp&&!d.cn){var badge=textEl('span','prod-tag','PRE-OWNED');picture.appendChild(badge);}
     var body=textEl('div','prod-body','');body.appendChild(textEl('p','prod-brand',d.b));body.appendChild(textEl('h3','prod-name',d.n));body.appendChild(textEl('p','prod-spec',d.sl));
-    var price=textEl('div','prod-price','');price.appendChild(textEl('div',d.p?'price':'price is-muted',d.p?'from ₹'+Number(d.p).toLocaleString('en-IN'):'—'));
+    var price=textEl('div','prod-price','');price.appendChild(textEl('div',d.p?'price':'price is-muted',d.p?'from ₹'+Number(d.p).toLocaleString('en-IN'):'Price under review'));
     if(d.ns>1){var sellers=textEl('span','mrp',d.ns+' sellers');sellers.style.textDecoration='none';price.appendChild(sellers);}
     body.appendChild(price);link.appendChild(picture);link.appendChild(body);link.appendChild(textEl('span','prod-cta',d.ns>1?'Compare '+d.ns+' sellers':'View & buy'));li.appendChild(link);cardEls[d.i]=li;return li;
   }

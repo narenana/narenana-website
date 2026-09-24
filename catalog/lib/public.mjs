@@ -19,17 +19,17 @@ const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`
-  const og = image ?? `${SITE}/assets/og-nanawing.jpg`
+  const og = image ?? `${SITE}/assets/og-nanawing.jpg?v=b7b515b0c7`
   const browsePath = '/' + (path.split('/')[1] || 'wings') + '/browse/'
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#087bc1" />
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}" /><link rel="canonical" href="${url}" /><meta name="robots" content="${noindex ? 'noindex,follow' : 'index,follow,max-image-preview:large'}" />
-<link rel="icon" href="/favicon.ico" sizes="any" /><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<link rel="icon" href="/favicon.ico" sizes="any" /><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=d4e6f9975a" />
 <meta property="og:type" content="website" /><meta property="og:site_name" content="narenana" /><meta property="og:url" content="${url}" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" /><meta property="og:image" content="${esc(og)}" />
 <meta name="twitter:title" content="${esc(title)}" /><meta name="twitter:description" content="${esc(desc)}" /><meta property="og:image:alt" content="${esc(title)}" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="${esc(og)}" />
-<link rel="preload" href="/assets/family/DMSans-400.woff2" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-700.woff2" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css" /><link rel="stylesheet" href="/assets/family/shell.css" />
+<link rel="preload" href="/assets/family/DMSans-400.woff2?v=9fea608a94" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-700.woff2?v=3787a5a419" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css?v=feeaa74c77" /><link rel="stylesheet" href="/assets/family/shell.css?v=f1a8773eb1" />
 <script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
@@ -40,7 +40,7 @@ ${body}
 <aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
 ${familyFooter({home:''})}
 
-<script type="module" src="/assets/family/preview-links.js?v=release2"></script></body></html>`
+<script type="module" src="/assets/family/preview-links.js?v=8745dd5cf9"></script></body></html>`
 }
 
 // Power class from a listing's text. LOGIC is in code; the text (engine
@@ -333,8 +333,14 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
 
   const configs = [...new Set(offers.map((o) => o.config))]
   const {seed: headlineOffer} = comparableOffers(offers)
+  // Stock and price are separate questions. A listing flagged for review still
+  // proves the model is in stock (same rule as the grid); only its PRICE is
+  // withheld. So a model whose only live listings are flagged is "in stock,
+  // price under review" — never "last seen" from an older out-of-stock listing.
+  const liveAny = offers.some((o) => !o.dead && o.in_stock)
   const liveMin = headlineOffer?.in_stock ? headlineOffer.price_inr : null
-  const seenMin = headlineOffer && !headlineOffer.in_stock ? headlineOffer.price_inr : null
+  const priceUnderReview = liveAny && !liveMin
+  const seenMin = !liveAny && headlineOffer && !headlineOffer.in_stock ? headlineOffer.price_inr : null
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
@@ -347,14 +353,17 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   // Preserve the Product entity for unavailable models, with honest availability.
   // Rich-result eligibility and indexing remain search-engine decisions.
   const hasImg = m.hero_image || offers.some((o) => o.image_url)
-  const offerSchema = comparableOfferSchema(offers)
-  const productLd = {
+  // Publish a Product only with an offer that states the truth: never one with
+  // no offers (an invalid snippet), and never an out-of-stock offer for a model
+  // that is actually in stock with its price under review.
+  const offerSchema = priceUnderReview ? null : comparableOfferSchema(offers)
+  const productLd = offerSchema && {
     '@type': 'Product',
     name: `${m.brand} ${m.name}`, brand: { '@type': 'Brand', name: m.brand }, description: overview,
     additionalProperty: manufacturer?.properties.map(p=>({'@type':'PropertyValue',name:p.name,value:p.value,unitText:p.unit || undefined})),
     url: `${SITE}${cat.path_prefix}/${m.slug}/`,
     image: hasImg ? `${SITE}/img/master/${m.id}` : undefined,
-    offers: offerSchema || undefined,
+    offers: offerSchema,
   }
   const jsonld = {
     '@context': 'https://schema.org',
@@ -427,10 +436,12 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
       ${m.hero_image || offers.some((o) => o.image_url) ? `<div class="kit-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" /></div>` : ''}
       ${liveMin
         ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
-        : seenMin
-          ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
-          : ''}
-      ${headlineOffer ? `<p class="price-context">${esc(headlineOffer.config || 'Configuration not specified')} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
+        : priceUnderReview
+          ? `<div class="price price-lg is-muted"><span class="price-pre">in stock</span> price under review</div>`
+          : seenMin
+            ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
+            : ''}
+      ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(headlineOffer.config || 'Configuration not specified')} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
       <dl class="spec">
         ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}
       </dl>

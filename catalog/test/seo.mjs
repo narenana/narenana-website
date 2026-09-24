@@ -40,6 +40,21 @@ test('staging router excludes both forwarded applications from indexing', async 
     }
   } finally { globalThis.fetch = original }
 })
+// latest-router forwards latest.narenana.com to the main Worker's workers.dev
+// host, so THAT is the hostname the main Worker must mark noindex (plus the
+// workers.dev mirror itself). www must stay indexable.
+test('main Worker: staging and workers.dev hosts are noindex, www is not', async () => {
+  const { default: worker } = await import('../../src/index.js')
+  const env = { ASSETS: { fetch: async () => new Response('User-agent: *\n', { status: 200, headers: { 'content-type': 'text/plain' } }) } }
+  const ctx = { waitUntil() {} }
+  for (const host of ['narenana-website.narenana.workers.dev', 'latest.narenana.com']) {
+    const r = await worker.fetch(new Request(`https://${host}/robots.txt`), env, ctx)
+    assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow', host + ' must be noindex')
+  }
+  const www = await worker.fetch(new Request('https://www.narenana.com/robots.txt'), env, ctx)
+  assert.ok(!www.headers.get('x-robots-tag')?.includes('noindex'), 'www stays indexable')
+})
+
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
 const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/']
 for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, async () => {
@@ -100,6 +115,44 @@ test('headline uses the same eligible seed as structured offers', () => {
   assert.ok(!html.includes('from</span> ₹1</div>'));
  }
 });
+test('flagged listings: stock is kept, price withheld, never a false or empty Product', () => {
+  const page = (offers) => renderMaster({ name: 'Wings', path_prefix: '/wings', spec_schema: '[]' }, { id: 999, brand: 'Test', name: 'Wing', slug: 'test', specs: '{}' }, offers)
+  const product = (html) => {
+    for (const m of html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)) {
+      const graph = [].concat(JSON.parse(m[1])['@graph'] || JSON.parse(m[1]))
+      const p = graph.find((n) => n['@type'] === 'Product')
+      if (p) return p
+    }
+    return null
+  }
+  const availability = (p) => JSON.stringify(p?.offers || {}).match(/schema\.org\/(InStock|OutOfStock)/g) || []
+
+  // Only live listing is flagged: in stock, price under review, no Product.
+  let html = page([offer({ flagged: 'price_jump', price_inr: 2599 })])
+  assert.ok(html.includes('price under review') && !html.includes('last seen'), 'flagged-only in-stock model says price under review')
+  assert.equal(product(html), null, 'no Product without a publishable offer')
+
+  // Flagged live listing + older unflagged out-of-stock listing (the
+  // fms-cessna-182 case): must not claim OutOfStock or show "last seen".
+  html = page([offer({ flagged: 'price_jump', price_inr: 28765 }), offer({ in_stock: 0, price_inr: 33010 })])
+  assert.ok(html.includes('price under review') && !html.includes('last seen'), 'in-stock model is never shown as last seen')
+  assert.equal(product(html), null, 'no OutOfStock Product for an in-stock model')
+
+  // Every listing gone: no Product with an empty offers field.
+  assert.equal(product(page([offer({ dead: 1 })])), null, 'no empty Product when all listings are dead')
+
+  // Genuinely out of stock (unflagged): Product kept, OutOfStock, last seen.
+  html = page([offer({ in_stock: 0, price_inr: 9499 })])
+  assert.ok(html.includes('last seen'), 'out-of-stock model shows last seen')
+  assert.deepEqual(availability(product(html)), ['schema.org/OutOfStock'], 'out-of-stock Product keeps OutOfStock availability')
+
+  // Normal in-stock: Product with InStock price; a flagged sibling price never leaks.
+  html = page([offer({ price_inr: 2599 }), offer({ flagged: 'price_jump', price_inr: 999 })])
+  assert.ok(html.includes('from</span> ₹2,599'), 'headline uses the unflagged live price')
+  assert.ok(!html.includes('999</'), 'flagged price is not published')
+  assert.deepEqual([...new Set(availability(product(html)))], ['schema.org/InStock'])
+})
+
 test('manufacturer physical overrides and explicit clears override harvested facts',()=>{
  const row={match_status:'accepted',url:'https://manufacturer.example/wing',title:'Wing',body_text:'Minimum 4 channels.',overrides_json:JSON.stringify({channels:6,motorCount:null})};
  assert.equal(manufacturerReference(row).properties.find(p=>p.name==='Minimum channels')?.value,6);

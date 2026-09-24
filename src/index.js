@@ -10,8 +10,10 @@
 // KV under key "feed". Page reloads naturally pick up the new payload. Also
 // runs the Wings pipeline (availability refresh + discovery), gated internally.
 
-import { handleCatalog, catalogScheduled } from '../catalog/lib/worker.mjs'
+import { handleCatalog, catalogScheduled, PUBLIC_CACHE_RELEASE } from '../catalog/lib/worker.mjs'
 import { consumeManufacturerHarvestQueue } from '../catalog/lib/mfr-jobs.mjs'
+import { homeCatalogQueries } from '../catalog/lib/home-queries.mjs'
+import { ASSET_VERSIONS } from './asset-versions.mjs'
 import { handleStats, refreshStats } from './stats.js'
 
 export default {
@@ -38,8 +40,9 @@ export default {
       return Response.redirect(url.toString(), 301)
     }
     if (url.pathname === '/index.html') {
-      url.pathname = '/'
-      return Response.redirect(url.toString(), 301)
+      // Relative Location: behind latest-router this Worker sees the workers.dev
+      // host, and an absolute redirect would move staging testers onto it.
+      return new Response(null, { status: 301, headers: { Location: '/' + url.search } })
     }
 
     // /log-viewer/* is a separate proxied app — leave its responses untouched
@@ -54,7 +57,7 @@ export default {
           ? env.LOG_VIEWER_ORIGIN_LATEST
           : env.LOG_VIEWER_ORIGIN
       const response = await forward(request, origin, '/log-viewer')
-      return url.hostname === 'latest.narenana.com' ? harden(response, url, isLocal) : response
+      return isStagingHost(url.hostname) ? harden(response, url, isLocal) : response
     }
 
     if (url.pathname === '/videos.json') {
@@ -99,8 +102,8 @@ export default {
     // crawlers / AI answer engines would otherwise see none of it. Inject a
     // <noscript> fallback list from the KV feed the Worker already holds.
     const response =
-      url.pathname === '/' || url.pathname === '/index.html'
-        ? await renderHome(request, env)
+      url.pathname === '/'
+        ? await cachedHome(request, env, ctx, isLocal)
         : await env.ASSETS.fetch(request)
 
     return harden(response, url, isLocal)
@@ -143,9 +146,14 @@ async function videosResponse(env) {
 // localhost); static art under /assets/ gets a real cache lifetime since the
 // Workers-Assets default is `max-age=0, must-revalidate` — every repeat visit
 // would otherwise revalidate.
+// Non-canonical hosts must never be indexed. latest-router forwards
+// latest.narenana.com to this Worker's *.workers.dev host, so that is the host
+// seen here in production; the workers.dev mirror itself is a duplicate too.
+const isStagingHost = (hostname) => hostname === 'latest.narenana.com' || hostname.endsWith('.workers.dev')
+
 function harden(response, url, isLocal) {
   const headers = new Headers(response.headers)
-  if (url.hostname === 'latest.narenana.com' || url.pathname.startsWith('/direction-b')) {
+  if (isStagingHost(url.hostname) || url.pathname.startsWith('/direction-b')) {
     headers.set('X-Robots-Tag', 'noindex, nofollow')
   }
   if (!isLocal) {
@@ -154,11 +162,18 @@ function harden(response, url, isLocal) {
     // every subdomain must then stay HTTPS-only). Everything here already is.
     headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   }
-  // Cache static art for a day — but ONLY successful responses. Caching a 404 or
-  // Revalidate stable asset URLs, including imports and family styles.
-  // Never persist an asset error during a release propagation window.
+  // Asset caching. Only successful responses — never persist an error.
+  // - ?v=<hash> matching the file's CURRENT content hash (scripts/version-assets.mjs
+  //   stamps every reference): immutable for a year, so repeat views make zero
+  //   asset requests. A stale hash (old cached HTML, a rollback) must not pin
+  //   today's bytes under it, so it falls through to the short rule.
+  // - Anything else (unversioned or stale): 5 min, then revalidated in the
+  //   background — never render-blocking, at most briefly stale after a release.
   if (url.pathname.startsWith('/assets/') && response.ok) {
-    headers.set('Cache-Control', 'public, max-age=0, must-revalidate')
+    const v = url.searchParams.get('v')
+    headers.set('Cache-Control', v && ASSET_VERSIONS[url.pathname] === v
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=300, stale-while-revalidate=86400')
   }
   return new Response(response.body, {
     status: response.status,
@@ -174,6 +189,27 @@ function harden(response, url, isLocal) {
 // at crawl time. The client script skips its own fetch when it finds these
 // cards already present (falling back to hydration only if KV was empty).
 // Markup mirrors the client renderer in site/index.html — keep in sync.
+// The homepage runs two D1 queries and a KV read per render. Cache the rendered
+// HTML at the edge like catalog pages (same release key, same TTLs) so traffic
+// and crawlers cost one render per ~15 minutes per location, not one per view.
+async function cachedHome(request, env, ctx, isLocal) {
+  if (request.method !== 'GET' || isLocal) return renderHome(request, env)
+  const cacheUrl = new URL(request.url)
+  cacheUrl.searchParams.set('__release', PUBLIC_CACHE_RELEASE)
+  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
+  const cache = caches.default
+  const hit = await cache.match(cacheKey)
+  if (hit) return hit
+  const res = await renderHome(request, env)
+  if (res.status === 200 && (res.headers.get('content-type') || '').includes('text/html')) {
+    const store = new Response(res.clone().body, res)
+    store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
+    store.headers.set('x-home-cache', 'HIT') // only ever seen on responses served FROM the cache
+    ctx.waitUntil(cache.put(cacheKey, store))
+  }
+  return res
+}
+
 async function renderHome(request, env) {
   const response = await env.ASSETS.fetch(request)
   if (!(response.headers.get('content-type') || '').includes('text/html')) {
@@ -196,21 +232,9 @@ async function renderHome(request, env) {
     if (env.CATALOG_DB) {
       const cat = (await env.CATALOG_DB.prepare(`SELECT id, path_prefix FROM category WHERE live=1 AND path_prefix='/wings' LIMIT 1`).all()).results?.[0]
       if (cat) {
-        sellerCount = (await env.CATALOG_DB.prepare(`SELECT COUNT(DISTINCT k.source_id) AS n FROM sku k JOIN offer o ON o.sku_id=k.id JOIN master_model m ON m.id=o.master_model_id WHERE m.category_id=? AND m.status='ready' AND k.review_status='approved' AND k.dead=0`).bind(cat.id).first())?.n || 0
-        wings = (
-          await env.CATALOG_DB.prepare(
-            `SELECT m.id, m.slug, m.brand, m.name, m.specs,
-                COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero,
-                COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS price,
-                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 THEN COALESCE(k.last_checked,k.last_seen) END) AS checked_at
-             FROM master_model m
-             JOIN offer o ON o.master_model_id=m.id
-             JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
-             WHERE m.category_id=? AND m.status='ready'
-             GROUP BY m.id HAVING price IS NOT NULL AND hero IS NOT NULL
-             ORDER BY COALESCE(m.pop_score, 0) DESC, m.id ASC LIMIT 4`,
-          ).bind(cat.id).all()
-        ).results.map((m) => ({ ...m, prefix: cat.path_prefix }))
+        const [sellers, cards] = await env.CATALOG_DB.batch(homeCatalogQueries(env.CATALOG_DB, cat.id))
+        sellerCount = sellers.results?.[0]?.n || 0
+        wings = (cards.results || []).map((m) => ({ ...m, prefix: cat.path_prefix }))
       }
     }
   } catch {
@@ -261,7 +285,13 @@ async function renderHome(request, env) {
         el.setInnerContent('Latest checked prices and stock. Confirm availability with the seller.')
       },
     })
-  return rw.transform(response)
+  // The rewritten page no longer matches the static file's validators; drop
+  // them so a conditional request can't be answered 304 with stale prices.
+  const out = rw.transform(response)
+  const page = new Response(out.body, out)
+  page.headers.delete('etag')
+  page.headers.delete('last-modified')
+  return page
 }
 
 function esc(s) {

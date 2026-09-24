@@ -1,4 +1,4 @@
-import { installShare } from './share.js?v=release2';
+import { installShare } from './share.js?v=9f7c343cd8';
 installShare();
 document.addEventListener('keydown',event=>{
  if(event.key!=='Escape')return;

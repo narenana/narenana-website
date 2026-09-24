@@ -54,6 +54,18 @@ const html = (body, status = 200) =>
 // Yandex accept our URL submissions). Not a secret; safe in the repo.
 const INDEXNOW_KEY = '7f3e9a1c5b8d4260e94a1f7c3b0d8e62'
 
+// Part of every edge-cache key for public HTML (catalog pages + homepage).
+// Change it in any release that changes page markup, so pages cached from the
+// previous build are not served after deploy. See docs/release-runbook.md.
+export const PUBLIC_CACHE_RELEASE = 'theme-20260924-1'
+
+// Manufacturer-sourced facts (harvested specs, manufacturer link, retrieval
+// date) on public product pages and in their JSON-LD. OFF by owner decision
+// (2026-09-24): manufacturer content stays admin-only until the owner settles
+// how descriptions are used and how conflicting wingspans are handled. When it
+// is switched on, bump PUBLIC_CACHE_RELEASE in the same change.
+export const PUBLIC_MANUFACTURER_FACTS = false
+
 export async function handleCatalog(request, url, env, ctx) {
   const path = url.pathname.replace(/\/+$/, '') || '/'
   if (!env.CATALOG_DB) return null
@@ -104,7 +116,7 @@ export async function handleCatalog(request, url, env, ctx) {
   // and the image proxy above are never cached; non-200s (incl. the 404 grid) and non-GETs skip.
   if (request.method === 'GET' && !['localhost','127.0.0.1'].includes(url.hostname)) {
     const cacheUrl = new URL(request.url)
-    cacheUrl.searchParams.set('__release','theme-20260923-2')
+    cacheUrl.searchParams.set('__release', PUBLIC_CACHE_RELEASE)
     const cacheKey = new Request(cacheUrl, request)
     const cache = caches.default
     const hit = await cache.match(cacheKey)
@@ -197,11 +209,13 @@ async function publicCatalogPages(url, env) {
          WHERE master_model_id=? AND excluded=0 ORDER BY pinned DESC, views DESC LIMIT 3`,
         m.id,
       )
-      const reference = await one(env, `SELECT p.url,p.title,p.body_text,p.span_mm,p.fetched_at,x.status AS match_status,pr.overrides_json
-        FROM mfr_match x JOIN mfr_product p ON p.id=x.mfr_product_id
-        JOIN manufacturer mf ON mf.id=p.manufacturer_id
-        LEFT JOIN mfr_profile pr ON pr.master_model_id=x.master_model_id AND pr.source_mfr_product_id=x.mfr_product_id
-        WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
+      const reference = PUBLIC_MANUFACTURER_FACTS
+        ? await one(env, `SELECT p.url,p.title,p.body_text,p.span_mm,p.fetched_at,x.status AS match_status,pr.overrides_json
+            FROM mfr_match x JOIN mfr_product p ON p.id=x.mfr_product_id
+            JOIN manufacturer mf ON mf.id=p.manufacturer_id
+            LEFT JOIN mfr_profile pr ON pr.master_model_id=x.master_model_id AND pr.source_mfr_product_id=x.mfr_product_id
+            WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
+        : null
       return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
     }
   }
@@ -342,7 +356,10 @@ async function sitemapResponse(env, cats) {
     for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
     // Ready products with approved offers remain useful when temporarily OOS.
     // Retired models are excluded by the query, not by fluctuating availability.
-    for (const m of masters) urls.push({ u: `${SITE}${cat.path_prefix}/${m.slug}/`, lm: m.updated_at })
+    // In-stock only (owner decision) — don't feed Google product pages we can't
+    // currently sell. Regenerates each request, so pages drop/return with stock.
+    // Same rule as /wings/browse/ and IndexNow.
+    for (const m of masters) if (m.any_stock) urls.push({ u: `${SITE}${cat.path_prefix}/${m.slug}/`, lm: m.updated_at })
   }
   const day = (ms) => (ms ? `<lastmod>${new Date(ms).toISOString().slice(0, 10)}</lastmod>` : '')
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(({ u, lm }) => `<url><loc>${esc(u)}</loc>${day(lm)}</url>`).join('\n')}\n</urlset>`

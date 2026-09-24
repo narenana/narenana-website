@@ -10,7 +10,10 @@ import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct,
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
-import { renderGridNext, searchRows } from '../lib/grid-next.mjs'
+import { renderGridNext, searchRows, resolveLanding } from '../lib/grid-next.mjs'
+import { HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL } from '../lib/home-queries.mjs'
+import { planAssetVersions } from '../../scripts/version-assets.mjs'
+import { ASSET_VERSIONS } from '../../src/asset-versions.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 import { configAgreement as mfrConfigAgreement, configTypes as mfrConfigTypes, isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
 import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
@@ -762,6 +765,87 @@ test('aircraft-data admin exposes editable sourced facts and the full protected 
 })
 
 // ---------------------------------------------------------------- public
+// Owner rule: every public surface lists IN-STOCK models only. The grid is the
+// reference (it only renders models with a live offer); the XML sitemap and the
+// /browse/ hub must list exactly the same product set — no more, no less.
+test('in-stock only: sitemap and /browse/ list exactly the grid\'s in-stock models', async () => {
+  const gridSlugs = new Set()
+  for (const q of ['', '?power=gas']) {
+    const html = await (await get('/wings/' + q)).text()
+    for (const m of html.matchAll(/<li class="prod" data-id="\d+"[^>]*>\s*<a class="prod-link" href="\/wings\/([a-z0-9-]+)\/"/g)) gridSlugs.add(m[1])
+  }
+  assert.ok(gridSlugs.size > 20, `grid should list many in-stock models (got ${gridSlugs.size})`)
+  const isProduct = (slug) => slug !== 'browse' && !resolveLanding(slug)
+
+  const xml = await (await get('/sitemap.xml')).text()
+  const siteSlugs = new Set([...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1]).filter(isProduct))
+  const browse = await (await get('/wings/browse/')).text()
+  const browseSlugs = new Set([...browse.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)].map((m) => m[1]).filter(isProduct))
+
+  const diff = (a, b) => [...a].filter((s) => !b.has(s))
+  assert.deepEqual(diff(siteSlugs, gridSlugs), [], 'sitemap lists products the grid does not (out of stock?)')
+  assert.deepEqual(diff(gridSlugs, siteSlugs), [], 'sitemap is missing in-stock products')
+  assert.deepEqual(diff(browseSlugs, gridSlugs), [], '/browse/ lists products the grid does not (out of stock?)')
+  assert.deepEqual(diff(gridSlugs, browseSlugs), [], '/browse/ is missing in-stock products')
+  assert.ok(!/Currently unavailable|out of stock/i.test(browse), '/browse/ must not advertise unavailable models')
+})
+
+// Every reference to site/assets/* carries its current content hash, and the
+// manifest the Worker reads matches. Fails when someone edits an asset or page
+// and forgets `npm run assets:version`.
+test('asset versions are current (run npm run assets:version)', () => {
+  const plan = planAssetVersions()
+  assert.deepEqual(plan.changes.map((f) => f.split(/[\\/]/).slice(-3).join('/')), [], 'files with stale asset versions')
+  assert.equal(plan.manifestStale, false, 'src/asset-versions.mjs is stale')
+  assert.deepEqual(plan.missing, [], 'references to assets that do not exist')
+})
+
+test('asset cache headers: current hash immutable, anything else short-lived', async () => {
+  const current = ASSET_VERSIONS['/assets/family/fonts.css']
+  assert.ok(current, 'fonts.css is in the manifest')
+  const hit = await get('/assets/family/fonts.css?v=' + current)
+  assert.equal(hit.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+  for (const p of ['/assets/family/fonts.css?v=0000000000', '/assets/family/fonts.css']) {
+    const r = await get(p)
+    assert.equal(r.status, 200)
+    assert.equal(r.headers.get('cache-control'), 'public, max-age=300, stale-while-revalidate=86400', p + ' must not be immutable')
+  }
+  const home = await (await get('/')).text()
+  const refs = [...home.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1])
+  assert.ok(refs.length > 5, 'homepage links assets')
+  for (const r of refs) assert.match(r, /\?v=[0-9a-f]{10}$/, 'homepage asset link is versioned: ' + r)
+})
+
+// Owner rule: manufacturer-sourced content is ADMIN-ONLY until the owner decides
+// how it may be shown. Models with an accepted manufacturer mapping must render
+// no manufacturer section, link or JSON-LD properties on their public page.
+test('manufacturer facts stay off public product pages (admin-only)', async () => {
+  const { status, body } = await api('mfr-profiles')
+  assert.equal(status, 200)
+  const published = (body.profiles || []).filter((p) => p.model_status === 'ready').slice(0, 5)
+  assert.ok(published.length, 'fixture needs at least one published model with an accepted mapping')
+  for (const p of published) {
+    const html = await (await get(`${p.path_prefix}/${p.slug}/`)).text()
+    assert.ok(!html.includes('manufacturer-reference'), `${p.slug}: manufacturer section is public`)
+    assert.ok(!html.includes('additionalProperty'), `${p.slug}: manufacturer facts in JSON-LD`)
+    if (p.mfr_url) assert.ok(!html.includes(p.mfr_url), `${p.slug}: manufacturer listing link is public`)
+  }
+})
+
+// The homepage is uncached-on-miss and not a catalog route: its queries must
+// keep the pinned master_model → offer → sku order (a planner-chosen order once
+// cost ~474k D1 row reads per view), and render real data.
+test('homepage catalog queries: pinned join order, live-priced sellers, cards render', async () => {
+  for (const sql of [HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL]) {
+    assert.match(sql, /FROM master_model m\s+CROSS JOIN offer o ON o\.master_model_id=m\.id\s+CROSS JOIN sku k ON k\.id=o\.sku_id/, 'join order must stay pinned with CROSS JOIN')
+  }
+  for (const cond of ['k.in_stock=1', 'k.price_inr>0', 'k.dead=0', "COALESCE(k.flagged,'')=''"]) assert.ok(HOME_SELLER_COUNT_SQL.includes(cond), 'seller count must require ' + cond)
+  const html = await (await get('/')).text()
+  const sellers = +(html.match(/id="catalog-seller-count"[^>]*>Listings from (\d+) Indian sellers/) || [])[1]
+  assert.ok(sellers > 0, 'homepage shows a live seller count')
+  assert.equal([...html.matchAll(/class="shopc-name"/g)].length, 4, 'homepage shows four catalog cards')
+})
+
 test('category grid renders (SSR), stylesheet served', async () => {
   const res = await get('/wings/')
   assert.equal(res.status, 200)

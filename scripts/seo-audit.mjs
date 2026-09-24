@@ -40,7 +40,11 @@ const issues=results.filter(r=>r.error||r.status!==200||!r.title||!r.description
 console.log(JSON.stringify({urls:urls.length,completed:results.length,issues},null,2))
 
 const inventoryErrors = inventories.filter(i=>i.error || i.status!==200 || !i.urls.length);
-const minimum = Number(process.env.SEO_MIN_URLS || 450);
+// Floor for "the inventory collapsed", not a target. The /wings/ sitemap lists
+// IN-STOCK models only (owner rule), so its size moves with stock: ~211 URLs in
+// Sept 2026, plus ~25 on the other surfaces. Exact in-stock coverage is enforced
+// by the catalog suite ('in-stock only: sitemap and /browse/ ...').
+const minimum = Number(process.env.SEO_MIN_URLS || 150);
 if(inventoryErrors.length || urls.length < minimum || results.length!==urls.length || issues.length){
  console.error(JSON.stringify({inventoryErrors,expectedMinimum:minimum,actual:urls.length}));
  process.exitCode=1;
