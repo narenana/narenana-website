@@ -109,9 +109,9 @@ export default {
     const response =
       url.pathname === '/'
         ? await cachedHome(request, env, ctx, isLocal)
-        : await env.ASSETS.fetch(request)
+        : await staticAsset(request, env)
 
-    return harden(response, url, isLocal)
+    return harden(response, url, isLocal, { staticFile: url.pathname !== '/' })
   },
 
   async scheduled(event, env, ctx) {
@@ -156,8 +156,10 @@ async function videosResponse(env) {
 // seen here in production; the workers.dev mirror itself is a duplicate too.
 const isStagingHost = (hostname) => hostname === 'latest.narenana.com' || hostname.endsWith('.workers.dev')
 
-function harden(response, url, isLocal) {
+function harden(response, url, isLocal, { staticFile = false } = {}) {
   const headers = new Headers(response.headers)
+  // Static files support byte ranges (staticAsset); say so, as Pages does.
+  if (staticFile && response.status === 200 && !headers.has('accept-ranges')) headers.set('Accept-Ranges', 'bytes')
   if (isStagingHost(url.hostname) || url.pathname.startsWith('/direction-b')) {
     headers.set('X-Robots-Tag', 'noindex, nofollow')
   }
@@ -199,6 +201,40 @@ function harden(response, url, isLocal) {
 // The homepage runs two D1 queries and a KV read per render. Cache the rendered
 // HTML at the edge like catalog pages (same release key, same TTLs) so traffic
 // and crawlers cost one render per ~15 minutes per location, not one per view.
+// Workers static assets answer HEAD with no Content-Length and ignore Range
+// (observed in production, 2026-09-25), unlike Pages. Link-preview fetchers
+// such as WhatsApp check an image's size before using it, and fall back to a
+// small thumbnail when they can't, so answer both from the full GET response.
+// Only HEAD and Range requests take this path; ordinary GETs pass through.
+async function staticAsset(request, env) {
+  const range = request.headers.get('range')
+  if (request.method !== 'HEAD' && !(request.method === 'GET' && range)) return env.ASSETS.fetch(request)
+  const headers = new Headers(request.headers)
+  headers.delete('range')
+  const res = await env.ASSETS.fetch(new Request(request.url, { method: 'GET', headers }))
+  if (res.status !== 200) return request.method === 'HEAD' ? new Response(null, res) : res
+  const body = await res.arrayBuffer()
+  const size = body.byteLength
+  const out = new Headers(res.headers)
+  out.set('Accept-Ranges', 'bytes')
+  if (request.method === 'HEAD') {
+    out.set('Content-Length', String(size))
+    return new Response(null, { status: 200, headers: out })
+  }
+  // A single byte range ("bytes=a-b", "bytes=a-", "bytes=-n"); anything else
+  // (multiple ranges, other units) gets the whole file, which is always valid.
+  const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim())
+  if (!m || (m[1] === '' && m[2] === '')) return new Response(body, { status: 200, headers: out })
+  const start = m[1] === '' ? Math.max(0, size - Number(m[2])) : Number(m[1])
+  const end = m[1] === '' || m[2] === '' ? size - 1 : Math.min(Number(m[2]), size - 1)
+  if (start >= size || start > end) {
+    out.set('Content-Range', `bytes */${size}`)
+    return new Response(null, { status: 416, headers: out })
+  }
+  out.set('Content-Range', `bytes ${start}-${end}/${size}`)
+  return new Response(body.slice(start, end + 1), { status: 206, headers: out })
+}
+
 async function cachedHome(request, env, ctx, isLocal) {
   if ((request.method !== 'GET' && request.method !== 'HEAD') || isLocal) return renderHome(request, env)
   // Key on host + path only: the rendered homepage never depends on the query

@@ -846,6 +846,23 @@ test('asset versions are current (run npm run assets:version)', () => {
   assert.deepEqual(plan.unhashed, [], 'asset references with a hand-written ?v= label')
 })
 
+// Link-preview fetchers (WhatsApp) size-check the share image before using it;
+// without a Content-Length on HEAD it falls back to a small square thumbnail.
+test('static files answer HEAD with their size and Range with 206', async () => {
+  const path = '/assets/og.jpg?v=' + ASSET_VERSIONS['/assets/og.jpg']
+  const full = await get(path)
+  const size = (await full.arrayBuffer()).byteLength
+  assert.equal(full.headers.get('accept-ranges'), 'bytes')
+  const head = await fetch(BASE + path, { method: 'HEAD' })
+  assert.equal(head.status, 200)
+  assert.equal(head.headers.get('content-length'), String(size), 'HEAD carries the real size')
+  const part = await get(path, { range: 'bytes=0-1023' })
+  assert.equal(part.status, 206)
+  assert.equal(part.headers.get('content-range'), `bytes 0-1023/${size}`)
+  assert.equal((await part.arrayBuffer()).byteLength, 1024)
+  assert.equal((await get(path, { range: `bytes=${size}-` })).status, 416, 'unsatisfiable range')
+})
+
 test('asset cache headers: current hash immutable, anything else short-lived', async () => {
   const current = ASSET_VERSIONS['/assets/family/fonts.css']
   assert.ok(current, 'fonts.css is in the manifest')
