@@ -849,7 +849,7 @@ test('asset versions are current (run npm run assets:version)', () => {
 // Link-preview fetchers (WhatsApp) size-check the share image before using it;
 // without a Content-Length on HEAD it falls back to a small square thumbnail.
 test('static files answer HEAD with their size and Range with 206', async () => {
-  const path = '/assets/og.jpg?v=' + ASSET_VERSIONS['/assets/og.jpg']
+  const path = '/og.jpg' // the share image (og:image), deliberately unversioned
   const full = await get(path)
   const size = (await full.arrayBuffer()).byteLength
   assert.equal(full.headers.get('accept-ranges'), 'bytes')
