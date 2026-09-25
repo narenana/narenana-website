@@ -1,5 +1,31 @@
 # Redesign release runbook
 
+## Release record — 25 September 2026 (RELEASED)
+
+The owner approved the release on 25 September, and all four apps are live. Everything below this section is the original preparation, kept for reference and for future releases.
+
+| Order | App | Merge on production branch | Production deployment | Rollback target | Verified |
+|---|---|---|---|---|---|
+| 0 | Website hotfix (catalog D1 join pin) | `master` ed4fe58 | Worker version ba6af4ed | aaad215c (c3d95f3) | Pinned queries read 1,962–2,146 rows in D1 insights (were ~238,000) |
+| 1 | Log viewer | `master` 4470505 (`[skip ci]`, see below) | Pages 3d9c2b42, direct upload of 4470505's build | 099917ae | New bundle via www; one Share launcher; styled 404; sample flight loads |
+| 2 | Website | `master` 554a20f | Worker version a207e595 | ba6af4ed (the hotfix) | 20/20 post-deploy checks; read-only in-stock test on prod; 237/237 sitemap URLs 200 across all four sites; Chrome desktop and 390px |
+| 3 | latest-router | manual `wrangler deploy` | Worker version f75b0a85 | 81576e80 | noindex on `/`, `/log-viewer/`, `/wings/` |
+| 4 | Nanawing FPV | `main` f5c16fe | Pages e2ed149e (GitHub Actions run 36099555489, green) | 30da74f4 | New bundle; service worker registers and warms its offline cache |
+| 4 | Nanawing 2 | `main` e2956fd (includes upstream 0c113cf and 8cb64e7) | Pages 9717be5b, build 7c228f6282c2c5fdeb57 | b5026429 (8cb64e7, build 61048f66) | See the note below |
+
+**Notes from the release.** These corrections supersede the preparation text below where they differ.
+
+- **Deploy mechanisms.**
+  - **Website:** Workers Builds on `master`.
+  - **Nanawing FPV:** GitHub Actions (`deploy.yml` on a push to `main`).
+  - **Nanawing 2:** GitHub Actions, which deploys a candidate, verifies it, then promotes it.
+  - **Log viewer:** production is a **manual direct upload**. Its Pages Git production builds have failed every time since July, so a merge alone never deploys it. For this release, `master` was merged with a `[skip ci]` message, and then the clean build of exactly that commit was uploaded:
+
+    `VITE_RELEASE=<sha> npm run build`, then `wrangler pages deploy dist --project-name edgetx-log-parser --branch master --commit-hash <sha>`
+- **Nanawing 2 CI run 36103039819 is red, but production is correct.** The candidate deploy, candidate verify and promote passed. "Verify production CDN" then failed 5 seconds after promotion. The CDN was still serving the previous build's 404 body (`c08fe8a5…`, which is b5026429's), and the 404 check does not wait for propagation. The same `verify-deployment.mjs` re-run against production a few minutes later passed on both hosts: worker and 404, all 87 asset hashes and headers, and offline landing to flight with no errors. The verifier fix was handed to the Nanawing 2 session.
+- **Log viewer, a one-off.** Browsers that opened `/log-viewer/` between the log-viewer deploy and the website deploy have the old Worker's injected Share widget in their service-worker-cached shell. The new app keeps it hidden (`display:none`), and it clears with the next log-viewer build.
+- **Not verifiable from here:** real offline boot on phones and devices, and Safari. Those remain owner checks.
+
 ## Current boundary
 
 The owner authorized pushing the redesign to feature branches on 24 September. Main-branch merges, preview/production deployment, sitemap submission and production database writes remain unauthorized. Use [skip ci] on the push tip to prevent connected Pages builds and Workers Builds previews; do not open a PR that triggers preview deployment. The isolated D1 snapshot contains disposable test fixtures and MUST NOT be uploaded to production.

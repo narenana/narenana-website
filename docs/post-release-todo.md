@@ -8,6 +8,13 @@ Deferred from the 24 September 2026 pre-production review (see `release-readines
 - [ ] **Review the 12 flagged live listings** (flagged since 9 Aug) in admin → Review, with the flagged filter. Until each one is accepted or corrected, its model shows "in stock · price under review" with no published price.
 - [ ] **Decide on manufacturer facts on product pages** (currently hidden: `PUBLIC_MANUFACTURER_FACTS = false` in `catalog/lib/worker.mjs`). Two things need settling first: how descriptions are used (rewrite or link), and what happens when a manufacturer wingspan conflicts with ours (auto-correct or flag). Enabling it needs no cache step: cache keys follow the deployed version.
 
+## Found during the release (25 September 2026)
+
+- [ ] **Log viewer: Pages Git production builds always fail.** Every one since July has failed, so production only changes by manual upload, and past uploads came from a dirty working tree. Either fix the Git build or switch the project to direct upload only, and add a `deploy` script that builds and uploads the exact committed tree (as done for this release; see `release-runbook.md`).
+- [ ] **Log viewer: Cesium satellite imagery returns 401.** The build sets no `VITE_CESIUM_TOKEN`, so `api.cesium.com/v1/assets/2` is requested with an empty token. This predates the release: the previous build has the identical empty setting. Terrain (ArcGIS) works. Set the token as a build secret, or switch to a keyless imagery provider. `VITE_GA_ID` and `VITE_SENTRY_DSN` are empty too, so the log viewer has no analytics or crash reporting. Decide whether that is intended.
+- [ ] **Nanawing 2 (its repo): production verifier races CDN propagation.** `verify-deployment.mjs` fails immediately when the 404 body right after a promote is still the previous build's. Treat that as propagation and retry within the shared deadline. Handed to the Nanawing 2 session; run 36103039819 is red for this reason only.
+- [ ] **Nanawing FPV (its repo): two advisory probes are always red.** The live offline probe expects `/unavailable/i`, but the offline leaderboard copy never says that. The pitch probe hits a runner-speed harness failure. Both are `continue-on-error`, so neither fails the run.
+
 ## Low-priority fixes from the review
 
 - [ ] **Sync the shared header copies** (`scripts/brand-shell.mjs`, `site/assets/family/shell.css`) into the Nanawing, Nanawing 2 and log-viewer repos. The only changes are the optional `cta` button and `avatar` URL (unused there, output unchanged), so this is housekeeping, not a release dependency.
