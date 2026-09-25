@@ -103,8 +103,10 @@ async function og() {
   await sharp(src('og-master.png'))
     .resize(1200, 630, { fit: 'cover' })
     .jpeg({ quality: 84, mozjpeg: true })
-    .toFile(a('og.jpg'))
-  console.log('og: og.jpg')
+    // Site root, unversioned (like the sims' /og.jpg): WhatsApp showed only the
+    // small thumbnail for the versioned /assets/og.jpg?v=… URL.
+    .toFile(site('og.jpg'))
+  console.log('og: site/og.jpg')
 }
 
 async function variants(name, widths, { webpQ = 80, avifQ = 52 } = {}) {

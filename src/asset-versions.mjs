@@ -58,7 +58,6 @@ export const ASSET_VERSIONS = {
   "/assets/nanawing2-sky-surfer.png": "521f84d7e2",
   "/assets/og-nanawing.jpg": "b7b515b0c7",
   "/assets/og-nanawing.svg": "701ff90379",
-  "/assets/og.jpg": "8ce55225af",
   "/assets/shot-log-viewer.avif": "3b5b9b04b2",
   "/assets/shot-log-viewer.jpg": "357c7ae1f2",
   "/assets/shot-log-viewer.webp": "e8653d9ba8",
