@@ -19,7 +19,7 @@ const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`
-  const og = image ?? `${SITE}/assets/og-nanawing.jpg?v=b7b515b0c7`
+  const og = image ?? `${SITE}/assets/og.jpg?v=8ce55225af`
   const browsePath = '/' + (path.split('/')[1] || 'wings') + '/browse/'
   return `<!doctype html>
 <html lang="en"><head>

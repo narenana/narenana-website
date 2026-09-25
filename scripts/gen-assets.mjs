@@ -8,7 +8,8 @@
 //   - favicon-master.png  simplified single-wing mark — the full mark turns to
 //                         mush at 16px, so the tab icon uses this instead
 //   - hero-master.png     16:9 hero photo
-//   - og-master.png       1.91:1 branded social card (wordmark + tagline)
+//   - og-master.png       1.91:1 narenana umbrella share card (RC sims + RC planes),
+//                         a 2x screenshot of og-card.html (1200x630 viewport, DPR 2)
 //
 // Produces, under site/assets/ (+ site/favicon.ico):
 //   - favicon.ico              multi-res 16/32/48 from icon-master
