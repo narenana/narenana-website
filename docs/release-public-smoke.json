@@ -1,0 +1,70 @@
+{
+  "checkedAt": "2026-09-23T20:12:21.485Z",
+  "scope": "Existing production only; candidate is local and not deployed",
+  "results": [
+    {
+      "name": "website",
+      "url": "https://www.narenana.com/",
+      "status": 200,
+      "expected": 200,
+      "ok": true
+    },
+    {
+      "name": "catalog",
+      "url": "https://www.narenana.com/wings/",
+      "status": 200,
+      "expected": 200,
+      "ok": true
+    },
+    {
+      "name": "feed",
+      "url": "https://www.narenana.com/videos.json",
+      "status": 200,
+      "expected": 200,
+      "ok": true,
+      "feedEntries": 15
+    },
+    {
+      "name": "log viewer",
+      "url": "https://www.narenana.com/log-viewer/",
+      "status": 200,
+      "expected": 200,
+      "ok": true
+    },
+    {
+      "name": "FPV",
+      "url": "https://sim.narenana.com/",
+      "status": 200,
+      "expected": 200,
+      "ok": true
+    },
+    {
+      "name": "LOS",
+      "url": "https://nanawing2.narenana.com/",
+      "status": 200,
+      "expected": 200,
+      "ok": true
+    },
+    {
+      "name": "admin authentication",
+      "url": "https://www.narenana.com/admin",
+      "status": 401,
+      "expected": 401,
+      "ok": true
+    },
+    {
+      "name": "review API authentication",
+      "url": "https://www.narenana.com/api/review",
+      "status": 401,
+      "expected": 401,
+      "ok": true
+    },
+    {
+      "name": "missing route",
+      "url": "https://www.narenana.com/release-check-missing-20260924/",
+      "status": 404,
+      "expected": 404,
+      "ok": true
+    }
+  ]
+}

@@ -91,7 +91,7 @@ function landingMeta(cat, L, slug) {
   const crumbs = [{ name: 'Home', url: '/' }, { name: cat.name, url: `${cat.path_prefix}/` }]
   if (L.power !== 'all' && L.roles.length) crumbs.push({ name: L.power === 'gas' ? 'Nitro / gas' : 'Electric', url: `${cat.path_prefix}/${L.power === 'gas' ? 'nitro' : 'electric'}/` })
   crumbs.push({ name: L.roles.length ? rl : (L.power === 'gas' ? 'Nitro / gas' : 'Electric'), url: `${cat.path_prefix}/${slug}/` })
-  return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare live prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
+  return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare latest checked prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
 }
 
 // landing slugs with >= min in-stock masters (for the sitemap). masters rows
@@ -109,9 +109,9 @@ export function validLandings(masters, min = 3) {
 }
 
 // Every IN-STOCK ready master (>=1 live approved offer). Powers the /browse/
-// HTML sitemap. In-stock only by design: we don't funnel crawl equity or
-// shoppers to products we can't currently sell. any_stock is kept for
-// validLandings (which filters on it) and is always 1 here.
+// HTML sitemap. In-stock only by owner decision: we don't funnel crawl equity
+// or shoppers to products we can't currently sell. Same rule as the grid and
+// the XML sitemap. any_stock is kept for validLandings and is always 1 here.
 export async function browseData(env, cat) {
   return all(
     env,
@@ -132,14 +132,14 @@ const BZ_CSS = `<style>
 .bz{max-width:1000px;margin:0 auto;padding:22px 20px 60px}
 .bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:14px}
 .bz-crumbs a{color:var(--muted);text-decoration:none}.bz-crumbs a:hover{text-decoration:underline}
-.bz-h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
+.bz-h1{font-family:'Barlow Condensed',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
 .bz-lede{color:var(--muted);max-width:66ch;margin:0 0 26px}
 .bz-qform{display:flex;max-width:430px;margin:0 0 28px}
 .bz-q{flex:1;min-width:0;border:1.5px solid var(--faint);border-right:0;border-radius:10px 0 0 10px;background:var(--card,#fff);color:var(--ink);font:inherit;font-size:14px;padding:9px 13px}
 .bz-q:focus{border-color:var(--ink);outline:none}
 .bz-qbtn{border:1.5px solid var(--ink);border-radius:0 10px 10px 0;background:var(--ink);color:var(--paper,#fcf9f1);font:inherit;font-size:13px;font-weight:600;padding:9px 16px;cursor:pointer}
 .bz-sec{margin:0 0 30px}
-.bz-sec h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.15rem;font-weight:800;margin:0 0 12px;padding-bottom:6px;border-bottom:1.5px solid var(--faint);scroll-margin-top:70px}
+.bz-sec h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.15rem;font-weight:800;margin:0 0 12px;padding-bottom:6px;border-bottom:1.5px solid var(--faint);scroll-margin-top:70px}
 .bz-n{font-family:'JetBrains Mono',monospace;font-size:.7em;color:var(--muted);font-weight:500;margin-left:5px}
 .bz-list,.bz-land{list-style:none;margin:0;padding:0;columns:2;column-gap:26px}
 @media(min-width:760px){.bz-list,.bz-land{columns:3}}
@@ -196,7 +196,7 @@ ${sections}
 
   return page({
     title: `All RC plane models in India (${total}) | narenana`,
-    desc: `Complete index of every RC plane in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with live prices.`,
+    desc: `Index of every RC plane currently in stock in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with latest checked prices.`,
     path: `${pfx}/browse/`,
     body,
     jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'All RC plane models', url: `${SITE}${pfx}/browse/` },
@@ -221,7 +221,7 @@ export async function gridDataNext(env, cat, power) {
     `SELECT m.id, m.slug, m.brand, m.name, m.power, m.role_tags, m.specs, m.hero_image, m.pop_score,
             COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND ${USED} THEN 1 ELSE 0 END) AS preowned_stock,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND NOT ${USED} THEN 1 ELSE 0 END) AS new_stock
@@ -239,19 +239,19 @@ const chip = (f, v, label, count, on, extra = '') =>
   `<button class="fx-chip ${extra} ${on ? 'is-on' : ''}" role="checkbox" aria-checked="${on ? 'true' : 'false'}" data-f="${f}" data-v="${esc(v)}">` +
   `${extra.includes('cb') ? '<span class="fx-cbx" aria-hidden="true"></span>' : ''}${esc(label)}<b class="fx-n">${count}</b></button>`
 
-function cardNext(it, pref, hidden) {
+function cardNext(it, pref, hidden, priority = false) {
   const m = it.m
   const hero = m.hero_any ?? m.hero_image
   const price = m.min_price
   const preOwnedOnly = it.cp && !it.cn // only obtainable pre-owned → surface the tag
   return `<li class="prod" data-id="${m.id}"${hidden ? ' style="display:none"' : ''}>
     <a class="prod-link" href="${pref}/${esc(m.slug)}/">
-      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
+      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="${priority ? 'eager' : 'lazy'}" fetchpriority="${priority ? 'high' : 'auto'}" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
       <div class="prod-body">
         <p class="prod-brand">${esc(m.brand)}</p>
-        <h3 class="prod-name">${esc(m.name)}</h3>
+        <h2 class="prod-name">${esc(m.name)}</h2>
         <p class="prod-spec">${esc(specLine(m))}</p>
-        <div class="prod-price">${price ? `<div class="price"><span class="price-pre">from</span> ${inr(price)}</div>` : '<div class="price is-muted">—</div>'}${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
+        <div class="prod-price">${price ? `<div class="price"><span class="price-pre">from</span> ${inr(price)}</div>` : '<div class="price is-muted">Price under review</div>'}${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
       </div>
       <span class="prod-cta">${m.sellers > 1 ? `Compare ${m.sellers} sellers` : 'View & buy'}</span>
     </a></li>`
@@ -307,17 +307,14 @@ export function renderGridNext(cat, rows, opts = {}) {
   const ordered = [...items].sort(cmp)
 
   const powerHref = (p) => {
-    if (landing) { // on a landing page, the tabs link to the sibling landing URLs
-      const ps = p === 'gas' ? 'nitro' : 'electric'
-      return `${pref}/${ps}${landing.L.roleSlug ? '-' + landing.L.roleSlug : ''}/`
-    }
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
+    if (landing?.L.roles.length) qs.set('role',landing.L.roles.join(','))
     if (sort !== DEFAULT_SORT) qs.set('sort', sort)
     const s = qs.toString()
     return `${pref}/${s ? '?' + s : ''}`
   }
-  const powerSeg = (id) => `<div class="fx-seg" id="${id}" role="tablist" aria-label="Power category">` +
+  const powerSeg = (id) => `<div class="fx-seg" id="${id}" role="navigation" aria-label="Power category">` +
     `<a class="fx-seg-b ${power === 'electric' ? 'is-on' : ''}" href="${powerHref('electric')}">Electric <span>${counts.electric}</span></a>` +
     `<a class="fx-seg-b ${power === 'gas' ? 'is-on' : ''}" href="${powerHref('gas')}">Nitro / Gas <span>${counts.gas}</span></a></div>`
 
@@ -332,15 +329,18 @@ export function renderGridNext(cat, rows, opts = {}) {
   const activeTags = [...selRoles.map((t) => ['role', t, t]), ...selSizes.map((k) => ['size', k, SIZE_BUCKETS.find((s) => s[0] === k)[1]]), ...(cond !== 'all' ? [['cond', cond, condLabel(cond)]] : [])]
     .map(([f, v, label]) => `<span class="fx-atag" data-f="${f}" data-v="${esc(v)}">${esc(label)}<button aria-label="Remove">×</button></span>`).join('')
 
-  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price, o: it.pop }))
+  // Keep filter metadata compact; nonmatching cards are created only when a
+  // visitor selects them. Search engines receive the selected results as HTML.
+  const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price, o: it.pop,
+    n: it.m.name, b: it.m.brand, u: it.m.slug, h: !!(it.m.hero_any ?? it.m.hero_image), ns: it.m.sellers, sl: specLine(it.m) }))
 
   // header: landing pages get their own H1 + breadcrumbs + intro; the main grid keeps the default.
   const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
   const subTxt = q
     ? `${resultN} result${resultN === 1 ? '' : 's'} for “${esc(q)}” · electric & nitro, in stock`
-    : Lmeta ? `${resultN} ${Lmeta.noun} in stock · live prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · live prices from Indian sellers`
+    : Lmeta ? `${resultN} ${Lmeta.noun} in stock · latest checked prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · latest checked prices from Indian sellers`
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
-  const introHtml = Lmeta ? `<p class="fx-intro">Compare live prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
+  const introHtml = Lmeta ? `<p class="fx-intro">Compare latest checked prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
   // Structured data on EVERY grid state, not just landings: BreadcrumbList
   // (default Home › category when no landing) + an ItemList of the first
   // visible results (capped — the full list would bloat the page).
@@ -371,7 +371,7 @@ export function renderGridNext(cat, rows, opts = {}) {
       <div class="fx-active" id="fx-active">${activeTags}</div>
       <button class="fx-clear" id="fx-clear"${nActive ? '' : ' hidden'}>Clear all</button>
     </div>
-    <ul class="prods" id="fx-grid">${ordered.map((it) => cardNext(it, pref, !visible(it))).join('')}</ul>
+    <ul class="prods" id="fx-grid">${ordered.filter(visible).map((it,i) => cardNext(it, pref, false,i<2)).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
     ${landing && landing.content ? `<section class="fx-content">${landing.content}</section>` : ''}
     ${browseHtml}
@@ -400,8 +400,8 @@ export function renderGridNext(cat, rows, opts = {}) {
   // Any other non-default filter/sort state is noindex — crawlable, not indexed.
   const filtered = !landing && (!!q || selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== DEFAULT_SORT)
   return page({
-    title: Lmeta ? Lmeta.title : `${cat.name} in India — compare live prices | narenana`,
-    desc: Lmeta ? Lmeta.desc : `Compare live prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
+    title: Lmeta ? Lmeta.title : `${cat.name} in India — compare latest checked prices | narenana`,
+    desc: Lmeta ? Lmeta.desc : `Compare latest checked prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
     path: Lmeta ? Lmeta.path : power === 'gas' ? `${pref}/nitro/` : `${pref}/`,
     body,
     jsonld: gridLd,
@@ -418,14 +418,14 @@ const FX_CSS = `
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
 .fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
 .fx-content{margin:40px 0 0;max-width:72ch}
-.fx-content h2{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.3rem;font-weight:800;margin:1.4em 0 .4em;color:var(--ink)}
+.fx-content h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.3rem;font-weight:800;margin:1.4em 0 .4em;color:var(--ink)}
 .fx-content h3{font-weight:800;font-size:1.05rem;margin:1.2em 0 .3em;color:var(--ink)}
 .fx-content p,.fx-content li{color:var(--muted);line-height:1.65;margin:0 0 .9em}
 .fx-content a{color:var(--orange-deep);text-decoration:none;font-weight:700}
 .fx-content a:hover{text-decoration:underline}
 .fx-browse{margin:44px 0 0;padding-top:20px;border-top:1.5px solid var(--faint);display:flex;flex-wrap:wrap;gap:10px 16px;align-items:baseline;font-size:.9rem}
 .fx-browse>span{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700}
-.fx-browse a{color:var(--orange-deep);text-decoration:none;font-weight:700}
+.fx-browse a{color:#0669a6;text-decoration:none;font-weight:700}
 .fx-browse a:hover{text-decoration:underline}
 .fx-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}
 .fx-qform{display:flex;flex:1;min-width:220px;max-width:430px}
@@ -436,23 +436,23 @@ const FX_CSS = `
 .fx-qclear{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap}
 .fx-qclear:hover{color:var(--ink);text-decoration:underline}
 .fx-seg{display:inline-flex;border:2px solid var(--ink);border-radius:999px;overflow:hidden;background:var(--card)}
-.fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
+.fx-seg-b{text-decoration:none;border-right:2px solid var(--ink);color:var(--muted);font-family:'DM Sans',system-ui,sans-serif;font-weight:700;font-size:.9rem;padding:9px 18px;white-space:nowrap}
 .fx-seg-b:last-child{border-right:none}
 .fx-seg-b:hover{color:var(--ink)}
 .fx-seg-b.is-on{background:var(--orange);color:var(--ink-2)}
-.fx-seg-b span{font-family:'JetBrains Mono',monospace;font-size:.7rem;opacity:.6;margin-left:4px}
-.fx-fbtn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);background:var(--card);color:var(--ink);font-family:'Hanken Grotesk',system-ui,sans-serif;font-weight:800;font-size:.9rem;padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.fx-seg-b span{font-family:'JetBrains Mono',monospace;font-size:.7rem;opacity:1;margin-left:4px}
+.fx-fbtn{margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:2px solid var(--ink);background:var(--card);color:var(--ink);font-family:'DM Sans',system-ui,sans-serif;font-weight:800;font-size:.9rem;padding:8px 16px;border-radius:999px;cursor:pointer;white-space:nowrap}
 .fx-fbtn:hover,.fx-fbtn[aria-expanded="true"]{background:var(--ink);color:var(--card)}
 .fx-badge{background:var(--orange);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace}
 .fx-summary{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .fx-rescount{color:var(--muted);font-size:.95rem}
-.fx-rescount b{color:var(--ink);font-size:1.1rem;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.fx-rescount b{color:var(--ink);font-size:1.1rem;font-family:'Barlow Condensed',system-ui,sans-serif;font-variant-numeric:tabular-nums}
 .fx-active{display:flex;gap:6px;flex-wrap:wrap}
 .fx-atag{display:inline-flex;align-items:center;gap:5px;background:color-mix(in srgb,var(--orange) 15%,transparent);color:var(--orange-deep);border-radius:999px;padding:3px 6px 3px 11px;font-size:12px;font-weight:700}
 .fx-atag button{border:none;background:none;color:inherit;cursor:pointer;font-size:15px;line-height:1;padding:0 2px}
 .fx-clear{border:none;background:none;color:var(--muted);font-family:inherit;font-weight:700;font-size:12.5px;text-decoration:underline;cursor:pointer}
-.fx-chip{appearance:none;display:inline-flex;align-items:center;border:1.5px solid var(--faint);background:transparent;color:var(--muted);border-radius:999px;padding:6px 12px;font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
-.fx-chip .fx-n{opacity:.55;margin-left:5px;font-weight:700}
+.fx-chip{appearance:none;display:inline-flex;align-items:center;border:1.5px solid var(--faint);background:transparent;color:var(--muted);border-radius:999px;padding:6px 12px;font-family:'DM Sans',system-ui,sans-serif;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.fx-chip .fx-n{opacity:1;margin-left:5px;font-weight:700}
 .fx-chip:hover:not(:disabled){border-color:var(--ink);color:var(--ink)}
 .fx-chip.is-on{color:#fff;border-color:transparent;background:var(--ink)}
 .fx-chip:disabled{opacity:.32;cursor:not-allowed;text-decoration:line-through}
@@ -465,7 +465,7 @@ const FX_CSS = `
 .fx-backdrop[hidden]{display:none}
 .fx-modal{background:var(--card);border:2px solid var(--ink);border-radius:16px;width:100%;max-width:540px;max-height:85vh;min-height:min(664px,85vh);display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.32);overflow:hidden}
 .fx-modal-head{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:2px solid var(--ink)}
-.fx-modal-head h2{margin:0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:1.15rem;font-weight:800}
+.fx-modal-head h2{margin:0;font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.15rem;font-weight:800}
 .fx-mx{border:none;background:none;color:var(--muted);font-size:26px;line-height:1;cursor:pointer;padding:0 4px}
 .fx-mx:hover{color:var(--ink)}
 .fx-modal-body{overflow-y:auto;flex:1 1 auto;min-height:0;padding:18px 20px;display:flex;flex-direction:column;gap:18px}
@@ -473,7 +473,7 @@ const FX_CSS = `
 .fx-fgl{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
 .fx-fgl em{font-style:normal;opacity:.7;text-transform:none;letter-spacing:0;font-weight:400}
 .fx-chips{display:flex;gap:6px;flex-wrap:wrap}
-.fx-sortsel{appearance:none;-webkit-appearance:none;font-family:'Hanken Grotesk',system-ui,sans-serif;font-size:.85rem;font-weight:700;color:var(--ink);background-color:var(--card);border:2px solid var(--ink);border-radius:999px;padding:9px 34px 9px 16px;cursor:pointer;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%230F2C39' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 12px center}
+.fx-sortsel{appearance:none;-webkit-appearance:none;font-family:'DM Sans',system-ui,sans-serif;font-size:.85rem;font-weight:700;color:var(--ink);background-color:var(--card);border:2px solid var(--ink);border-radius:999px;padding:9px 34px 9px 16px;cursor:pointer;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%230F2C39' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");background-repeat:no-repeat;background-position:right 12px center}
 .fx-modal-foot{display:flex;align-items:center;gap:12px;padding:14px 20px;border-top:1.5px solid var(--faint)}
 .fx-mclear{border:none;background:none;color:var(--muted);font-family:inherit;font-weight:700;font-size:13px;text-decoration:underline;cursor:pointer}
 .fx-mshow{margin-left:auto;border:2px solid var(--orange-deep);background:var(--orange);color:#fff;border-radius:999px;padding:10px 24px;font-family:inherit;font-weight:800;cursor:pointer}
@@ -488,12 +488,25 @@ const FX_JS = `(function(){
   var CONDLABEL={'new':'New','pre-owned':'Pre-owned'};
   var grid=document.getElementById('fx-grid');
   var cardEls={}; [].slice.call(grid.querySelectorAll('.prod')).forEach(function(c){cardEls[c.getAttribute('data-id')]=c;});
+  function textEl(tag,cls,text){var el=document.createElement(tag);el.className=cls;el.textContent=text==null?'':text;return el;}
+  function ensureCard(d){
+    if(cardEls[d.i])return cardEls[d.i];
+    var li=textEl('li','prod','');li.setAttribute('data-id',d.i);
+    var link=textEl('a','prod-link','');link.href=FX_PREF+'/'+encodeURIComponent(d.u)+'/';
+    var picture=textEl('div','prod-img','');
+    if(d.h){var img=document.createElement('img');img.src='/img/master/'+d.i;img.alt=(d.b||'')+' '+d.n;img.width=800;img.height=600;img.loading='lazy';picture.appendChild(img);}else{picture.appendChild(textEl('div','prod-noimg','No image'));}
+    if(d.cp&&!d.cn){var badge=textEl('span','prod-tag','PRE-OWNED');picture.appendChild(badge);}
+    var body=textEl('div','prod-body','');body.appendChild(textEl('p','prod-brand',d.b));body.appendChild(textEl('h3','prod-name',d.n));body.appendChild(textEl('p','prod-spec',d.sl));
+    var price=textEl('div','prod-price','');price.appendChild(textEl('div',d.p?'price':'price is-muted',d.p?'from ₹'+Number(d.p).toLocaleString('en-IN'):'Price under review'));
+    if(d.ns>1){var sellers=textEl('span','mrp',d.ns+' sellers');sellers.style.textDecoration='none';price.appendChild(sellers);}
+    body.appendChild(price);link.appendChild(picture);link.appendChild(body);link.appendChild(textEl('span','prod-cta',d.ns>1?'Compare '+d.ns+' sellers':'View & buy'));li.appendChild(link);cardEls[d.i]=li;return li;
+  }
   function mRoles(d){if(!state.roles.size)return true;for(var i=0;i<d.t.length;i++)if(state.roles.has(d.t[i]))return true;return false;}
   function mSizes(d){return state.sizes.size===0||state.sizes.has(d.s);}
   function mCond(d){return state.cond==='all'||(state.cond==='new'?d.cn:d.cp);}
   function results(){return FX_DATA.filter(function(d){return mRoles(d)&&mSizes(d)&&mCond(d);});}
   function cmp(a,b){
-    if(state.sort==='name'){return (cardEls[a.i].querySelector('.prod-name').textContent).localeCompare(cardEls[b.i].querySelector('.prod-name').textContent);}
+    if(state.sort==='name'){return a.n.localeCompare(b.n);}
     if(state.sort==='popular'){var oa=a.o==null?-1:a.o,ob=b.o==null?-1:b.o;return (ob-oa)||((b.p==null?-1:b.p)-(a.p==null?-1:a.p));}
     if(state.sort==='span-desc'){return (b.sp||0)-(a.sp||0);}
     if(state.sort==='span-asc'){return (a.sp||1e9)-(b.sp||1e9);}
@@ -522,7 +535,7 @@ const FX_JS = `(function(){
     var hint=document.getElementById('fx-rolehint'); if(hint)hint.textContent=state.roles.size?'· '+state.roles.size+' selected':'· tick any that apply';
     res.sort(cmp);
     for(var id in cardEls){cardEls[id].style.display=vis[id]?'':'none';}
-    res.forEach(function(d){grid.appendChild(cardEls[d.i]);});
+    res.forEach(function(d){var card=ensureCard(d);card.style.display='';grid.appendChild(card);});
     document.getElementById('fx-nres').textContent=res.length;
     document.getElementById('fx-mshown').textContent=res.length;
     document.getElementById('fx-empty').hidden=res.length>0;
@@ -552,12 +565,12 @@ const FX_JS = `(function(){
   document.getElementById('fx-conds').addEventListener('click',function(e){var b=e.target.closest('.fx-chip');if(b)toggle('cond',b.getAttribute('data-v'));});
   document.getElementById('fx-sort').addEventListener('change',function(e){state.sort=e.target.value;render();});
   var bd=document.getElementById('fx-backdrop'),ob=document.getElementById('fx-open');
-  function setModal(o){bd.hidden=!o;ob.setAttribute('aria-expanded',o?'true':'false');document.body.style.overflow=o?'hidden':'';if(o){var x=document.getElementById('fx-mx');if(x)x.focus();}}
+  function setModal(o){bd.hidden=!o;ob.setAttribute('aria-expanded',o?'true':'false');document.body.style.overflow=o?'hidden':'';if(o){var x=document.getElementById('fx-mx');if(x)x.focus();}else{ob.focus();}}
   ob.onclick=function(){setModal(true);};
   document.getElementById('fx-mx').onclick=function(){setModal(false);};
   document.getElementById('fx-mshow').onclick=function(){setModal(false);};
   bd.onclick=function(e){if(e.target===bd)setModal(false);};
-  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!bd.hidden)setModal(false);});
+  document.addEventListener('keydown',function(e){if(bd.hidden)return;if(e.key==='Escape'){e.preventDefault();setModal(false);}if(e.key==='Tab'){var items=Array.from(bd.querySelectorAll('button,input,select,a[href]')).filter(function(el){return !el.disabled&&el.getClientRects().length;});var first=items[0],last=items[items.length-1];if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
   var ca=function(){state.roles.clear();state.sizes.clear();state.cond='all';render();};
   document.getElementById('fx-clear').onclick=ca;
   document.getElementById('fx-mclear').onclick=ca;

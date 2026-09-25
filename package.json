@@ -6,12 +6,17 @@
   "scripts": {
     "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
-    "assets": "node scripts/gen-assets.mjs",
+    "assets": "node scripts/gen-assets.mjs && node scripts/version-assets.mjs",
     "deploy": "wrangler deploy",
     "catalog:css": "node catalog/lib/gen-styles.mjs",
     "catalog:migrate": "wrangler d1 migrations apply CATALOG_DB --local",
     "catalog:migrate:remote": "wrangler d1 migrations apply CATALOG_DB --remote",
-    "catalog:test": "node --test catalog/test/suite.mjs"
+    "catalog:test": "node --test catalog/test/suite.mjs",
+    "seo:test": "node --test catalog/test/seo.mjs",
+    "seo:audit": "node scripts/sitemap-audit.mjs && node scripts/seo-audit.mjs --local && node scripts/release-link-audit.mjs",
+    "sitemap:audit": "node scripts/sitemap-audit.mjs",
+    "assets:version": "node scripts/version-assets.mjs",
+    "assets:check": "node scripts/version-assets.mjs --check"
   },
   "devDependencies": {
     "png-to-ico": "^3.0.2",

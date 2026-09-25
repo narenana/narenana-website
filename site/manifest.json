@@ -1,15 +1,30 @@
 {
-  "name": "narenana — browser tools for RC pilots",
+  "name": "narenana — Nanawing & RC flying tools",
   "short_name": "narenana",
-  "description": "Free browser tools for RC pilots: 3D flight-log replay for EdgeTX / iNAV / Betaflight, plus the Nanawing FPV wing simulator.",
+  "description": "Fly Nanawing FPV and Nanawing 2, compare RC aircraft in India and explore your flight logs.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "theme_color": "#0e1117",
-  "background_color": "#0e1117",
+  "theme_color": "#087bc1",
+  "background_color": "#f4f8fc",
   "icons": [
-    { "src": "/assets/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/assets/icon-192.png?v=be2cccc883",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-512.png?v=a7ab9bcbbe",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icon-maskable-512.png?v=c49a35f35c",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

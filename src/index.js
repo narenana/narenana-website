@@ -10,8 +10,10 @@
 // KV under key "feed". Page reloads naturally pick up the new payload. Also
 // runs the Wings pipeline (availability refresh + discovery), gated internally.
 
-import { handleCatalog, catalogScheduled } from '../catalog/lib/worker.mjs'
+import { handleCatalog, catalogScheduled, publicCacheKey, forMethod } from '../catalog/lib/worker.mjs'
 import { consumeManufacturerHarvestQueue } from '../catalog/lib/mfr-jobs.mjs'
+import { homeCatalogQueries } from '../catalog/lib/home-queries.mjs'
+import { ASSET_VERSIONS } from './asset-versions.mjs'
 import { handleStats, refreshStats } from './stats.js'
 
 export default {
@@ -37,11 +39,21 @@ export default {
       if (isApex) url.hostname = 'www.narenana.com'
       return Response.redirect(url.toString(), 301)
     }
+    if (url.pathname === '/index.html') {
+      // Relative Location: behind latest-router this Worker sees the workers.dev
+      // host, and an absolute redirect would move staging testers onto it.
+      return new Response(null, { status: 301, headers: { Location: '/' + url.search } })
+    }
 
     // /log-viewer/* is a separate proxied app — leave its responses untouched
     // (the delicate redirect + X-Robots-Tag handling lives in forward()).
     // Cloudflare-dashboard edge HSTS covers those hosts belt-and-suspenders.
-    if (url.pathname === '/log-viewer' || url.pathname.startsWith('/log-viewer/')) {
+    // No trailing slash: the app's relative asset URLs would resolve against
+    // the site root (/assets/...) and the viewer would load blank.
+    if (url.pathname === '/log-viewer') {
+      return new Response(null, { status: 301, headers: { Location: '/log-viewer/' + url.search } })
+    }
+    if (url.pathname.startsWith('/log-viewer/')) {
       // latest.narenana.com mirrors the LATEST log-viewer preview build (the
       // `latest` Pages branch alias); www / apex stay on the production
       // origin. Falls back to production if the staging var is unset.
@@ -49,7 +61,8 @@ export default {
         url.hostname === 'latest.narenana.com' && env.LOG_VIEWER_ORIGIN_LATEST
           ? env.LOG_VIEWER_ORIGIN_LATEST
           : env.LOG_VIEWER_ORIGIN
-      return forward(request, origin, '/log-viewer')
+      const response = await forward(request, origin, '/log-viewer')
+      return isStagingHost(url.hostname) ? harden(response, url, isLocal) : response
     }
 
     if (url.pathname === '/videos.json') {
@@ -94,8 +107,8 @@ export default {
     // crawlers / AI answer engines would otherwise see none of it. Inject a
     // <noscript> fallback list from the KV feed the Worker already holds.
     const response =
-      url.pathname === '/' || url.pathname === '/index.html'
-        ? await renderHome(request, env)
+      url.pathname === '/'
+        ? await cachedHome(request, env, ctx, isLocal)
         : await env.ASSETS.fetch(request)
 
     return harden(response, url, isLocal)
@@ -138,21 +151,36 @@ async function videosResponse(env) {
 // localhost); static art under /assets/ gets a real cache lifetime since the
 // Workers-Assets default is `max-age=0, must-revalidate` — every repeat visit
 // would otherwise revalidate.
+// Non-canonical hosts must never be indexed. latest-router forwards
+// latest.narenana.com to this Worker's *.workers.dev host, so that is the host
+// seen here in production; the workers.dev mirror itself is a duplicate too.
+const isStagingHost = (hostname) => hostname === 'latest.narenana.com' || hostname.endsWith('.workers.dev')
+
 function harden(response, url, isLocal) {
   const headers = new Headers(response.headers)
+  if (isStagingHost(url.hostname) || url.pathname.startsWith('/direction-b')) {
+    headers.set('X-Robots-Tag', 'noindex, nofollow')
+  }
   if (!isLocal) {
     // 2-year max-age + `preload` makes the domain eligible for the HSTS preload
     // list (still has to be submitted once at hstspreload.org — a one-way door:
     // every subdomain must then stay HTTPS-only). Everything here already is.
     headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   }
-  // Cache static art for a day — but ONLY successful responses. Caching a 404 or
-  // 5xx here (e.g. a request that races a deploy before an asset propagates)
-  // would otherwise pin the error at the edge for the full TTL. Filenames aren't
-  // content-hashed, but Workers-Assets re-versions changed files on deploy so
-  // in-place edits still go live; stale-while-revalidate bounds the rest.
-  if (url.pathname.startsWith('/assets/') && response.ok) {
-    headers.set('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800')
+  // Asset caching. Only successful responses — never persist an error.
+  // - ?v=<hash> matching the file's CURRENT content hash (scripts/version-assets.mjs
+  //   stamps every reference): immutable for a year, so repeat views make zero
+  //   asset requests. A stale hash (old cached HTML, a rollback) must not pin
+  //   today's bytes under it, so it falls through to the short rule.
+  // - Anything else (unversioned or stale): 5 min, then revalidated in the
+  //   background — never render-blocking, at most briefly stale after a release.
+  // 304s get the same header: a 304 replaces the stored response's headers
+  // (RFC 9111 4.3.4), so the Workers-Assets default on it would undo this.
+  if (url.pathname.startsWith('/assets/') && (response.ok || response.status === 304)) {
+    const v = url.searchParams.get('v')
+    headers.set('Cache-Control', v && ASSET_VERSIONS[url.pathname] === v
+      ? 'public, max-age=31536000, immutable'
+      : 'public, max-age=300, stale-while-revalidate=86400')
   }
   return new Response(response.body, {
     status: response.status,
@@ -168,7 +196,35 @@ function harden(response, url, isLocal) {
 // at crawl time. The client script skips its own fetch when it finds these
 // cards already present (falling back to hydration only if KV was empty).
 // Markup mirrors the client renderer in site/index.html — keep in sync.
-async function renderHome(request, env) {
+// The homepage runs two D1 queries and a KV read per render. Cache the rendered
+// HTML at the edge like catalog pages (same release key, same TTLs) so traffic
+// and crawlers cost one render per ~15 minutes per location, not one per view.
+async function cachedHome(request, env, ctx, isLocal) {
+  if ((request.method !== 'GET' && request.method !== 'HEAD') || isLocal) return renderHome(request, env)
+  // Key on host + path only: the rendered homepage never depends on the query
+  // string, and keying on it would let ?utm=/?fbclid=/random params bypass the
+  // cache and force a D1 render each. The key carries the deployed version.
+  const cacheKey = publicCacheKey(new URL(request.url), env, { path: '/', params: [], tag: 'home' })
+  const cache = caches.default
+  const hit = await cache.match(cacheKey)
+  // HEAD (uptime monitors, link checkers) is answered from the GET entry, and a
+  // miss renders the GET once so monitors can't run D1 on every probe.
+  if (hit) return forMethod(request, hit)
+  const state = { degraded: false }
+  const get = request.method === 'HEAD' ? new Request(request.url, { method: 'GET', headers: request.headers }) : request
+  const res = await renderHome(get, env, state)
+  // A render that fell back because KV or D1 failed is served, never cached:
+  // one blip must not pin a homepage without prices/videos for 15 minutes.
+  if (!state.degraded && res.status === 200 && (res.headers.get('content-type') || '').includes('text/html')) {
+    const store = new Response(res.clone().body, res)
+    store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
+    store.headers.set('x-home-cache', 'HIT') // only ever seen on responses served FROM the cache
+    ctx.waitUntil(cache.put(cacheKey, store))
+  }
+  return forMethod(request, res)
+}
+
+async function renderHome(request, env, state = {}) {
   const response = await env.ASSETS.fetch(request)
   if (!(response.headers.get('content-type') || '').includes('text/html')) {
     return response
@@ -180,34 +236,27 @@ async function renderHome(request, env) {
     if (json) videos = (JSON.parse(json).videos || []).slice(0, 6)
   } catch {
     // Leave the page untransformed rather than inject garbage on a KV blip.
+    state.degraded = true
   }
 
   // Live catalog cards for the #shop-grid section. Fail-open on ANY D1
-  // problem — the static "Browse every wing" fallback card stays.
+  // problem — real catalog product links stay, without stale prices or stock claims.
   let wings = []
+  let sellerCount = 0
   try {
     if (env.CATALOG_DB) {
-      const cat = (await env.CATALOG_DB.prepare(`SELECT id, path_prefix FROM category WHERE live=1 LIMIT 1`).all()).results?.[0]
+      const cat = (await env.CATALOG_DB.prepare(`SELECT id, path_prefix FROM category WHERE live=1 AND path_prefix='/wings' LIMIT 1`).all()).results?.[0]
       if (cat) {
-        wings = (
-          await env.CATALOG_DB.prepare(
-            `SELECT m.id, m.slug, m.brand, m.name, m.specs,
-                COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero,
-                MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS price
-             FROM master_model m
-             JOIN offer o ON o.master_model_id=m.id
-             JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
-             WHERE m.category_id=? AND m.status='ready'
-             GROUP BY m.id HAVING price IS NOT NULL AND hero IS NOT NULL
-             ORDER BY price DESC LIMIT 4`,
-          ).bind(cat.id).all()
-        ).results.map((m) => ({ ...m, prefix: cat.path_prefix }))
+        const [sellers, cards] = await env.CATALOG_DB.batch(homeCatalogQueries(env.CATALOG_DB, cat.id))
+        sellerCount = sellers.results?.[0]?.n || 0
+        wings = (cards.results || []).map((m) => ({ ...m, prefix: cat.path_prefix }))
       }
     }
   } catch {
     // fallback card remains
+    state.degraded = true
   }
-  if (videos.length === 0 && wings.length === 0) return response
+  if (videos.length === 0 && wings.length === 0 && sellerCount === 0) return response
 
   const wingCard = (m) => {
     let span = ''
@@ -216,9 +265,9 @@ async function renderHome(request, env) {
     } catch {}
     return (
       `<a class="shopc" href="${esc(m.prefix)}/${esc(m.slug)}/">` +
-      `<div class="shopc-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" loading="lazy" /><span class="skel-tag">IN STOCK</span></div>` +
+      `<div class="shopc-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="400" height="300" loading="lazy" /><span class="skel-tag">IN STOCK</span></div>` +
       `<div class="shopc-body"><div class="shopc-brand">${esc(m.brand)}</div><div class="shopc-name">${esc(m.name)}</div>` +
-      `<div class="shopc-meta"><span class="shopc-price">from ₹${Number(m.price).toLocaleString('en-IN')}</span>${span ? `<span class="shopc-chip">${esc(span)}mm</span>` : ''}</div></div></a>`
+      `<div class="shopc-meta"><span class="shopc-price">from ₹${Number(m.price).toLocaleString('en-IN')}</span>${span ? `<span class="shopc-chip">${esc(span)}mm</span>` : ''}</div>${m.checked_at ? `<p class="shopc-checked">Oldest live listing check: <time datetime="${new Date(m.checked_at).toISOString()}">${new Date(m.checked_at).toISOString().slice(0,10)}</time></p>` : ''}</div></a>`
     )
   }
 
@@ -227,7 +276,7 @@ async function renderHome(request, env) {
     const thumb = v.thumbnail || `https://img.youtube.com/vi/${v.id}/hqdefault.jpg`
     return (
       `<a class="vid" href="${esc(href)}" target="_blank" rel="noopener">` +
-      `<div class="vid-thumb"><img src="${esc(thumb)}" alt="${esc(v.title)}" loading="lazy" />` +
+      `<div class="vid-thumb"><img src="${esc(thumb)}" alt="${esc(v.title)}" width="480" height="360" loading="lazy" />` +
       `<div class="vid-play"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="margin-left:2px"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></div></div>` +
       `<div class="vid-body"><div class="vid-title">${esc(v.title)}</div>` +
       `<div class="vid-meta"><svg width="15" height="15" viewBox="0 0 24 24" fill="#C63B2E" stroke="none"><rect x="2.5" y="5.5" width="19" height="13" rx="3.6"/><path d="M10 9.4l5.2 2.6L10 14.6z" fill="#FCF9F1"/></svg>YOUTUBE</div></div></a>`
@@ -235,6 +284,7 @@ async function renderHome(request, env) {
   }
 
   let rw = new HTMLRewriter()
+  if (sellerCount) rw = rw.on('#catalog-seller-count', { element(el) { el.setInnerContent(`Listings from ${sellerCount} Indian sellers`) } })
   if (videos.length)
     rw = rw.on('#vid-grid', {
       element(el) {
@@ -246,8 +296,18 @@ async function renderHome(request, env) {
       element(el) {
         el.setInnerContent(wings.map(wingCard).join(''), { html: true })
       },
+    }).on('#shop-status', {
+      element(el) {
+        el.setInnerContent('Latest checked prices and stock. Confirm availability with the seller.')
+      },
     })
-  return rw.transform(response)
+  // The rewritten page no longer matches the static file's validators; drop
+  // them so a conditional request can't be answered 304 with stale prices.
+  const out = rw.transform(response)
+  const page = new Response(out.body, out)
+  page.headers.delete('etag')
+  page.headers.delete('last-modified')
+  return page
 }
 
 function esc(s) {
@@ -396,57 +456,6 @@ async function forward(request, origin, prefix) {
     })
   }
 
-  // Inject the site share widget into proxied HTML (the log-viewer app ships
-  // from its own repo; injecting at the edge keeps it on-brand without a
-  // cross-repo release). Floating pill, self-contained, utm-tagged.
-  if (prefix === '/log-viewer' && (out.headers.get('content-type') || '').includes('text/html') && out.status === 200) {
-    out = new HTMLRewriter()
-      .on('body', {
-        element(el) {
-          el.append(shareWidgetHtml('log-viewer', 'RC Log Viewer — replay EdgeTX / iNAV / Betaflight logs in 3D, free in your browser'), { html: true })
-        },
-      })
-      .transform(out)
-  }
-
+  // The upstream app owns its shared chrome, including the share dialog.
   return out
-}
-
-// Floating share pill injected into proxied apps. Every channel carries its
-// own utm_source (utm_medium=share, utm_campaign=<surface>) so GA4 and CF
-// analytics can attribute incoming traffic to these buttons.
-function shareWidgetHtml(campaign, title) {
-  return `
-<style>
-#nn-shr{position:fixed;right:16px;bottom:16px;z-index:2147483000;font-family:'Hanken Grotesk',system-ui,sans-serif}
-#nn-shr-btn{display:inline-flex;align-items:center;gap:7px;background:rgba(15,44,57,.88);border:1.5px solid rgba(252,249,241,.25);color:#FCF9F1;border-radius:999px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28);backdrop-filter:blur(6px)}
-#nn-shr-btn:hover{background:#EF7A25;border-color:#EF7A25;color:#12303D}
-#nn-shr-menu{display:none;position:absolute;right:0;bottom:calc(100% + 12px);background:#FCF9F1;border:2px solid #0F2C39;border-radius:12px;min-width:208px;padding:6px;box-shadow:0 18px 44px rgba(0,0,0,.3)}
-#nn-shr-menu.on{display:block}
-#nn-shr .nn-k{font-family:ui-monospace,monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:rgba(15,44,57,.55);margin:6px 10px 5px;font-weight:700}
-#nn-shr-menu a,#nn-shr-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;background:none;border:0;border-radius:8px;font-family:inherit;font-size:14px;font-weight:600;color:#0F2C39;text-align:left;text-decoration:none;cursor:pointer}
-#nn-shr-menu a:hover,#nn-shr-menu button:hover{background:#DDE9EE}
-</style>
-<div id="nn-shr">
-  <div id="nn-shr-menu">
-    <p class="nn-k">Share this page</p>
-    <a id="nn-shr-wa" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.3c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5.2.6.8 1.9.8 2 .1.1.1.3 0 .5-.3.6-.7.9-.5 1.2.7 1.2 1.6 2 2.8 2.6.3.2.5.1.7-.1l.9-1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.4 0 .1 0 .7-.2 1.3z"/></svg>WhatsApp</a>
-    <a id="nn-shr-x" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-6.8 7.8L23.3 22h-6.3l-4.9-6.4L6.5 22H3.4l7.3-8.3L1 2h6.4l4.4 5.9L18.9 2zm-1.1 18h1.7L7.3 3.7H5.5L17.8 20z"/></svg>X / Twitter</a>
-    <button id="nn-shr-cp"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>Copy link</button>
-    <button id="nn-shr-nt"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>More options</button>
-  </div>
-  <button id="nn-shr-btn" aria-haspopup="true"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>Share</button>
-</div>
-<script>(function(){var b=document.getElementById('nn-shr-btn'),m=document.getElementById('nn-shr-menu');if(!b)return;
-function u(s){var x=new URL(location.origin+location.pathname);x.searchParams.set('utm_source',s);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign',${JSON.stringify(campaign)});return x.toString()}
-var t=${JSON.stringify(title)};
-b.onclick=function(e){e.stopPropagation();m.style.display=m.style.display==='block'?'none':'block'};
-document.addEventListener('click',function(){m.style.display='none'});
-m.addEventListener('click',function(e){e.stopPropagation()});
-document.getElementById('nn-shr-wa').href='https://wa.me/?text='+encodeURIComponent(t+' — '+u('whatsapp'));
-document.getElementById('nn-shr-x').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(t)+'&url='+encodeURIComponent(u('x'));
-document.getElementById('nn-shr-cp').onclick=function(){var el=this;navigator.clipboard.writeText(u('copy')).then(function(){el.textContent='Copied ✓';setTimeout(function(){el.textContent='Copy link'},1400)})};
-var n=document.getElementById('nn-shr-nt');
-if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native')}).catch(function(){})}}else{n.style.display='none'}
-})()</script>`
 }

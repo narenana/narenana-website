@@ -10,7 +10,10 @@ import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct,
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
-import { renderGridNext, searchRows } from '../lib/grid-next.mjs'
+import { renderGridNext, searchRows, resolveLanding } from '../lib/grid-next.mjs'
+import { HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL } from '../lib/home-queries.mjs'
+import { planAssetVersions } from '../../scripts/version-assets.mjs'
+import { ASSET_VERSIONS } from '../../src/asset-versions.mjs'
 import { ADMIN_HTML } from '../lib/admin-ui.mjs'
 import { configAgreement as mfrConfigAgreement, configTypes as mfrConfigTypes, isAircraft as isMfrAircraft, nameSim as mfrNameSim, rankCandidates } from '../lib/mfr-match.mjs'
 import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
@@ -654,8 +657,8 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   const out = renderGridNext(cat, rows, base)
   assert.ok(out.includes('class="prods" id="fx-grid"'), 'reuses the live .prods grid class')
   assert.ok(!out.includes('class="filt"'), 'does NOT emit the live power-filter markup')
-  assert.ok(!out.includes('name="robots" content="noindex"'), 'default grid must be indexable (not noindex)')
-  assert.ok(renderGridNext(cat, rows, { ...base, sort: 'price-desc' }).includes('name="robots" content="noindex"'), 'non-default sort state is noindex')
+  assert.ok(!/name="robots" content="noindex(?:,|")/.test(out), 'default grid must be indexable (not noindex)')
+  assert.ok(renderGridNext(cat, rows, { ...base, sort: 'price-desc' }).includes('name="robots" content="noindex,follow"'), 'non-default sort state is noindex')
   assert.ok(out.includes('var FX_DATA='), 'embeds the client dataset')
   assert.ok(!out.includes('data-v="FPV / Flying Wing"'), 'a role with no models is not offered (contextual)')
 
@@ -673,9 +676,11 @@ test('renderGridNext: isolated faceted grid — reuse, contextual facets, server
   const outLarge = renderGridNext(cat, rows, { ...base, sizes: ['large'] })
   assert.ok(/id="fx-nres">1</.test(outLarge), '1500mm bucketed as medium → only the 1900mm plane is Large')
 
-  // fix #3: server hides non-matching cards so the no-JS count matches the grid
+  // Selected results are real HTML; other products remain filter metadata only.
   const outWb = renderGridNext(cat, rows, { ...base, roles: ['Warbird'] })
-  assert.ok(/id="fx-nres">1</.test(outWb) && outWb.includes('style="display:none"'), 'filtered link hides non-matching cards server-side')
+  assert.ok(/id="fx-nres">1</.test(outWb), 'filtered count matches the selected category')
+  assert.equal((outWb.match(/class="prod" data-id=/g) || []).length, 1, 'only matching cards are server-rendered')
+  assert.ok(outWb.includes('"n":"Sport Cub"'), 'other products remain available to client filters')
 })
 
 test('catalog search: name/brand/type matching + search-mode grid', () => {
@@ -702,7 +707,7 @@ test('catalog search: name/brand/type matching + search-mode grid', () => {
   const full = rows.map((m) => ({ ...m, specs: '{}', sellers: 1, hero_any: null, min_price: 5000, span_mm: 1000, new_stock: 1, preowned_stock: 0 }))
   const out = renderGridNext(cat, full, { power: 'electric', q: 'ranger', counts: { electric: 3, gas: 1 } })
   assert.ok(/id="fx-nres">2</.test(out), 'search result count reflects the query')
-  assert.ok(out.includes('name="robots" content="noindex"'), 'search pages are noindex')
+  assert.ok(/name="robots" content="noindex(?:,|")/.test(out), 'search pages are noindex')
   assert.ok(out.includes('value="ranger"'), 'search box retains the query')
   assert.ok(out.includes('class="fx-qclear"'), 'search mode offers a clear link')
   const plain = renderGridNext(cat, full.filter((m) => m.power === 'electric'), { power: 'electric', counts: { electric: 3, gas: 1 } })
@@ -753,20 +758,166 @@ test('aircraft-data admin exposes editable sourced facts and the full protected 
   assert.match(ADMIN_HTML, /Manufacturer text/)
   assert.match(ADMIN_HTML, /Unknown \/ needs input/)
   assert.match(ADMIN_HTML, /data-mp-save/)
-  assert.match(ADMIN_HTML, /mfrProductId:\+r\.mfr_product_id,overrides:over/)
+  assert.match(ADMIN_HTML, /mfrProductId:\+r\.mfr_product_id,expectedUpdatedAt:r\.updated_at\?\?null,overrides:over/)
   assert.match(ADMIN_HTML, /\/img\/mfr\/'?\+r\.mfr_product_id\+'?\/'?\+i/)
   assert.match(ADMIN_HTML, /Shared mapping:/)
   assert.match(ADMIN_HTML, /Mapping changed:/)
 })
 
 // ---------------------------------------------------------------- public
+// Owner rule: every public surface lists IN-STOCK models only. The grid is the
+// reference (it only renders models with a live offer); the XML sitemap and the
+// /browse/ hub must list exactly the same product set — no more, no less.
+test('in-stock only: sitemap and /browse/ list exactly the grid\'s in-stock models', async () => {
+  const gridSlugs = new Set()
+  for (const q of ['', '?power=gas']) {
+    const html = await (await get('/wings/' + q)).text()
+    for (const m of html.matchAll(/<li class="prod" data-id="\d+"[^>]*>\s*<a class="prod-link" href="\/wings\/([a-z0-9-]+)\/"/g)) gridSlugs.add(m[1])
+  }
+  assert.ok(gridSlugs.size > 20, `grid should list many in-stock models (got ${gridSlugs.size})`)
+  const isProduct = (slug) => slug !== 'browse' && !resolveLanding(slug)
+
+  const xml = await (await get('/sitemap.xml')).text()
+  const siteSlugs = new Set([...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1]).filter(isProduct))
+  const browse = await (await get('/wings/browse/')).text()
+  const browseSlugs = new Set([...browse.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)].map((m) => m[1]).filter(isProduct))
+
+  const diff = (a, b) => [...a].filter((s) => !b.has(s))
+  assert.deepEqual(diff(siteSlugs, gridSlugs), [], 'sitemap lists products the grid does not (out of stock?)')
+  assert.deepEqual(diff(gridSlugs, siteSlugs), [], 'sitemap is missing in-stock products')
+  assert.deepEqual(diff(browseSlugs, gridSlugs), [], '/browse/ lists products the grid does not (out of stock?)')
+  assert.deepEqual(diff(gridSlugs, browseSlugs), [], '/browse/ is missing in-stock products')
+  assert.ok(!/Currently unavailable|out of stock/i.test(browse), '/browse/ must not advertise unavailable models')
+})
+
+// Live data: every in-stock flagged listing (admin "flagged" queue) must show
+// "Price under review" in its product-page row and never its stored amount.
+test('flagged live listings: product pages withhold the flagged amount', async () => {
+  const { status, body } = await api('review?status=flagged')
+  assert.equal(status, 200)
+  const live = (body.skus || []).filter((k) => k.in_stock === 1 && k.review_status === 'approved' && k.master && k.price_inr > 0)
+  if (!live.length) return // nothing flagged right now
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  const browse = await (await get('/wings/browse/')).text()
+  let checked = 0
+  for (const k of live) {
+    const at = browse.indexOf('/">' + esc(k.master) + '</a>')
+    if (at < 0) continue // master not public (draft) — nothing to check
+    const slug = browse.slice(browse.lastIndexOf('href="/wings/', at) + 'href="/wings/'.length, at)
+    const html = await (await get(`/wings/${slug}/`)).text()
+    const row = html.split('<tr').find((r) => r.includes(`href="${esc(k.url_canonical)}"`))
+    assert.ok(row, `${slug}: row for flagged listing ${k.id} is on the page`)
+    assert.ok(row.includes('Price under review'), `${slug}: flagged listing ${k.id} is labelled Price under review`)
+    assert.ok(!row.includes(k.price_inr.toLocaleString('en-IN')), `${slug}: flagged amount of listing ${k.id} is not shown`)
+    checked++
+  }
+  assert.ok(checked > 0, 'at least one public model has a flagged live listing to check')
+})
+
+// One header everywhere: the homepage's static header must be exactly the
+// shared familyNav() output (plus its homepage-only "Fly FPV" button), and
+// catalog pages must render the same header without the button.
+test('homepage and catalog use the same shared header (homepage adds only Fly FPV)', async () => {
+  const { familyNav } = await import('../../scripts/brand-shell.mjs')
+  const { readFile } = await import('node:fs/promises')
+  const unversion = (s) => s.replace(/\?v=[0-9a-f]{10}/g, '')
+  const home = unversion(await readFile(new URL('../../site/index.html', import.meta.url), 'utf8'))
+  const homeHeader = (home.match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0]
+  const HOME_CTA = { label: 'Fly FPV', href: 'https://sim.narenana.com', newTab: true }
+  assert.equal(homeHeader, familyNav({ home: '', cta: HOME_CTA }), 'homepage header must be regenerated from familyNav()')
+  assert.equal((home.match(/<header\b/g) || []).length, 1, 'homepage has exactly one header')
+  const grid = await (await get('/wings/')).text()
+  const catalogHeader = unversion((grid.match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0] || '')
+  const links = (h) => [...h.matchAll(/<a [^>]*href="([^"]+)"/g)].map((m) => m[1])
+  assert.deepEqual(links(catalogHeader), links(homeHeader).filter((u) => u !== HOME_CTA.href), 'same links apart from the homepage button')
+  assert.ok(!catalogHeader.includes('nn-cta'), 'catalog pages have no Fly FPV button')
+  const homeJs = await readFile(new URL('../../site/assets/home.js', import.meta.url), 'utf8')
+  assert.ok(!/menu-toggle|getElementById\('navigation'\)/.test(homeJs), 'home.js must not wire the removed header')
+})
+
+// Every reference to site/assets/* carries its current content hash, and the
+// manifest the Worker reads matches. Fails when someone edits an asset or page
+// and forgets `npm run assets:version`.
+test('asset versions are current (run npm run assets:version)', () => {
+  const plan = planAssetVersions()
+  assert.deepEqual(plan.changes.map((f) => f.split(/[\\/]/).slice(-3).join('/')), [], 'files with stale asset versions')
+  assert.equal(plan.manifestStale, false, 'src/asset-versions.mjs is stale')
+  assert.deepEqual(plan.missing, [], 'references to assets that do not exist')
+  assert.deepEqual(plan.unhashed, [], 'asset references with a hand-written ?v= label')
+})
+
+test('asset cache headers: current hash immutable, anything else short-lived', async () => {
+  const current = ASSET_VERSIONS['/assets/family/fonts.css']
+  assert.ok(current, 'fonts.css is in the manifest')
+  const hit = await get('/assets/family/fonts.css?v=' + current)
+  assert.equal(hit.headers.get('cache-control'), 'public, max-age=31536000, immutable')
+  for (const p of ['/assets/family/fonts.css?v=0000000000', '/assets/family/fonts.css']) {
+    const r = await get(p)
+    assert.equal(r.status, 200)
+    assert.equal(r.headers.get('cache-control'), 'public, max-age=300, stale-while-revalidate=86400', p + ' must not be immutable')
+  }
+  // A 304 replaces the stored response's headers, so it must carry the same rule.
+  for (const [p, cc] of [['/assets/family/fonts.css?v=' + current, 'public, max-age=31536000, immutable'], ['/assets/family/fonts.css', 'public, max-age=300, stale-while-revalidate=86400']]) {
+    const etag = (await get(p)).headers.get('etag')
+    assert.ok(etag, p + ' has an ETag')
+    const revalidated = await get(p, { 'if-none-match': etag })
+    assert.equal(revalidated.status, 304)
+    assert.equal(revalidated.headers.get('cache-control'), cc, p + ' 304 keeps its cache rule')
+  }
+  // Every page template links versioned assets only (header avatar included).
+  const browse = await (await get('/wings/browse/')).text()
+  const product = (browse.match(/href="(\/wings\/[a-z0-9-]+\/)">/g) || []).map((m) => m.slice(6, -2)).find((p) => !resolveLanding(p.split('/')[2]))
+  for (const path of ['/', '/wings/', product]) {
+    const html = await (await get(path)).text()
+    const refs = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1])
+    assert.ok(refs.length > 3, path + ' links assets')
+    for (const r of refs) assert.match(r, /\?v=[0-9a-f]{10}$/, `${path} asset link is versioned: ${r}`)
+  }
+})
+
+test('/log-viewer without a trailing slash redirects into the app', async () => {
+  const r = await get('/log-viewer?from=test')
+  assert.equal(r.status, 301)
+  assert.equal(r.headers.get('location'), '/log-viewer/?from=test')
+})
+
+// Owner rule: manufacturer-sourced content is ADMIN-ONLY until the owner decides
+// how it may be shown. Models with an accepted manufacturer mapping must render
+// no manufacturer section, link or JSON-LD properties on their public page.
+test('manufacturer facts stay off public product pages (admin-only)', async () => {
+  const { status, body } = await api('mfr-profiles')
+  assert.equal(status, 200)
+  const published = (body.profiles || []).filter((p) => p.model_status === 'ready').slice(0, 5)
+  assert.ok(published.length, 'fixture needs at least one published model with an accepted mapping')
+  for (const p of published) {
+    const html = await (await get(`${p.path_prefix}/${p.slug}/`)).text()
+    assert.ok(!html.includes('manufacturer-reference'), `${p.slug}: manufacturer section is public`)
+    assert.ok(!html.includes('additionalProperty'), `${p.slug}: manufacturer facts in JSON-LD`)
+    if (p.mfr_url) assert.ok(!html.includes(p.mfr_url), `${p.slug}: manufacturer listing link is public`)
+  }
+})
+
+// The homepage is uncached-on-miss and not a catalog route: its queries must
+// keep the pinned master_model → offer → sku order (a planner-chosen order once
+// cost ~474k D1 row reads per view), and render real data.
+test('homepage catalog queries: pinned join order, live-priced sellers, cards render', async () => {
+  for (const sql of [HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL]) {
+    assert.match(sql, /FROM master_model m\s+CROSS JOIN offer o ON o\.master_model_id=m\.id\s+CROSS JOIN sku k ON k\.id=o\.sku_id/, 'join order must stay pinned with CROSS JOIN')
+  }
+  for (const cond of ['k.in_stock=1', 'k.price_inr>0', 'k.dead=0', "COALESCE(k.flagged,'')=''"]) assert.ok(HOME_SELLER_COUNT_SQL.includes(cond), 'seller count must require ' + cond)
+  const html = await (await get('/')).text()
+  const sellers = +(html.match(/id="catalog-seller-count"[^>]*>Listings from (\d+) Indian sellers/) || [])[1]
+  assert.ok(sellers > 0, 'homepage shows a live seller count')
+  assert.equal([...html.matchAll(/class="shopc-name"/g)].length, 4, 'homepage shows four catalog cards')
+})
+
 // D1 rows-read guard. Left to itself SQLite drives master→offer→sku from sku,
 // which read ~240k rows per grid/browse/sitemap/404 render (measured on the
 // production snapshot) against ~2–4k with the order pinned. Admin LEFT JOINs
 // are not reorderable and are out of scope.
 test('catalog master→offer→sku joins stay pinned with CROSS JOIN', async () => {
   const { readFile } = await import('node:fs/promises')
-  for (const f of ['worker.mjs', 'grid-next.mjs', 'jobs.mjs']) {
+  for (const f of ['worker.mjs', 'grid-next.mjs', 'jobs.mjs', 'home-queries.mjs']) {
     const src = await readFile(new URL('../lib/' + f, import.meta.url), 'utf8')
     const loose = src.match(/FROM master_model m\s+(?:INNER\s+)?JOIN offer o ON o\.master_model_id\s*=\s*m\.id\s+(?:INNER\s+|CROSS\s+)?JOIN sku k\b/g) || []
     assert.deepEqual(loose, [], f + ': pin the join order (FROM master_model m CROSS JOIN offer o … CROSS JOIN sku k …)')
@@ -915,6 +1066,7 @@ test('aircraft-data save rejects invalid and stale requests without writing', as
   const profiles = (await api('mfr-profiles')).body.profiles
   if (!profiles.length) return
   const row = profiles[0]
+  assert.equal((await api('mfr-profile',{masterId:row.master_model_id,mfrProductId:row.mfr_product_id,expectedUpdatedAt:-1,overrides:{channels:4}})).status,409)
   assert.equal((await api('mfr-profile', {
     masterId: row.master_model_id,
     mfrProductId: row.mfr_product_id,

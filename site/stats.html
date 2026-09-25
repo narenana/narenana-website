@@ -8,7 +8,7 @@
   <meta name="robots" content="noindex, nofollow" />
   <meta name="theme-color" content="#0e1117" />
   <title>Portfolio stats — narenana</title>
-  <style>
+  <link rel="stylesheet" href="/assets/family/fonts.css?v=c848c473a8"><style>
     :root {
       --bg: #0e1117; --fg: #e6edf3; --muted: #8b949e;
       --accent: #1f9bd9; --accent-bright: #3eb5e8;
@@ -91,7 +91,7 @@
     .empty { color: var(--muted); font-size: 0.85rem; }
     footer { margin-top: 64px; color: var(--muted); font-size: 0.8rem; }
     #err { color: var(--down); margin-top: 24px; display: none; }
-  </style>
+  body{font-family:"DM Sans",sans-serif}h1,h2{font-family:"Barlow Condensed",sans-serif}:root{--bg:#15191c;--card:#20272d;--accent:#ff8500;--accent-bright:#80c9f5}h1{font-size:38px}header.top:before{content:"";width:38px;height:38px;border-radius:50%;background:url(/assets/avatar.jpg?v=49424a6497) center/cover}</style>
 </head>
 <body>
   <div class="wrap">
@@ -134,6 +134,7 @@
     const PROJECTS = [
       { id: 'lastcall', name: 'Last Call', host: 'lastcall.narenana.com', sub: 'reverse tower defence' },
       { id: 'nanawing', name: 'Nanawing', host: 'sim.narenana.com', sub: 'FPV wing simulator' },
+      { id: 'nanawing2', name: 'Nanawing 2', host: 'nanawing2.narenana.com', sub: 'line-of-sight RC simulator' },
       { id: 'hub', name: 'narenana.com', host: 'www.narenana.com', sub: 'hub · wings catalog · log viewer' },
       { id: 'agent', name: 'Agent', host: 'agent.narenana.com', sub: 'agent.narenana.com' },
     ]
@@ -282,8 +283,8 @@
         let series = hostDaily.has(p.host) ? dailySeries(hostDaily.get(p.host), days) : []
         let seriesLabel = 'sessions · 7d' // the big number is the 7-day sum
         // Without GA creds, fall back to game-native activity so cards stay live.
-        if (!series.length && p.id === 'lastcall') { series = lcStarts; seriesLabel = 'game starts · 7d' }
-        if (!series.length && p.id === 'nanawing') { series = nwFlights; seriesLabel = 'flights · 7d' }
+        if (!series.length && p.id === 'lastcall' && ok(data.lastcall)) { series = lcStarts; seriesLabel = 'game starts · 7d' }
+        if (!series.length && p.id === 'nanawing' && ok(data.nanawing)) { series = nwFlights; seriesLabel = 'flights · 7d' }
         const t = hostTotals.get(p.host)
         const facts = []
         if (p.id === 'lastcall' && ok(data.lastcall)) {

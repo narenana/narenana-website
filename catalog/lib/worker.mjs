@@ -1,3 +1,4 @@
+import { manufacturerReference } from './product-overview.mjs'
 // Catalog worker: public pages from D1, admin panel + API behind HTTP Basic
 // auth, image proxy, and the */15 job-slice dispatcher.
 
@@ -53,6 +54,35 @@ const html = (body, status = 200) =>
 // Yandex accept our URL submissions). Not a secret; safe in the repo.
 const INDEXNOW_KEY = '7f3e9a1c5b8d4260e94a1f7c3b0d8e62'
 
+// Edge-cache release tag for public HTML (catalog pages + homepage). The key
+// also carries the deployed Worker version (the CF_VERSION_METADATA binding),
+// so every deploy and every rollback reads and writes its own entries with no
+// manual step: a build never serves HTML another build cached. The constant
+// only names the key format; changing it is never required for a release.
+export const PUBLIC_CACHE_RELEASE = 'theme-20260924-1'
+export const cacheRelease = (env) => `${PUBLIC_CACHE_RELEASE}.${env?.CF_VERSION_METADATA?.id || 'dev'}`
+
+// The only query parameters a public catalog page reads. The cache key keeps
+// these and drops the rest, so tracking and junk parameters (?utm_*, ?fbclid,
+// a hand-made ?__release) share the real entry instead of forcing a D1 render
+// each, and can never select another build's entry.
+const PAGE_PARAMS = ['ui', 'power', 'role', 'size', 'q', 'cond', 'sort', 'page']
+export function publicCacheKey(url, env, { path = url.pathname, params = PAGE_PARAMS, tag = null } = {}) {
+  const key = new URL(path, url.origin)
+  for (const k of params) { const v = url.searchParams.get(k); if (v !== null) key.searchParams.set(k, v) }
+  if (tag) key.searchParams.set('__entry', tag) // a key no page URL can produce
+  key.searchParams.set('__release', cacheRelease(env))
+  return new Request(key.toString(), { method: 'GET' })
+}
+// HEAD shares the GET entry; it just never carries the body.
+export const forMethod = (request, res) => (request.method === 'HEAD' ? new Response(null, res) : res)
+
+// Manufacturer-sourced facts (harvested specs, manufacturer link, retrieval
+// date) on public product pages and in their JSON-LD. OFF by owner decision
+// (2026-09-24): manufacturer content stays admin-only until the owner settles
+// how descriptions are used and how conflicting wingspans are handled.
+export const PUBLIC_MANUFACTURER_FACTS = false
+
 export async function handleCatalog(request, url, env, ctx) {
   const path = url.pathname.replace(/\/+$/, '') || '/'
   if (!env.CATALOG_DB) return null
@@ -100,29 +130,45 @@ export async function handleCatalog(request, url, env, ctx) {
   // was reading ~8.5M D1 rows/day against the account's 5M/day free cap (Cloudflare alert, two days
   // running). The rendered page is cached at the edge per full URL for 15 min (s-maxage) with a
   // 5 min browser max-age — stock and prices move on ingest cadence, not per-view. Admin, /api,
-  // and the image proxy above are never cached; non-200s (incl. the 404 grid) and non-GETs skip.
-  if (request.method === 'GET') {
+  // and the image proxy above are never cached. HEAD is answered from the GET entry. Every
+  // unknown slug in a category shares ONE cached 404 grid, so scanners and stale links can't
+  // force a grid render per junk URL.
+  // Paths the catalog doesn't own (the homepage, /assets/*, static pages) leave here, before
+  // any cache lookup. categories() is per-isolate cached, so this costs no D1 read.
+  const cats = await categories(env)
+  if (path !== '/sitemap.xml' && !cats.some((c) => c.live && (path === c.path_prefix || path.startsWith(c.path_prefix + '/')))) return null
+  if ((request.method === 'GET' || request.method === 'HEAD') && !['localhost','127.0.0.1'].includes(url.hostname)) {
     const cache = caches.default
-    const hit = await cache.match(request)
-    if (hit) return hit
-    const res = await publicCatalogPages(url, env)
-    if (
-      res && res.status === 200
-      && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
-    ) {
-      const store = new Response(res.clone().body, res)
-      store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
-      store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
-      ctx.waitUntil(cache.put(request, store))
+    const cached = async (key, render, status = 200) => {
+      const hit = await cache.match(key)
+      if (hit) return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
+      const res = await render()
+      if (
+        res && res.status === status
+        && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
+      ) {
+        // Stored as 200 whatever it is served as: the Cache API need not keep error statuses.
+        const store = new Response(res.clone().body, { status: 200, headers: res.headers })
+        store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
+        store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
+        ctx.waitUntil(cache.put(key, store))
+      }
+      return res
     }
-    return res
+    const notFound = (cat) => cached(publicCacheKey(url, env, { path: cat.path_prefix + '/', params: [], tag: 'not-found' }), () => notFoundGrid(env, cat), 404)
+    const res = await cached(publicCacheKey(url, env), () => publicCatalogPages(url, env, notFound))
+    return res && forMethod(request, res)
   }
   return publicCatalogPages(url, env)
 }
 
+// Unknown slug → the REAL category grid (page 1, electric) with a 404 status.
+const notFoundGrid = async (env, cat) =>
+  html(renderGrid(cat, await gridMasters(env, cat, 'electric', 1), { power: 'electric', page: 1, counts: await gridCounts(env, cat) }), 404)
+
 // The public catalog surface (grids, landings, browse hub, product pages, sitemap) — everything
 // here may run heavy D1 aggregations, so it is only ever reached through the edge cache above.
-async function publicCatalogPages(url, env) {
+async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env, cat)) {
   const path = url.pathname.replace(/\/+$/, '') || '/' // same normalization as handleCatalog
   const cats = await categories(env)
   if (path === '/sitemap.xml') return sitemapResponse(env, cats)
@@ -193,11 +239,17 @@ async function publicCatalogPages(url, env) {
          WHERE master_model_id=? AND excluded=0 ORDER BY pinned DESC, views DESC LIMIT 3`,
         m.id,
       )
-      return html(renderMaster(cat, m, offers, similar, videos))
+      const reference = PUBLIC_MANUFACTURER_FACTS
+        ? await one(env, `SELECT p.url,p.title,p.body_text,p.span_mm,p.fetched_at,x.status AS match_status,pr.overrides_json
+            FROM mfr_match x JOIN mfr_product p ON p.id=x.mfr_product_id
+            JOIN manufacturer mf ON mf.id=p.manufacturer_id
+            LEFT JOIN mfr_profile pr ON pr.master_model_id=x.master_model_id AND pr.source_mfr_product_id=x.mfr_product_id
+            WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
+        : null
+      return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
     }
   }
-  // unknown slug → the REAL category grid (page 1, electric) with 404 status
-  return html(renderGrid(cat, await gridMasters(env, cat, 'electric', 1), { power: 'electric', page: 1, counts: await gridCounts(env, cat) }), 404)
+  return notFound(cat)
 }
 
 const GRID_PAGE = 24
@@ -222,7 +274,7 @@ async function gridMasters(env, cat, power = 'electric', page = 1, sort = 'price
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%'
                   OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%' THEN 1 ELSE 0 END) AS preowned,
@@ -253,7 +305,7 @@ async function similarMasters(env, cat, m) {
     env,
     `SELECT m.*, COUNT(DISTINCT k.source_id) AS sellers,
             COALESCE(m.hero_image, MIN(CASE WHEN k.dead=0 THEN k.image_url END)) AS hero_any,
-            MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price,
+            COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS any_stock
      FROM master_model m
@@ -310,14 +362,14 @@ async function setMasterPower(env, masterId) {
 const SITE = 'https://www.narenana.com'
 
 // sitemap.xml: homepage + each live category + its valid landing pages (>=3
-// in-stock) + every ready product page.
+// in-stock) + every IN-STOCK ready product page.
 async function sitemapResponse(env, cats) {
   // Main site + the /log-viewer/ tool (this route shadows the static
   // site/sitemap.xml, so those entries must live here now). The FPV simulator
   // is on its own subdomain and ships its own sitemap.
   // lastmod comes from master_model.updated_at — bumped only on real edits (the
   // IndexNow cursor already relies on this), so it's an honest recrawl signal.
-  const urls = [{ u: `${SITE}/` }, { u: `${SITE}/log-viewer/` }]
+  const urls = ['/', '/log-viewer/', '/catalog-methodology/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/'].map(path => ({ u: SITE + path }))
   for (const cat of cats.filter((c) => c.live)) {
     urls.push({ u: `${SITE}${cat.path_prefix}/` })
     urls.push({ u: `${SITE}${cat.path_prefix}/browse/` })
@@ -331,8 +383,11 @@ async function sitemapResponse(env, cats) {
       cat.id,
     )
     for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
-    // In-stock only — don't feed Google product pages we can't currently sell.
-    // Regenerates live each request, so pages auto-drop/return with stock.
+    // Retired models are excluded by the query. Out-of-stock product pages stay
+    // reachable (honest OutOfStock schema) but are not listed here.
+    // In-stock only (owner decision) — don't feed Google product pages we can't
+    // currently sell. Regenerates each request, so pages drop/return with stock.
+    // Same rule as /wings/browse/ and IndexNow.
     for (const m of masters) if (m.any_stock) urls.push({ u: `${SITE}${cat.path_prefix}/${m.slug}/`, lm: m.updated_at })
   }
   const day = (ms) => (ms ? `<lastmod>${new Date(ms).toISOString().slice(0, 10)}</lastmod>` : '')
@@ -869,7 +924,7 @@ async function api(request, url, env, ep, actor) {
       : null
     const masters = await all(env, `SELECT m.*, COUNT(o.sku_id) AS offers,
         SUM(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) AS live_offers,
-        MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND o.pack_qty=1 THEN k.price_inr END) AS min_price
+        COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price
       FROM master_model m LEFT JOIN offer o ON o.master_model_id=m.id
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
       ${where} GROUP BY m.id ${having} ${orderBy} LIMIT ? OFFSET ?`, ...condParams, PAGE, (page - 1) * PAGE)
@@ -1212,6 +1267,8 @@ async function api(request, url, env, ep, actor) {
       masterId,
       mfrProductId,
     )
+    if (Object.hasOwn(body,'expectedUpdatedAt') && body.expectedUpdatedAt !== (stored?.updated_at ?? null))
+      return json({error:'aircraft data changed; reload before saving'},409)
     const previous = jsonObject(stored?.overrides_json)
     const overrides = { ...previous, ...patch }
     try {

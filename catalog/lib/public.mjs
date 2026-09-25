@@ -7,7 +7,9 @@
 // "last seen ₹X on <date>" — pages only vanish when the owner retires them.
 
 import { esc, inr } from './util.mjs'
+import { familyNav, familyFooter } from '../../scripts/brand-shell.mjs'
 import { CSS_VER } from './styles.mjs'
+import { productOverview } from './product-overview.mjs'
 
 // Site IDENTITY (domain, analytics id) is code config; all product/market
 // content — masters, offers, recipes, components — arrives as arguments,
@@ -17,48 +19,28 @@ const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`
-  const og = image ?? `${SITE}/assets/og.jpg`
+  const og = image ?? `${SITE}/assets/og-nanawing.jpg?v=b7b515b0c7`
   const browsePath = '/' + (path.split('/')[1] || 'wings') + '/browse/'
   return `<!doctype html>
 <html lang="en"><head>
-<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#F3EEE0" />
-<title>${esc(title)}</title><meta name="description" content="${esc(desc)}" /><link rel="canonical" href="${url}" />${noindex ? '<meta name="robots" content="noindex" />' : ''}
-<link rel="icon" href="/favicon.ico" sizes="any" /><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png" />
+<meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><meta name="theme-color" content="#087bc1" />
+<title>${esc(title)}</title><meta name="description" content="${esc(desc)}" /><link rel="canonical" href="${url}" /><meta name="robots" content="${noindex ? 'noindex,follow' : 'index,follow,max-image-preview:large'}" />
+<link rel="icon" href="/favicon.ico" sizes="any" /><link rel="apple-touch-icon" href="/assets/apple-touch-icon.png?v=d4e6f9975a" />
 <meta property="og:type" content="website" /><meta property="og:site_name" content="narenana" /><meta property="og:url" content="${url}" />
 <meta property="og:title" content="${esc(title)}" /><meta property="og:description" content="${esc(desc)}" /><meta property="og:image" content="${esc(og)}" />
-<meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="${esc(og)}" />
-<link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700..800&family=Grand+Hotel&family=Hanken+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+<meta name="twitter:title" content="${esc(title)}" /><meta name="twitter:description" content="${esc(desc)}" /><meta property="og:image:alt" content="${esc(title)}" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:image" content="${esc(og)}" />
+<link rel="preload" href="/assets/family/DMSans-400.woff2?v=9fea608a94" as="font" type="font/woff2" crossorigin /><link rel="preload" href="/assets/family/BarlowCondensed-800.woff2?v=2515494e8c" as="font" type="font/woff2" crossorigin /><link rel="stylesheet" href="/assets/family/fonts.css?v=c848c473a8" /><link rel="stylesheet" href="/assets/family/shell.css?v=79d618fb95" />
 <script>if(location.hostname==='www.narenana.com'){var _g=document.createElement('script');_g.async=1;_g.src='https://www.googletagmanager.com/gtag/js?id=G-1KY518LPBH';document.head.appendChild(_g);window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date());gtag("config","G-1KY518LPBH")}</script>
 ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>` : ''}
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
 </head><body>
-<header class="nav"><a class="nav-back" href="/">narenana</a><span class="nav-sep">/</span><a class="nav-here" href="${esc(path.split('/').slice(0, 2).join('/'))}/">${esc(path.split('/')[1])}</a>
-<span class="nav-grow"></span>
-<div class="shr"><button id="shr-btn" class="shr-btn" aria-haspopup="true" aria-expanded="false"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>Share</button>
-<div id="shr-menu" class="shr-menu" role="menu">
-<p class="shr-k">Share this page</p>
-<a id="shr-wa" target="_blank" rel="noopener" role="menuitem"><svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.3c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5.2.6.8 1.9.8 2 .1.1.1.3 0 .5-.3.6-.7.9-.5 1.2.7 1.2 1.6 2 2.8 2.6.3.2.5.1.7-.1l.9-1c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.4 0 .1 0 .7-.2 1.3z"/></svg>WhatsApp</a>
-<a id="shr-x" target="_blank" rel="noopener" role="menuitem"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-6.8 7.8L23.3 22h-6.3l-4.9-6.4L6.5 22H3.4l7.3-8.3L1 2h6.4l4.4 5.9L18.9 2zm-1.1 18h1.7L7.3 3.7H5.5L17.8 20z"/></svg>X / Twitter</a>
-<button id="shr-cp" role="menuitem"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>Copy link</button>
-<button id="shr-nt" role="menuitem"><svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>More options</button>
-</div></div></header>
+${familyNav({active:'wings',home:'',avatar:'/assets/family/avatar.jpg?v=49424a6497'})}
+<div class="catalog-toolbar"><a href="/wings/browse/">Wings / Browse the catalog</a></div>
 ${body}
-<footer class="foot"><p>Prices come from each seller's live listing and carry the date we last confirmed them — always check the seller's page before paying.</p>
-<p><a class="wordmark" href="/">narenana</a> &nbsp;·&nbsp; <a href="${browsePath}">All models</a> · <a href="/log-viewer/">RC Log Viewer</a> · <a href="https://sim.narenana.com">Nanawing simulator</a> · <a href="https://www.youtube.com/@narenana" rel="noopener">YouTube</a></p></footer>
-<script>(function(){var b=document.getElementById('shr-btn'),m=document.getElementById('shr-menu');if(!b)return;
-function u(s){var x=new URL(location.origin+location.pathname);x.searchParams.set('utm_source',s);x.searchParams.set('utm_medium','share');x.searchParams.set('utm_campaign','wings');return x.toString()}
-var t=document.title.replace(/\\s*\\|[^|]*$/,'').trim();
-b.onclick=function(e){e.stopPropagation();var on=m.classList.toggle('on');b.setAttribute('aria-expanded',on)};
-document.addEventListener('click',function(){m.classList.remove('on');b.setAttribute('aria-expanded','false')});
-m.addEventListener('click',function(e){e.stopPropagation()});
-document.getElementById('shr-wa').href='https://wa.me/?text='+encodeURIComponent(t+' — '+u('whatsapp'));
-document.getElementById('shr-x').href='https://twitter.com/intent/tweet?text='+encodeURIComponent(t)+'&url='+encodeURIComponent(u('x'));
-document.getElementById('shr-cp').onclick=function(){var el=this;navigator.clipboard.writeText(u('copy')).then(function(){el.textContent='Copied ✓';setTimeout(function(){el.textContent='Copy link'},1400)})};
-var n=document.getElementById('shr-nt');
-if(navigator.share){n.onclick=function(){navigator.share({title:t,url:u('native')}).catch(function(){})}}else{n.style.display='none'}
-})()</script>
-</body></html>`
+<aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
+${familyFooter({home:''})}
+
+<script type="module" src="/assets/family/preview-links.js?v=be680653c7"></script></body></html>`
 }
 
 // Power class from a listing's text. LOGIC is in code; the text (engine
@@ -150,7 +132,7 @@ function masterCard(m, prefix) {
           <p class="prod-brand">${esc(m.brand)}</p>
           <h3 class="prod-name">${esc(m.name)}</h3>
           <p class="prod-spec">${esc(specLine(m))}</p>
-          <div class="prod-price">${price ? `<div class="price"><span class="price-pre">${oos ? 'was' : 'from'}</span> ${inr(price)}</div>` : '<div class="price is-muted">—</div>'}
+          <div class="prod-price">${price ? `<div class="price"><span class="price-pre">${oos ? 'was' : 'from'}</span> ${inr(price)}</div>` : `<div class="price is-muted">${oos ? '—' : 'Price under review'}</div>`}
             ${m.sellers > 1 ? `<span class="mrp" style="text-decoration:none">${m.sellers} sellers</span>` : ''}</div>
         </div>
         <span class="prod-cta ${oos ? 'is-off' : ''}">${oos ? 'See details' : m.sellers > 1 ? `Compare ${m.sellers} sellers` : 'View & buy'}</span>
@@ -306,7 +288,34 @@ function recipesFor(recipes, components) {
   </section>`
 }
 
-export function renderMaster(cat, m, offers, similar = [], videos = []) {
+// Compare only the same configuration, condition and pack size. Never publish
+// flagged, removed or unknown prices as a current structured offer.
+export function comparableOffers(offers) {
+  const valid = offers.filter(o => !o.dead && !o.flagged && Number.isFinite(o.price_inr) && o.price_inr > 0)
+  const live = valid.filter(o => o.in_stock)
+  const pool = live.length ? live : valid
+  const singles = pool.filter(o => o.pack_qty === 1 && conditionOf(o.title) === 'new')
+  const seed = [...(singles.length ? singles : pool)].sort((a,b) => a.price_inr - b.price_inr)[0]
+  if (!seed) return {seed:null,group:[]}
+  const group = seed.config && seed.pack_qty > 0
+    ? pool.filter(o => o.config === seed.config && o.pack_qty === seed.pack_qty && conditionOf(o.title) === conditionOf(seed.title))
+    : [seed] // Unknown bundle details do not establish price comparability.
+  return {seed,group}
+}
+export function comparableOfferSchema(offers) {
+  const {seed,group} = comparableOffers(offers)
+  if (!seed) return null
+  const individual = o => ({'@type':'Offer', url:o.url_canonical, price:o.price_inr, priceCurrency:'INR',
+    availability:o.in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    itemCondition:conditionOf(o.title) === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
+    name:`${o.config || 'Configuration not specified'} · ${o.pack_qty > 0 ? o.pack_qty+' unit(s)' : 'Quantity not specified'}`, seller:{'@type':'Organization',name:o.source_name}})
+  if (group.length === 1) return individual(seed)
+  return {'@type':'AggregateOffer', priceCurrency:'INR', lowPrice:Math.min(...group.map(o=>o.price_inr)),
+    highPrice:Math.max(...group.map(o=>o.price_inr)), offerCount:group.length, offers:group.map(individual)}
+}
+
+export function renderMaster(cat, m, offers, similar = [], videos = [], manufacturer = null) {
+  const overview = productOverview(m, offers)
   // Only well-formed YouTube ids reach markup/URLs (defense against any junk
   // that might land in master_video).
   const vids = (videos || []).filter((v) => /^[A-Za-z0-9_-]{6,15}$/.test(v.video_id || ''))
@@ -322,48 +331,46 @@ export function renderMaster(cat, m, offers, similar = [], videos = []) {
     }
   })()
 
-  const liveOffers = offers.filter((o) => !o.dead && o.in_stock)
   const configs = [...new Set(offers.map((o) => o.config))]
-  // Min over PRESENT prices only — data-poor offers (price NULL until a scan
-  // or verify fills it) must render as "—", never as ₹∞ from Math.min().
-  const minOf = (arr) => {
-    const v = arr.map((o) => o.price_inr).filter(Boolean)
-    return v.length ? Math.min(...v) : null
-  }
-  // The headline "from" price (and schema lowPrice) means a NEW, single unit —
-  // same rule as the grid (pack_qty=1). Multi-packs and pre-owned listings
-  // stay in the table but must not undercut the headline. Fall back to any
-  // live offer only when no single-unit new offer has a price.
-  const headlineOffers = liveOffers.filter((o) => o.pack_qty === 1 && conditionOf(o.title) !== 'used')
-  const liveMin = minOf(headlineOffers) ?? minOf(liveOffers)
-  const seenMin = minOf(offers)
+  const {seed: headlineOffer} = comparableOffers(offers)
+  // Stock and price are separate questions. A listing flagged for review still
+  // proves the model is in stock (same rule as the grid); only its PRICE is
+  // withheld. So a model whose only live listings are flagged is "in stock,
+  // price under review" — never "last seen" from an older out-of-stock listing.
+  const liveAny = offers.some((o) => !o.dead && o.in_stock)
+  const liveMin = headlineOffer?.in_stock ? headlineOffer.price_inr : null
+  const priceUnderReview = liveAny && !liveMin
+  const seenMin = !liveAny && headlineOffer && !headlineOffer.in_stock ? headlineOffer.price_inr : null
+  // A flagged listing (price jump / identity mismatch awaiting review) keeps its
+  // stock badge but never shows its amount: the number may be wrong. Rows keep
+  // the query's order (live first, cheapest first) with flagged rows after the
+  // priced ones of the same availability, so a withheld low price can't top it.
+  const offerOrder = (list) => list.map((o, i) => [o, i]).sort(([a, i], [b, j]) =>
+    (a.dead - b.dead) || (b.in_stock - a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
       <td>${esc(o.config)}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
-      <td>${o.flagged ? `<span title="price under review">${o.price_inr ? inr(o.price_inr) : '—'}*</span>` : o.price_inr ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
+      <td>${o.flagged ? '<span style="color:var(--muted);font-weight:600">Price under review</span>' : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
       <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
       <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>
     </tr>`
 
-  // Keep the Product entity in Google's graph even out of stock (with the
-  // last-seen price + OutOfStock availability) so the page recovers instantly
-  // when stock returns instead of re-earning rich results from scratch. The
-  // image uses the same offer-sku fallback the visible hero does.
+  // Preserve the Product entity for unavailable models, with honest availability.
+  // Rich-result eligibility and indexing remain search-engine decisions.
   const hasImg = m.hero_image || offers.some((o) => o.image_url)
-  const ldPrice = liveMin ?? seenMin
-  const productLd = ldPrice ? {
+  // Publish a Product only with an offer that states the truth: never one with
+  // no offers (an invalid snippet), and never an out-of-stock offer for a model
+  // that is actually in stock with its price under review.
+  const offerSchema = priceUnderReview ? null : comparableOfferSchema(offers)
+  const productLd = offerSchema && {
     '@type': 'Product',
-    name: `${m.brand} ${m.name}`, brand: { '@type': 'Brand', name: m.brand }, description: m.blurb ?? undefined,
+    name: `${m.brand} ${m.name}`, brand: { '@type': 'Brand', name: m.brand }, description: overview,
+    additionalProperty: manufacturer?.properties.map(p=>({'@type':'PropertyValue',name:p.name,value:p.value,unitText:p.unit || undefined})),
+    url: `${SITE}${cat.path_prefix}/${m.slug}/`,
     image: hasImg ? `${SITE}/img/master/${m.id}` : undefined,
-    offers: {
-      '@type': 'AggregateOffer', priceCurrency: 'INR',
-      lowPrice: ldPrice,
-      highPrice: Math.max(...(liveOffers.length ? liveOffers : offers).map((o) => o.price_inr).filter(Boolean)) || ldPrice,
-      offerCount: liveOffers.length || offers.length,
-      availability: liveOffers.length ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    },
-  } : null
+    offers: offerSchema,
+  }
   const jsonld = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -377,11 +384,12 @@ export function renderMaster(cat, m, offers, similar = [], videos = []) {
       },
       ...(productLd ? [productLd] : []),
       // VideoObject per embedded review → video rich-result eligibility.
-      ...vids.map((v) => ({
+      ...vids.filter(v => v.published_at && Number.isFinite(new Date(v.published_at).getTime())).map((v) => ({
         '@type': 'VideoObject',
         name: v.title || `${m.brand} ${m.name} video`,
+        description: `${v.title || `${m.brand} ${m.name} video`} — ${v.channel || 'YouTube'} video featured on the ${m.brand} ${m.name} comparison page.`,
         thumbnailUrl: `https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg`,
-        uploadDate: v.published_at ? new Date(v.published_at).toISOString().slice(0, 10) : undefined,
+        uploadDate: new Date(v.published_at).toISOString(),
         embedUrl: `https://www.youtube-nocookie.com/embed/${v.video_id}`,
         url: `https://www.youtube.com/watch?v=${v.video_id}`,
       })),
@@ -395,7 +403,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = []) {
   const videoSection = vids.length ? `
     <section class="ytv" style="margin-top:44px"><h2 class="sec">Watch it fly</h2>
     <div class="ytv-grid">${vids.map((v) => `
-      <button class="ytv-card" data-yt="${v.video_id}" aria-label="Play video: ${esc(v.title || '')}">
+      <button class="ytv-card" data-yt="${v.video_id}" aria-label="Play video: ${esc((v.title || '').slice(0,80))} ${esc(v.channel || 'YouTube')}${v.views ? ' · '+fmtV(v.views)+' views' : ''}">
         <span class="ytv-thumb"><img src="https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg" alt="${esc(v.title || 'video thumbnail')}" loading="lazy" width="480" height="360" /><span class="ytv-play" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></span></span>
         <span class="ytv-meta"><span class="ytv-title">${esc((v.title || '').slice(0, 80))}</span><span class="ytv-sub">${esc(v.channel || 'YouTube')}${v.views ? ' · ' + fmtV(v.views) + ' views' : ''}</span></span>
       </button>`).join('')}
@@ -429,22 +437,26 @@ export function renderMaster(cat, m, offers, similar = [], videos = []) {
   <main class="wrap">
     <a class="crumb" href="${cat.path_prefix}/">← all ${esc(cat.name.toLowerCase())}</a>
     <h1 class="kit-h">${esc(m.brand)} ${esc(m.name)}</h1>
-    ${m.blurb ? `<p class="lede">${esc(m.blurb)}</p>` : ''}
+    <p class="lede">${esc(overview)}</p>
     <div class="kit-key">
       ${m.hero_image || offers.some((o) => o.image_url) ? `<div class="kit-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" /></div>` : ''}
       ${liveMin
         ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
-        : seenMin
-          ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
-          : ''}
+        : priceUnderReview
+          ? `<div class="price price-lg is-muted"><span class="price-pre">in stock</span> price under review</div>`
+          : seenMin
+            ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
+            : ''}
+      ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(headlineOffer.config || 'Configuration not specified')} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
       <dl class="spec">
         ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}
       </dl>
     </div>
     <h2 class="sec">Where to buy${configs.length > 1 ? ' <span class="count">by configuration</span>' : ''}</h2>
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
-      <tbody>${offers.map(offerRow).join('')}</tbody></table>
+      <tbody>${offerOrder(offers).map(offerRow).join('')}</tbody></table>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
+    ${manufacturer?.properties.length ? `<section class="manufacturer-reference"><h2 class="sec">Manufacturer reference</h2><p>Specifications from the accepted manufacturer listing. Seller packages can differ.</p><dl class="spec">${manufacturer.properties.map(p=>`<div><dt>${esc(p.name)}</dt><dd>${esc(String(p.value))}${p.unit?' '+esc(p.unit):''}</dd></div>`).join('')}</dl><p class="source"><a href="${esc(manufacturer.url)}" target="_blank" rel="noopener">View the manufacturer's listing ↗</a>${manufacturer.checked?' · Retrieved '+dateOf(manufacturer.checked):''}</p></section>` : ''}
     ${videoSection}
     ${similar.length ? `<section class="similar" style="margin-top:44px"><h2 class="sec">Similar models</h2><ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul></section>` : ''}
   </main>`

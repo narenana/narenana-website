@@ -1,23 +1,19 @@
 // Generated from catalog/catalog.css — edit that, then: npm run catalog:css
-export const CSS_VER = '1598312f'
-export const CSS = `/* narenana catalog — Narenana Daylight design system (matches the homepage).
-   Tokens: paper #F3EEE0 · card #FCF9F1 · ink #0F2C39 · soft #DDE9EE ·
-   orange #EF7A25 / #D8641A · red #C63B2E. Fonts: Bricolage Grotesque
-   (display) · Hanken Grotesk (body) · JetBrains Mono (kickers) ·
-   Grand Hotel (wordmark). */
+export const CSS_VER = '0abd006e'
+export const CSS = `/* narenana catalog — approved blue/orange homepage identity. */
 :root {
-  --paper: #F3EEE0;
-  --card: #FCF9F1;
-  --ink: #0F2C39;
-  --ink-2: #12303D;
-  --muted: rgba(15, 44, 57, 0.62);
-  --faint: rgba(15, 44, 57, 0.16);
-  --soft: #DDE9EE;
-  --orange: #EF7A25;
-  --orange-deep: #D8641A;
+  --paper: #f4f8fc;
+  --card: #ffffff;
+  --ink: #15191c;
+  --ink-2: #15191c;
+  --muted: #586a79;
+  --faint: #d3e0eb;
+  --soft: #e8f2fa;
+  --orange: #ff8500;
+  --orange-deep: #0669a6;
   --red: #C63B2E;
   --green: #2E7D4F;
-  --amber: #B97F0F;
+  --amber: #805800;
 }
 
 * { box-sizing: border-box; }
@@ -27,7 +23,7 @@ html, body {
   padding: 0;
   background: var(--paper);
   color: var(--ink);
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -37,7 +33,7 @@ a:hover { color: var(--ink); }
 ::selection { background: #F79A3F; color: var(--ink); }
 :focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
 
-h1, h2, h3 { font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+h1, h2, h3 { font-family: 'Barlow Condensed', 'DM Sans', sans-serif; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
 
 /* --- nav ---------------------------------------------------------------- */
 .nav {
@@ -48,12 +44,12 @@ h1, h2, h3 { font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif; f
   border-bottom: 2px solid var(--ink);
   position: sticky;
   top: 0;
-  background: rgba(243, 238, 224, 0.92);
+  background: rgba(244, 248, 252, 0.96);
   backdrop-filter: blur(8px);
   z-index: 10;
 }
 .nav-back {
-  font-family: 'Grand Hotel', cursive;
+  font-family: 'DM Sans', sans-serif;
   font-size: 26px;
   line-height: 1;
   color: var(--ink);
@@ -82,7 +78,7 @@ h1, h2, h3 { font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif; f
   color: var(--ink);
   border-radius: 999px;
   padding: 6px 14px;
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 0.82rem; font-weight: 700;
   cursor: pointer;
 }
@@ -115,7 +111,7 @@ h1, h2, h3 { font-family: 'Bricolage Grotesque', 'Hanken Grotesk', sans-serif; f
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 9px 10px;
   background: none; border: none; border-radius: 8px;
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 0.88rem; font-weight: 600;
   color: var(--ink); text-align: left; text-decoration: none;
   cursor: pointer;
@@ -182,7 +178,7 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .filt { display: inline-flex; margin: 18px 0 0; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; background: var(--card); }
 .filt-b {
   appearance: none; border: none; background: transparent;
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 0.85rem; font-weight: 700; color: var(--muted);
   padding: 9px 18px; cursor: pointer; white-space: nowrap;
   border-right: 2px solid var(--ink);
@@ -202,7 +198,7 @@ a.filt-b { text-decoration: none; }
 }
 .sortsel-in {
   appearance: none; -webkit-appearance: none;
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 0.85rem; font-weight: 700; color: var(--ink);
   background-color: var(--card);
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' fill='none' stroke='%230F2C39' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
@@ -278,7 +274,7 @@ a.filt-b { text-decoration: none; }
   z-index: 1;
 }
 .tag-in { background: var(--orange); color: var(--ink-2); }
-.tag-off { background: var(--green); color: #FCF9F1; left: auto; right: 10px; }
+.tag-off { background: var(--green); color: #ffffff; left: auto; right: 10px; }
 
 .prod-body { padding: 13px 14px 10px; flex: 1; display: flex; flex-direction: column; }
 .prod-brand {
@@ -308,7 +304,7 @@ a.filt-b { text-decoration: none; }
   font-size: 0.85rem;
   font-weight: 700;
 }
-.prod:hover .prod-cta { background: var(--orange-deep); border-color: var(--orange-deep); color: #FCF9F1; }
+.prod:hover .prod-cta { background: var(--orange-deep); border-color: var(--orange-deep); color: #ffffff; }
 .prod-cta.is-off { background: transparent; border: 1.5px solid var(--faint); color: var(--muted); }
 .prod:hover .prod-cta.is-off { border-color: var(--ink); color: var(--ink); }
 
@@ -387,7 +383,7 @@ a.filt-b { text-decoration: none; }
   font-size: 0.92rem;
   text-decoration: none;
 }
-.cta:hover { background: var(--orange-deep); border-color: var(--orange-deep); color: #FCF9F1; }
+.cta:hover { background: var(--orange-deep); border-color: var(--orange-deep); color: #ffffff; }
 .tax { font-size: 0.85rem; color: var(--amber); margin: 8px 0 0; }
 .tax strong { color: var(--amber); }
 
@@ -448,7 +444,7 @@ a.filt-b { text-decoration: none; }
   color: var(--muted);
   border-radius: 999px;
   padding: 7px 16px;
-  font-family: 'Hanken Grotesk', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
@@ -490,5 +486,19 @@ a.filt-b { text-decoration: none; }
 .foot p { margin: 0 0 8px; }
 .foot a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .foot a:hover { color: var(--orange-deep); }
-.foot .wordmark { font-family: 'Grand Hotel', cursive; font-size: 20px; font-weight: 400; }
+.foot .wordmark { font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 400; }
+
+/* Shared product chrome and clearer comparison layout. */
+.catalog-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1264px;margin:auto;padding:14px 24px;border-bottom:1px solid var(--faint);font:11px/1.5 'JetBrains Mono',monospace}.catalog-toolbar>a{color:var(--muted);text-decoration:none}
+.shop-h1{font-size:clamp(42px,5.4vw,72px);line-height:1;text-transform:uppercase;letter-spacing:-.025em}.shop-head{border-bottom:1px solid var(--faint)}
+.prod{border:1px solid var(--faint);border-radius:4px;box-shadow:none;transition:transform .2s,border-color .2s}.prod:hover{border-color:var(--orange);transform:translateY(-3px);box-shadow:0 10px 30px #15191c0b}.prod-img{background:white}.prod-name{font-family:'DM Sans',sans-serif;font-size:17px;font-weight:700}.prod-cta{border-top:1px solid var(--faint);border-radius:0;background:var(--orange);color:var(--ink)}.prod:hover .prod-cta{background:#e87800;color:var(--ink)}.cta{border-radius:3px}.foot{padding-bottom:25px}.foot .wordmark{font-weight:700}.nn-header{position:relative}
+@media(prefers-reduced-motion:reduce){.prod{transition:none}.prod:hover{transform:none}}
+
+.manufacturer-reference{margin:34px 0;padding:24px;background:#fff;border:1px solid var(--faint);border-radius:4px}.manufacturer-reference p{color:var(--muted);font-size:14px}.manufacturer-reference .source{font-size:12px}.prod-tag{position:absolute;top:8px;left:8px;font:700 10px/1.5 "DM Sans",sans-serif;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:3px;padding:2px 7px}
+
+.bz-land a,.bz-list a,.fx-crumbs a{color:#0669a6}
+
+#fx-grid>.prod:nth-child(n+5){content-visibility:auto;contain-intrinsic-size:auto 390px}
+
+.vars tr.is-dim{opacity:1;color:var(--muted)}
 `
