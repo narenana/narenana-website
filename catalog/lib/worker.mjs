@@ -360,6 +360,9 @@ async function setMasterPower(env, masterId) {
 
 // ---------------------------------------------------------------- img proxy
 const SITE = 'https://www.narenana.com'
+// Editorial change dates, not build/request dates. Keep the static fallback
+// in site/sitemap.xml in sync when changing these pages.
+const STATIC_PAGE_LASTMOD = { '/': '2026-09-26' }
 
 // sitemap.xml: homepage + each live category + its valid landing pages (>=3
 // in-stock) + every IN-STOCK ready product page.
@@ -367,9 +370,9 @@ async function sitemapResponse(env, cats) {
   // Main site + the /log-viewer/ tool (this route shadows the static
   // site/sitemap.xml, so those entries must live here now). The FPV simulator
   // is on its own subdomain and ships its own sitemap.
-  // lastmod comes from master_model.updated_at — bumped only on real edits (the
-  // IndexNow cursor already relies on this), so it's an honest recrawl signal.
-  const urls = ['/', '/log-viewer/', '/catalog-methodology/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/'].map(path => ({ u: SITE + path }))
+  // Product lastmod comes from master_model.updated_at — bumped only on real
+  // edits (the IndexNow cursor already relies on this).
+  const urls = ['/', '/log-viewer/', '/catalog-methodology/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/'].map(path => ({ u: SITE + path, lm: STATIC_PAGE_LASTMOD[path] }))
   for (const cat of cats.filter((c) => c.live)) {
     urls.push({ u: `${SITE}${cat.path_prefix}/` })
     urls.push({ u: `${SITE}${cat.path_prefix}/browse/` })

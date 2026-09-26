@@ -173,6 +173,35 @@ test('catalog edge cache: page-parameter keys, HEAD, one shared 404, per-deploy 
   }
 })
 
+test('sitemap preserves editorial dates in the Worker and static fallback', async () => {
+  const { handleCatalog } = await import('../lib/worker.mjs')
+  const editedAt = Date.UTC(2026, 8, 20, 12)
+  const env = { CATALOG_DB: { prepare: (sql) => ({
+    bind() { return this },
+    all: async () => ({ results: /FROM category/.test(sql) ? [CAT] : [
+      { slug: 'available-wing', any_stock: 1, updated_at: editedAt },
+      { slug: 'sold-out-wing', any_stock: 0, updated_at: editedAt },
+    ] }),
+  }) } }
+  const url = new URL('http://localhost/sitemap.xml')
+  const response = await handleCatalog(new Request(url), url, env, { waitUntil() {} })
+  assert.equal(response.status, 200)
+  const xml = await response.text()
+  const entries = (text) => new Map([...text.matchAll(/<url>([\s\S]*?)<\/url>/g)].map(([, entry]) => [
+    /<loc>(.*?)<\/loc>/.exec(entry)[1], /<lastmod>(.*?)<\/lastmod>/.exec(entry)?.[1],
+  ]))
+  const live = entries(xml)
+  const fallback = entries(await readFile('site/sitemap.xml', 'utf8'))
+  for (const [loc, date] of fallback) {
+    assert.ok(live.has(loc), `${loc} must survive the Worker route`)
+    assert.equal(live.get(loc), date, `${loc} has the same editorial date`)
+  }
+  assert.match(live.get('https://www.narenana.com/'), /^\d{4}-\d{2}-\d{2}$/)
+  assert.ok(live.get('https://www.narenana.com/') <= new Date().toISOString().slice(0, 10))
+  assert.equal(live.get('https://www.narenana.com/wings/available-wing/'), '2026-09-20')
+  assert.ok(!live.has('https://www.narenana.com/wings/sold-out-wing/'))
+})
+
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
 const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/']
 for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, async () => {
