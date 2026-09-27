@@ -316,3 +316,20 @@ test('manufacturer physical overrides and explicit clears override harvested fac
  const cleared=manufacturerReference({...row,overrides_json:JSON.stringify({channels:null})});
  assert.ok(!cleared.properties.some(p=>p.name==='Minimum channels'));
 });
+
+// Owner decision (2026-09-25): WhatsApp/Facebook shares of the homepage describe
+// narenana.com as a whole (RC sims + RC plane prices), while <title> stays
+// Nanawing-first for search. The two are deliberately different; PR #3 "aligned"
+// them once by mistake.
+test('homepage share tags describe narenana.com as a whole, not one product', async () => {
+  const html = await readFile(new URL('../../site/index.html', import.meta.url), 'utf8')
+  const meta = (attr, key) => (html.match(new RegExp(`<meta ${attr}="${key}" content="([^"]*)"`)) || [])[1]
+  const og = meta('property', 'og:title')
+  assert.equal(meta('name', 'twitter:title'), og, 'og:title and twitter:title match')
+  assert.match(og, /^narenana /, 'the share title leads with the narenana brand')
+  assert.match(og, /simulators/i, 'names the simulators')
+  assert.match(og, /RC plane prices/i, 'names RC plane buying')
+  assert.match(meta('property', 'og:description'), /Indian sellers/, 'description covers buying too')
+  assert.equal(meta('property', 'og:image'), 'https://www.narenana.com/og.jpg', 'the umbrella card')
+  assert.match((html.match(/<title>([^<]*)<\/title>/) || [])[1], /^Nanawing/, '<title> stays Nanawing-first')
+})
