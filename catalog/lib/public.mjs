@@ -9,7 +9,7 @@
 import { esc, inr } from './util.mjs'
 import { familyNav, familyFooter } from '../../scripts/brand-shell.mjs'
 import { CSS_VER } from './styles.mjs'
-import { productOverview } from './product-overview.mjs'
+import { productOverview, displayName, realBrand } from './product-overview.mjs'
 
 // Site IDENTITY (domain, analytics id) is code config; all product/market
 // content — masters, offers, recipes, components — arrives as arguments,
@@ -90,8 +90,10 @@ const ROLE_RULES = [
   ['Sport / Park Flyer', /sport|park[\s-]?flyer|fun[\s-]?cub|foam[\s-]?board|depron|gyro[\s-]?rtf|allrounder|wingnetic/],
 ]
 // Primary precedence when several tags match (jets lead over their warbird tag; a
-// scale civilian outranks a bare "trainer"; sport is the catch-all).
-const ROLE_PRIMARY = ['Jet / EDF', 'Warbird', 'Airliner', 'Glider / Sailplane', 'FPV / Flying Wing', 'Aerobatic / 3D', 'Scale Civilian', 'Trainer', 'Sport / Park Flyer']
+// scale civilian outranks a bare "trainer"; sport is the catch-all). Product
+// pages use the same fixed order to pick their breadcrumb role from the STORED
+// tags, whose stored order is not a priority order.
+export const ROLE_PRIMARY = ['Jet / EDF', 'Warbird', 'Airliner', 'Glider / Sailplane', 'FPV / Flying Wing', 'Aerobatic / 3D', 'Scale Civilian', 'Trainer', 'Sport / Park Flyer']
 
 // Dedup, validate against the vocabulary, pick a primary, drop the combos the owner
 // removed (no Warbird+Trainer, no Scale Civilian+Trainer — keep the primary), and
@@ -124,7 +126,7 @@ function masterCard(m, prefix) {
     <li class="prod">
       <a class="prod-link" href="${prefix}/${esc(m.slug)}/">
         <div class="prod-img">
-          ${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
+          ${hero ? `<img src="/img/master/${m.id}" alt="${esc(displayName(m))}" width="800" height="600" loading="lazy" />` : '<div class="prod-noimg">No image</div>'}
           ${oos ? '<span class="prod-veil">Out of stock</span>' : ''}
           ${m.preowned ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}
         </div>
@@ -246,7 +248,7 @@ export function renderGrid(cat, masters, opts = {}) {
             itemListElement: masters.map((m, i) => ({
               '@type': 'ListItem',
               position: (pageNo - 1) * pageSize + i + 1,
-              name: `${m.brand} ${m.name}`,
+              name: displayName(m),
               url: `${SITE}${pref}/${m.slug}/`,
             })),
           },
@@ -314,8 +316,68 @@ export function comparableOfferSchema(offers) {
     highPrice:Math.max(...group.map(o=>o.price_inr)), offerCount:group.length, offers:group.map(individual)}
 }
 
-export function renderMaster(cat, m, offers, similar = [], videos = [], manufacturer = null) {
+// Short type noun for a product's meta description, from its stored primary role.
+const ROLE_NOUN = { 'Jet / EDF': 'jet', Warbird: 'warbird', Airliner: 'airliner', 'Glider / Sailplane': 'glider', 'FPV / Flying Wing': 'FPV plane', 'Aerobatic / 3D': 'aerobatic plane', 'Scale Civilian': 'scale plane', Trainer: 'trainer', 'Sport / Park Flyer': 'sport plane' }
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+// '28 Sep 2026', in UTC like the offers table's dates. Built by hand: en-GB
+// formats September as 'Sept' in current ICU.
+const dayOf = (ms) => { const d = new Date(ms); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
+export const PRODUCT_DESC_MAX = 155
+
+// Product <title> and meta description, from our own data only (SEO rec 4):
+// the headline price and the seller it comes from, the stock state, the date
+// it was last checked and how many distinct sellers have it in stock. A
+// withheld (flagged) price is never quoted: "price under review" carries no
+// amount. `state` is renderMaster's headline state, so the snippet always
+// agrees with the page. The title names the seller count only from 2 up and
+// never a price, because Google keeps showing a title after the price moves.
+export function productSnippet(m, offers, specs, { headlineOffer, liveMin, priceUnderReview, seenMin }) {
+  const name = displayName(m)
+  let tags = []
+  try { tags = JSON.parse(m.role_tags || '[]') } catch {}
+  const role = ROLE_PRIMARY.find((r) => Array.isArray(tags) && tags.includes(r))
+  const span = Math.round(Number(specs?.spanMM))
+  // No '1500mm' twice when the name already carries it ('Sky Surfer V4 1500mm').
+  const spanTxt = Number.isFinite(span) && span > 0 && !new RegExp(`(^|\\D)${span}\\s?mm`, 'i').test(name) ? `${span}mm` : ''
+  const kind = [spanTxt, m.power === 'gas' ? 'nitro/gas' : 'electric', ROLE_NOUN[role] || 'RC plane'].filter(Boolean).join(' ')
+  const sellers = (list) => new Set(list.map((o) => o.source_name).filter(Boolean)).size
+  const live = offers.filter((o) => !o.dead && o.in_stock)
+  const liveSellers = sellers(live)
+  const checkedSellers = sellers(offers.filter((o) => !o.dead))
+  const when = (o) => o?.last_checked ?? o?.last_seen
+  const on = (ms) => (ms ? ` on ${dayOf(ms)}` : '')
+  const nSellers = (n) => `${n} Indian seller${n === 1 ? '' : 's'}`
+  // full names the seller; bare drops it; extra is the seller count.
+  let full, bare, extra = ''
+  if (liveMin) {
+    // Pre-owned only when no new unit is on offer (comparableOffers prefers new).
+    const price = `${inr(liveMin)}${conditionOf(headlineOffer.title) === 'used' ? ' (pre-owned)' : ''}`
+    full = `From ${price} at ${headlineOffer.source_name}, in stock when last checked${on(when(headlineOffer))}.`
+    bare = `From ${price}, in stock when last checked${on(when(headlineOffer))}.`
+    if (liveSellers > 1) extra = ` In stock at ${nSellers(liveSellers)}.`
+  } else if (priceUnderReview) {
+    full = bare = `In stock at ${nSellers(liveSellers)} when last checked${on(Math.max(0, ...live.map((o) => when(o) || 0)))}; price under review.`
+  } else if (checkedSellers) {
+    full = bare = `Out of stock at ${checkedSellers === 1 ? 'the 1 Indian seller' : `all ${nSellers(checkedSellers)}`} we check${seenMin ? `; last seen at ${inr(seenMin)}${on(when(headlineOffer))}` : ''}.`
+  } else {
+    full = bare = 'No Indian seller we check lists it right now.'
+  }
+  // Richest version that fits; a very long name is cut at a word as a last resort.
+  const fits = [`${name}, ${kind}. ${full}${extra}`, `${name}, ${kind}. ${full}`, `${name}. ${full}${extra}`, `${name}. ${full}`, `${name}. ${bare}`]
+    .find((d) => d.length <= PRODUCT_DESC_MAX)
+  const cut = () => `${name.slice(0, PRODUCT_DESC_MAX - bare.length - 2).replace(/\s+\S*$/, '')}… ${bare}`
+  return {
+    title: `${name} price in India${liveMin && liveSellers >= 2 ? `: ${liveSellers} sellers compared` : ''} | narenana`,
+    desc: fits ?? cut(),
+  }
+}
+
+// landings: productLandings() from grid-next.mjs, the model's role and power
+// landing links (only valid, indexable landings carry an href). Omitted in
+// unit renders: the breadcrumb then stops at the category.
+export function renderMaster(cat, m, offers, similar = [], videos = [], manufacturer = null, landings = null) {
   const overview = productOverview(m, offers)
+  const name = displayName(m)
   // Only well-formed YouTube ids reach markup/URLs (defense against any junk
   // that might land in master_video).
   const vids = (videos || []).filter((v) => /^[A-Za-z0-9_-]{6,15}$/.test(v.video_id || ''))
@@ -363,31 +425,38 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   // no offers (an invalid snippet), and never an out-of-stock offer for a model
   // that is actually in stock with its price under review.
   const offerSchema = priceUnderReview ? null : comparableOfferSchema(offers)
+  // No Brand at all rather than an empty or 'Unbranded' one.
+  const brand = realBrand(m)
   const productLd = offerSchema && {
     '@type': 'Product',
-    name: `${m.brand} ${m.name}`, brand: { '@type': 'Brand', name: m.brand }, description: overview,
+    name, brand: brand ? { '@type': 'Brand', name: brand } : undefined, description: overview,
     additionalProperty: manufacturer?.properties.map(p=>({'@type':'PropertyValue',name:p.name,value:p.value,unitText:p.unit || undefined})),
     url: `${SITE}${cat.path_prefix}/${m.slug}/`,
     image: hasImg ? `${SITE}/img/master/${m.id}` : undefined,
     offers: offerSchema,
   }
+  // Breadcrumb (SEO rec 3): narenana › category › role landing › model. The
+  // role level appears only when the model's role has a valid landing.
+  const role = landings?.primary || null
+  const crumbs = [
+    { name: 'narenana', label: 'narenana', href: '/' },
+    { name: `${cat.name} in India`, label: cat.name, href: `${cat.path_prefix}/` },
+    ...(role ? [{ name: `${role.label} RC planes`, label: `${role.label} RC planes`, href: role.href }] : []),
+    { name, label: name },
+  ]
   const jsonld = {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'BreadcrumbList',
-        itemListElement: [
-          { '@type': 'ListItem', position: 1, name: 'narenana', item: `${SITE}/` },
-          { '@type': 'ListItem', position: 2, name: `${cat.name} in India`, item: `${SITE}${cat.path_prefix}/` },
-          { '@type': 'ListItem', position: 3, name: `${m.brand} ${m.name}` },
-        ],
+        itemListElement: crumbs.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, ...(c.href ? { item: SITE + c.href } : {}) })),
       },
       ...(productLd ? [productLd] : []),
       // VideoObject per embedded review → video rich-result eligibility.
       ...vids.filter(v => v.published_at && Number.isFinite(new Date(v.published_at).getTime())).map((v) => ({
         '@type': 'VideoObject',
-        name: v.title || `${m.brand} ${m.name} video`,
-        description: `${v.title || `${m.brand} ${m.name} video`} — ${v.channel || 'YouTube'} video featured on the ${m.brand} ${m.name} comparison page.`,
+        name: v.title || `${name} video`,
+        description: `${v.title || `${name} video`} — ${v.channel || 'YouTube'} video featured on the ${name} comparison page.`,
         thumbnailUrl: `https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg`,
         uploadDate: new Date(v.published_at).toISOString(),
         embedUrl: `https://www.youtube-nocookie.com/embed/${v.video_id}`,
@@ -433,13 +502,21 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
       },{once:true})})</script>
     </section>` : ''
 
+  // Type and Power rows link the role and power landings (valid ones only).
+  const linked = (x) => (x.href ? `<a href="${esc(x.href)}">${esc(x.label)}</a>` : esc(x.label))
+  const landingRows = landings
+    ? `${landings.types.length ? `<div><dt>Type</dt><dd>${landings.types.map(linked).join(', ')}</dd></div>` : ''}${landings.power ? `<div><dt>Power</dt><dd>${linked(landings.power)}</dd></div>` : ''}`
+    : ''
+  // 'More trainer RC planes in India →' ('FPV & flying-wing' keeps its capitals).
+  const moreRole = role ? `<p class="similar-more"><a href="${esc(role.href)}">More ${esc(role.label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()))} RC planes in India →</a></p>` : ''
+
   const body = `
   <main class="wrap">
-    <a class="crumb" href="${cat.path_prefix}/">← all ${esc(cat.name.toLowerCase())}</a>
-    <h1 class="kit-h">${esc(m.brand)} ${esc(m.name)}</h1>
+    <nav class="crumb" aria-label="Breadcrumb">${crumbs.map((c) => (c.href ? `<a href="${esc(c.href)}">${esc(c.label)}</a>` : `<span aria-current="page">${esc(c.label)}</span>`)).join(' <i>›</i> ')}</nav>
+    <h1 class="kit-h">${esc(name)}</h1>
     <p class="lede">${esc(overview)}</p>
     <div class="kit-key">
-      ${m.hero_image || offers.some((o) => o.image_url) ? `<div class="kit-img"><img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" /></div>` : ''}
+      ${m.hero_image || offers.some((o) => o.image_url) ? `<div class="kit-img"><img src="/img/master/${m.id}" alt="${esc(name)}" width="800" height="600" /></div>` : ''}
       ${liveMin
         ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
         : priceUnderReview
@@ -449,7 +526,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
             : ''}
       ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(headlineOffer.config || 'Configuration not specified')} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
       <dl class="spec">
-        ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}
+        ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}${landingRows}
       </dl>
     </div>
     <h2 class="sec">Where to buy${configs.length > 1 ? ' <span class="count">by configuration</span>' : ''}</h2>
@@ -459,11 +536,12 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
     ${manufacturer?.properties.length ? `<section class="manufacturer-reference"><h2 class="sec">Manufacturer reference</h2><p>Specifications from the accepted manufacturer listing. Seller packages can differ.</p><dl class="spec">${manufacturer.properties.map(p=>`<div><dt>${esc(p.name)}</dt><dd>${esc(String(p.value))}${p.unit?' '+esc(p.unit):''}</dd></div>`).join('')}</dl><p class="source"><a href="${esc(manufacturer.url)}" target="_blank" rel="noopener">View the manufacturer's listing ↗</a>${manufacturer.checked?' · Retrieved '+dateOf(manufacturer.checked):''}</p></section>` : ''}
     ${videoSection}
-    ${similar.length ? `<section class="similar" style="margin-top:44px"><h2 class="sec">Similar models</h2><ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul></section>` : ''}
+    ${similar.length ? `<section class="similar" style="margin-top:44px"><h2 class="sec">Similar models</h2><ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul>${moreRole}</section>` : moreRole}
   </main>`
+  const { title, desc } = productSnippet(m, offers, specs, { headlineOffer, liveMin, priceUnderReview, seenMin })
   return page({
-    title: `${m.brand} ${m.name} — price in India | narenana`,
-    desc: m.blurb || `${m.brand} ${m.name}: prices compared across ${offers.length} Indian seller listing${offers.length === 1 ? '' : 's'}.`,
+    title,
+    desc,
     path: `${cat.path_prefix}/${m.slug}/`,
     body, jsonld,
     image: hasImg ? `${SITE}/img/master/${m.id}` : undefined,

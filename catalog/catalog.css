@@ -134,6 +134,13 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
   margin-bottom: 18px;
 }
 .crumb:hover { color: var(--orange-deep); }
+/* Product page breadcrumb: narenana › category › role landing › model. */
+nav.crumb { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; }
+nav.crumb:hover { color: var(--muted); }
+nav.crumb a { color: var(--muted); text-decoration: none; }
+nav.crumb a:hover { color: var(--orange-deep); text-decoration: underline; }
+nav.crumb i { font-style: normal; opacity: 0.5; }
+nav.crumb [aria-current] { color: var(--ink); }
 
 /* --- section headings --------------------------------------------------- */
 .sec {
@@ -369,6 +376,9 @@ a.filt-b { text-decoration: none; }
   color: var(--muted);
 }
 .spec dd { margin: 3px 0 0; font-weight: 700; font-size: 0.98rem; }
+.spec dd a, .similar-more a { color: var(--orange-deep); text-decoration: none; }
+.spec dd a:hover, .similar-more a:hover { text-decoration: underline; }
+.similar-more { margin: 16px 0 0; font-weight: 700; }
 
 .cta {
   display: inline-block;

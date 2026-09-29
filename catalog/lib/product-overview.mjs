@@ -19,11 +19,30 @@ export function manufacturerReference(row) {
   }
   return {url:row.url,properties,checked:row.fetched_at}
 }
+// A model's public name: brand and name, trimmed and joined, with no brand when
+// there isn't a real one ('' or 'Unbranded'). The <title>, H1, image alt text,
+// JSON-LD and cards all use it, so a brandless model reads 'Sky Surfer', never
+// ' Sky Surfer'.
+export const realBrand = (m) => { const b = String(m?.brand ?? '').trim(); return /^unbranded$/i.test(b) ? '' : b }
+export const displayName = (m) => [realBrand(m), String(m?.name ?? '').trim()].filter(Boolean).join(' ')
+
+// Approve-time name lint: a master's name is the model, not the seller's
+// listing title ("Phoenix 2000 V2", not "RC Phoenix 2000 V2: Soar to New
+// Heights…"). Returns why a name looks like a seller title, or ''.
+export function nameLint(name) {
+  const n = String(name ?? '').trim()
+  if (n.length > 45) return 'is over 45 characters'
+  if (n.includes(':')) return "contains ':', where seller slogans start"
+  const letters = n.replace(/[^A-Za-z]/g, '')
+  if (letters.length >= 8 && /\s/.test(n) && letters === letters.toUpperCase()) return 'is all capitals'
+  return ''
+}
+
 export function productOverview(model, offers) {
   if (model.blurb?.trim()) return model.blurb.trim()
   let specs={};try{specs=JSON.parse(model.specs||'{}')}catch{}
   const span=Number(specs.spanMM)
-  const name=[model.brand,model.name].filter(Boolean).join(' ')
+  const name=displayName(model)
   const configs=[...new Set(offers.filter(o=>!o.dead).map(o=>o.config).filter(Boolean))]
   const sellers=new Set(offers.filter(o=>!o.dead).map(o=>o.source_name).filter(Boolean)).size
   const detail=Number.isFinite(span)&&span>0?` The catalog lists a ${span.toLocaleString('en-IN')} mm wingspan.`:''

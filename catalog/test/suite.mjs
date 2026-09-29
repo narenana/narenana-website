@@ -20,6 +20,7 @@ import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
 import { enqueueManufacturerHarvests, MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
 import { extractManufacturerFacts, mergeProfile, normalizeProfilePatch, PROFILE_FIELDS, validateProfileValues } from '../lib/mfr-profile.mjs'
 import { fetchWithAllowedRedirects, imageCacheHeaders } from '../lib/util.mjs'
+import { nameLint } from '../lib/product-overview.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -873,8 +874,59 @@ test('landings: sitemap set, electric-X redirects, thin pages noindex, grids lin
     const html = await (await get(p)).text()
     const nav = html.match(/<nav class="fx-browse"[\s\S]*?<\/nav>/)?.[0] || ''
     const tabs = html.match(/<div class="fx-seg" id="fx-powmain"[\s\S]*?<\/div>/)?.[0] || ''
-    for (const [, s] of (nav + tabs).matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(listed.has(s), `${p} links /wings/${s}/, which is not a listed landing`)
+    // Editorial links too (landing_page bodies, rec 3): never a thin or folded page.
+    const content = html.match(/<section class="fx-content">[\s\S]*?<\/section>/)?.[0] || ''
+    for (const [, s] of (nav + tabs + content).matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(listed.has(s), `${p} links /wings/${s}/, which is not a listed landing`)
   }
+})
+
+// Live data, SEO recs 3 and 4, across every product page in the sitemap: no
+// title or H1 with a leading or trailing space, no ₹ in the title, no empty or
+// 'Unbranded' Brand, a meta description of at most 160 characters, and every
+// landing the page links (breadcrumb, Type, Power, 'More …') is a listed one.
+// A page with a linked Type has the 4-level breadcrumb through that role.
+test('product pages: clean names, own-data snippets, links to listed landings only', async () => {
+  const xml = await (await get('/sitemap.xml')).text()
+  const locs = [...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1])
+  const listed = new Set(locs.filter((s) => resolveLanding(s)))
+  const products = locs.filter((s) => s !== 'browse' && !resolveLanding(s))
+  assert.ok(products.length > 20, `the sitemap should list many products (got ${products.length})`)
+  const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+  const queue = [...products]
+  const problems = []
+  let fourLevel = 0
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    for (let slug; (slug = queue.shift());) {
+      const res = await get(`/wings/${slug}/`)
+      const html = await res.text()
+      const bad = (msg) => problems.push(`${slug}: ${msg}`)
+      if (res.status !== 200) { bad(`status ${res.status}`); continue }
+      const title = unesc(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? '')
+      const h1 = unesc(html.match(/<h1 class="kit-h">([^<]*)<\/h1>/)?.[1] ?? '')
+      const desc = unesc(html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? '')
+      if (!title || title !== title.trim() || /\s{2}/.test(title)) bad(`title ${JSON.stringify(title)}`)
+      if (!h1 || h1 !== h1.trim() || /\s{2}/.test(h1)) bad(`H1 ${JSON.stringify(h1)}`)
+      if (title.includes('₹')) bad(`₹ in the title ${JSON.stringify(title)}`)
+      if (!desc || desc !== desc.trim() || desc.length > 160) bad(`description (${desc.length}) ${JSON.stringify(desc)}`)
+      const graph = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])['@graph'] || []))
+      const product = graph.find((n) => n['@type'] === 'Product')
+      if (product && ('brand' in product) && (!product.brand?.name?.trim() || /^unbranded$/i.test(product.brand.name))) bad(`Brand ${JSON.stringify(product.brand)}`)
+      if (product && product.name !== h1) bad(`Product.name ${JSON.stringify(product.name)} differs from the H1`)
+      const crumbs = graph.find((n) => n['@type'] === 'BreadcrumbList')?.itemListElement || []
+      if (crumbs.at(-1)?.name !== h1) bad('the last breadcrumb is not the model name')
+      const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'))
+      for (const [, s] of main.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) if (resolveLanding(s) && !listed.has(s)) bad(`links /wings/${s}/, which is not a listed landing`)
+      // The first linked type is the breadcrumb role (types are in priority order).
+      const typeLink = main.match(/<dt>Type<\/dt><dd>(.*?)<\/dd>/)?.[1].match(/href="\/wings\/([a-z0-9-]+)\/"/)?.[1]
+      if (typeLink) {
+        fourLevel++
+        if (crumbs.length !== 4 || crumbs[2].item !== `https://www.narenana.com/wings/${typeLink}/`) bad(`breadcrumb does not go through /wings/${typeLink}/`)
+        if (!main.includes(`<nav class="crumb" aria-label="Breadcrumb">`) || !main.includes(`<a href="/wings/${typeLink}/">`)) bad('no visible breadcrumb link to the role landing')
+      } else if (crumbs.length !== 3) bad(`${crumbs.length}-level breadcrumb without a role landing`)
+    }
+  }))
+  assert.deepEqual(problems, [])
+  assert.ok(fourLevel > products.length * 0.9, `most product pages link a role landing (${fourLevel} of ${products.length})`)
 })
 
 // Live data: every in-stock flagged listing (admin "flagged" queue) must show
@@ -1245,6 +1297,17 @@ test('decide guards: unknown sku 404, unknown action 400, bad approve 400', asyn
   assert.equal((await api('decide', { skuId: any.id, action: 'frobnicate' })).status, 400)
   const bad = await api('decide', { skuId: any.id, action: 'approve', master: { brand: '', name: '', slug: 'BAD SLUG' } })
   assert.equal(bad.status, 400)
+  // A seller-title name is refused before anything is written (SEO rec 4).
+  const slogan = await api('decide', { skuId: any.id, action: 'approve', master: { brand: 'Volantex', name: 'RC Phoenix 2000 V2: Soar to New Heights', slug: 'ztest-name-lint' } })
+  assert.equal(slogan.status, 400)
+  assert.match(slogan.body.error, /plain model name/)
+})
+
+test('approve-time name lint: seller titles are refused, model names pass', () => {
+  for (const n of ['RC Trainstar Ascent 1400mm 747-8 PNP: Unleash Superior Perfo', 'F959S SKY-KING 2.4G 3CH 6-AXIS RTF RC AIRPLANE BLUE', 'PEACE MAKER CONTROL LINE KIT', 'Ranger 2000 V757-8 2000mm Wingspan EPO FPV Aircraft RC Airpl'])
+    assert.ok(nameLint(n), `${n} is refused`)
+  for (const n of ['Phoenix 2000 V2', 'SU-27 Depron Jet', 'F-16 Falcon (2CH)', 'PT-19', 'TBS Chupito', 'X2', 'Laser Z2300 33in (RT scheme)', 'Suite Master 123'])
+    assert.equal(nameLint(n), '', `${n} passes`)
 })
 
 test('sources add: invalid URL 400; broken root rejected at add-time', async () => {

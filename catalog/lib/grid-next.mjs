@@ -10,7 +10,8 @@
 //     no-JS still gets a consistent, filtered in-stock grid for the chosen power)
 import { esc, inr } from './util.mjs'
 import { all } from './db.mjs'
-import { page } from './public.mjs'
+import { page, ROLE_PRIMARY } from './public.mjs'
+import { displayName } from './product-overview.mjs'
 
 const ROLE_VOCAB = ['Trainer', 'Sport / Park Flyer', 'Aerobatic / 3D', 'Warbird', 'Jet / EDF', 'Glider / Sailplane', 'FPV / Flying Wing', 'Scale Civilian', 'Airliner']
 const SIZE_BUCKETS = [['small', 'Small · under 1 m'], ['medium', 'Medium · 1–1.5 m'], ['large', 'Large · over 1.5 m']]
@@ -26,9 +27,9 @@ const jsonSafe = (o) => JSON.stringify(o).replace(/</g, '\\u003c')
 const SITE = 'https://www.narenana.com'
 
 // ---- SEO landing pages: flat slugs → {power, roles} + page metadata ----
-const ROLE_SLUG = { warbirds: 'Warbird', jets: 'Jet / EDF', fpv: 'FPV / Flying Wing', trainers: 'Trainer', gliders: 'Glider / Sailplane', 'scale-planes': 'Scale Civilian', aerobatic: 'Aerobatic / 3D', 'sport-planes': 'Sport / Park Flyer', airliners: 'Airliner' }
-const SLUG_OF_ROLE = Object.fromEntries(Object.entries(ROLE_SLUG).map(([s, r]) => [r, s]))
-const ROLE_H1 = { Warbird: 'Warbird', 'Jet / EDF': 'Jet & EDF', 'FPV / Flying Wing': 'FPV & flying-wing', Trainer: 'Trainer', 'Glider / Sailplane': 'Glider & sailplane', 'Scale Civilian': 'Scale civilian', 'Aerobatic / 3D': 'Aerobatic & 3D', 'Sport / Park Flyer': 'Sport & park flyer', Airliner: 'Airliner' }
+export const ROLE_SLUG = { warbirds: 'Warbird', jets: 'Jet / EDF', fpv: 'FPV / Flying Wing', trainers: 'Trainer', gliders: 'Glider / Sailplane', 'scale-planes': 'Scale Civilian', aerobatic: 'Aerobatic / 3D', 'sport-planes': 'Sport / Park Flyer', airliners: 'Airliner' }
+export const SLUG_OF_ROLE = Object.fromEntries(Object.entries(ROLE_SLUG).map(([s, r]) => [r, s]))
+export const ROLE_H1 = { Warbird: 'Warbird', 'Jet / EDF': 'Jet & EDF', 'FPV / Flying Wing': 'FPV & flying-wing', Trainer: 'Trainer', 'Glider / Sailplane': 'Glider & sailplane', 'Scale Civilian': 'Scale civilian', 'Aerobatic / 3D': 'Aerobatic & 3D', 'Sport / Park Flyer': 'Sport & park flyer', Airliner: 'Airliner' }
 
 // ---- catalog search --------------------------------------------------------
 // A search token matches a model when it appears in the brand/name/slug text
@@ -127,6 +128,28 @@ export function landingRedirect(slug, valid) {
   return ROLE_SLUG[rslug] && !valid.has(`nitro-${rslug}`) ? rslug : null
 }
 
+// A product page's links into the landings (SEO rec 3). It reads the model's
+// STORED role tags only (the reviewed taxonomy is never re-inferred) and orders
+// them by the fixed ROLE_PRIMARY priority, since stored order is not a
+// priority order. Only valid (indexable) landings get an href:
+//   types   every tag, in priority order, linked to its role landing
+//   primary the first type whose landing is valid: the breadcrumb level
+//   power   electric-X / nitro-X for the primary role when valid, else
+//           /nitro/ for a nitro model; electric otherwise stays plain text
+// valid: a Set of validLandings() slugs.
+export function productLandings(cat, m, valid) {
+  let tags = []
+  try { tags = JSON.parse(m.role_tags || '[]') } catch {}
+  if (!Array.isArray(tags)) tags = []
+  const href = (slug) => (slug && valid?.has(slug) ? `${cat.path_prefix}/${slug}/` : null)
+  const types = ROLE_PRIMARY.filter((r) => tags.includes(r)).map((role) => ({ role, label: ROLE_H1[role], href: href(SLUG_OF_ROLE[role]) }))
+  const primary = types.find((t) => t.href) || null
+  const gas = (m.power || 'electric') === 'gas'
+  const roleSlug = primary ? SLUG_OF_ROLE[primary.role] : null
+  const power = { label: gas ? 'Nitro / gas' : 'Electric', href: href(roleSlug && `${gas ? 'nitro' : 'electric'}-${roleSlug}`) || (gas ? href('nitro') : null) }
+  return { types, primary, power }
+}
+
 // { electric, gas } in-stock model counts for the power tabs, from
 // gridDataNext rows (the same numbers as the worker's gridCounts).
 export function powerCounts(rows) {
@@ -205,7 +228,7 @@ export function renderBrowse(cat, masters, landings) {
     .map((role) => {
       const items = groups
         .get(role)
-        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc((m.brand ? m.brand + ' ' : '') + m.name)}</a></li>`)
+        .map((m) => `<li><a href="${pfx}/${esc(m.slug)}/">${esc(displayName(m))}</a></li>`)
         .join('')
       return `<section class="bz-sec"><h2 id="${esc(SLUG_OF_ROLE[role] || 'other')}">${esc(ROLE_H1[role] || 'Other')}<span class="bz-n">${groups.get(role).length}</span></h2><ul class="bz-list">${items}</ul></section>`
     })
@@ -273,7 +296,7 @@ function cardNext(it, pref, hidden, priority = false) {
   const preOwnedOnly = it.cp && !it.cn // only obtainable pre-owned → surface the tag
   return `<li class="prod" data-id="${m.id}"${hidden ? ' style="display:none"' : ''}>
     <a class="prod-link" href="${pref}/${esc(m.slug)}/">
-      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(m.brand)} ${esc(m.name)}" width="800" height="600" loading="${priority ? 'eager' : 'lazy'}" fetchpriority="${priority ? 'high' : 'auto'}" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
+      <div class="prod-img">${hero ? `<img src="/img/master/${m.id}" alt="${esc(displayName(m))}" width="800" height="600" loading="${priority ? 'eager' : 'lazy'}" fetchpriority="${priority ? 'high' : 'auto'}" />` : '<div class="prod-noimg">No image</div>'}${preOwnedOnly ? '<span class="prod-tag" style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:700;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:5px;padding:2px 7px">PRE-OWNED</span>' : ''}</div>
       <div class="prod-body">
         <p class="prod-brand">${esc(m.brand)}</p>
         <h2 class="prod-name">${esc(m.name)}</h2>
@@ -397,7 +420,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     : { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'narenana', item: `${SITE}/` }, { '@type': 'ListItem', position: 2, name: `${cat.name} in India` }] }
   const listLd = {
     '@type': 'ItemList', numberOfItems: resultN,
-    itemListElement: ordered.filter(visible).slice(0, 24).map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: `${it.m.brand ?? ''} ${it.m.name}`.trim(), url: `${SITE}${pref}/${it.m.slug}/` })),
+    itemListElement: ordered.filter(visible).slice(0, 24).map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: displayName(it.m), url: `${SITE}${pref}/${it.m.slug}/` })),
   }
   const gridLd = { '@context': 'https://schema.org', '@graph': [crumbLd, listLd] }
   // Crawlable internal links — ONLY to indexable landings, the same valid set
@@ -546,7 +569,7 @@ const FX_JS = `(function(){
     var li=textEl('li','prod','');li.setAttribute('data-id',d.i);
     var link=textEl('a','prod-link','');link.href=FX_PREF+'/'+encodeURIComponent(d.u)+'/';
     var picture=textEl('div','prod-img','');
-    if(d.h){var img=document.createElement('img');img.src='/img/master/'+d.i;img.alt=(d.b||'')+' '+d.n;img.width=800;img.height=600;img.loading='lazy';picture.appendChild(img);}else{picture.appendChild(textEl('div','prod-noimg','No image'));}
+    if(d.h){var img=document.createElement('img');img.src='/img/master/'+d.i;img.alt=(d.b&&!/^unbranded$/i.test(d.b)?d.b+' ':'')+d.n;img.width=800;img.height=600;img.loading='lazy';picture.appendChild(img);}else{picture.appendChild(textEl('div','prod-noimg','No image'));}
     if(d.cp&&!d.cn){var badge=textEl('span','prod-tag','PRE-OWNED');picture.appendChild(badge);}
     var body=textEl('div','prod-body','');body.appendChild(textEl('p','prod-brand',d.b));body.appendChild(textEl('h3','prod-name',d.n));body.appendChild(textEl('p','prod-spec',d.sl));
     var price=textEl('div','prod-price','');price.appendChild(textEl('div',d.p?'price':'price is-muted',d.p?'from ₹'+Number(d.p).toLocaleString('en-IN'):'Price under review'));

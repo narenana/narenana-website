@@ -1,4 +1,4 @@
-import { manufacturerReference } from './product-overview.mjs'
+import { manufacturerReference, nameLint } from './product-overview.mjs'
 // Catalog worker: public pages from D1, admin panel + API behind HTTP Basic
 // auth, image proxy, and the */15 job-slice dispatcher.
 
@@ -6,7 +6,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
-import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse } from './grid-next.mjs'
+import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse, productLandings } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import {
   MFR_WEEKLY_CRON,
@@ -81,6 +81,34 @@ export function publicCacheKey(url, env, { path = url.pathname, params = PAGE_PA
 }
 // HEAD shares the GET entry; it just never carries the body.
 export const forMethod = (request, res) => (request.method === 'HEAD' ? new Response(null, res) : res)
+
+// The valid (indexable) landing set that product pages link to (SEO rec 3).
+// It needs a catalog-wide aggregation, so it is worked out once per edge-cache
+// cycle (15 min, the pages' s-maxage) per isolate, not on every product render.
+// Keyed by cacheRelease, so a deploy starts fresh; the hub, landing, browse and
+// sitemap routes compute the same set anyway and refresh it for free.
+const LANDING_SET_TTL = 900e3
+const landingMemo = new Map() // `${cacheRelease}|${category id}` → { at, set }
+function rememberLandings(env, cat, slugs) {
+  if (landingMemo.size > 16) landingMemo.clear()
+  const set = slugs instanceof Set ? slugs : new Set(slugs)
+  landingMemo.set(`${cacheRelease(env)}|${cat.id}`, { at: now(), set })
+  return set
+}
+async function landingSet(env, cat) {
+  const hit = landingMemo.get(`${cacheRelease(env)}|${cat.id}`)
+  if (hit && now() - hit.at < LANDING_SET_TTL) return hit.set
+  const rows = await all(
+    env,
+    `SELECT COALESCE(m.power,'electric') AS power, m.role_tags
+     FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+     WHERE m.category_id=? AND m.status='ready' GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1`,
+    cat.id,
+  )
+  return rememberLandings(env, cat, validLandings(rows.map((r) => ({ ...r, any_stock: 1 }))))
+}
 
 // Manufacturer-sourced facts (harvested specs, manufacturer link, retrieval
 // date) on public product pages and in their JSON-LD. OFF by owner decision
@@ -205,7 +233,7 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       const q = (url.searchParams.get('q') || '').trim().slice(0, 60)
       const allRows = await gridDataNext(env, cat, 'all')
       const rows = q ? allRows : allRows.filter((r) => (r.power || 'electric') === p)
-      const valid = new Set(validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
+      const valid = rememberLandings(env, cat, validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
       return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts: powerCounts(allRows), valid }))
     }
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
@@ -221,7 +249,7 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
   // product page is orphaned. Reserved slug, checked before the master lookup.
   if (slug === 'browse') {
     const rows = await browseData(env, cat)
-    return html(renderBrowse(cat, rows, validLandings(rows)))
+    return html(renderBrowse(cat, rows, [...rememberLandings(env, cat, validLandings(rows))]))
   }
   // SEO landing pages — flat slugs (warbirds, electric-warbirds, nitro, …).
   // Checked before the master lookup; reserved slugs can't collide with product slugs.
@@ -234,7 +262,7 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       // counts, scoped to this landing's role.
       const allRows = await gridDataNext(env, cat, 'all')
       const rows = L.power === 'all' ? allRows : allRows.filter((r) => (r.power || 'electric') === L.power)
-      const valid = new Set(validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
+      const valid = rememberLandings(env, cat, validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
       const inRole = (r) => { if (!L.roles.length) return true; try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }
       // No match at all (e.g. nitro-gliders) stays a 404: nothing links there.
       if (rows.some(inRole)) {
@@ -276,7 +304,11 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
             LEFT JOIN mfr_profile pr ON pr.master_model_id=x.master_model_id AND pr.source_mfr_product_id=x.mfr_product_id
             WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
         : null
-      return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
+      // Breadcrumb role + Type/Power rows link only valid landings; the set is
+      // memoised per cache cycle (landingSet), not queried per product. If it
+      // cannot be worked out, the page still renders, with no landing links.
+      const landings = productLandings(cat, m, await landingSet(env, cat).catch(() => null))
+      return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference), landings))
     }
   }
   return notFound(cat)
@@ -415,7 +447,7 @@ async function sitemapResponse(env, cats) {
        WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
       cat.id,
     )
-    for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
+    for (const s of rememberLandings(env, cat, validLandings(masters))) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
     // Retired models are excluded by the query. Out-of-stock product pages stay
     // reachable (honest OutOfStock schema) but are not listed here.
     // In-stock only (owner decision) — don't feed Google product pages we can't
@@ -794,6 +826,9 @@ async function api(request, url, env, ep, actor) {
     if (body.action === 'approve') {
       const m = body.master ?? {}
       if (!m.brand || !m.name || !m.slug || !/^[a-z0-9-]{3,60}$/.test(m.slug)) return json({ error: 'brand, name and a valid slug are required' }, 400)
+      // The name becomes the public <title>, H1 and card name (SEO rec 4).
+      const lint = nameLint(m.name)
+      if (lint) return json({ error: `The name ${lint}, so it looks like the seller's listing title. Enter the plain model name (for example "Phoenix 2000 V2"). Kit or PNP goes in Config; colour and condition stay on the listing.` }, 400)
       // Reserved slugs resolve BEFORE the master lookup (landing pages, browse
       // hub, power slugs) — a master with one of these would be unreachable.
       if (m.slug === 'browse' || resolveLanding(m.slug)) return json({ error: `"${m.slug}" is a reserved page name (landing/hub route) — pick another slug` }, 400)
