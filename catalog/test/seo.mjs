@@ -517,6 +517,14 @@ test('product names and snippets: no empty brand, our own price, stock and date,
   assert.equal(h.title, 'FMS Ranger 1220 price in India: 2 sellers compared | narenana')
   assert.equal(h.desc, 'FMS Ranger 1220, 1220mm electric trainer. From ₹28,999 at robosynckits.in, in stock when last checked on 28 Sep 2026. In stock at 2 Indian sellers.')
   assert.ok(!h.desc.includes('21,733') && !h.title.includes('₹'))
+  // In stock at 2 sellers, but one of them only at a withheld price: the title
+  // counts the sellers whose price the page compares (1), so it names none.
+  h = head(renderMaster(cat, model(), [
+    sold({ price_inr: 30899, source_name: 'robosynckits.in' }),
+    sold({ flagged: 'missing', price_inr: 29975, source_name: 'fpvguru.in' }),
+  ]))
+  assert.equal(h.title, 'FMS Ranger 1220 price in India | narenana')
+  assert.equal(h.desc, 'FMS Ranger 1220, 1220mm electric trainer. From ₹30,899 at robosynckits.in, in stock when last checked on 28 Sep 2026. In stock at 2 Indian sellers.')
 
   // One seller: no count in the title.
   h = head(renderMaster(cat, model(), [sold({ price_inr: 28999, source_name: 'robosynckits.in' })]))

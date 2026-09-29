@@ -347,6 +347,9 @@ export function productSnippet(m, offers, specs, { headlineOffer, liveMin, price
   const sellers = (list) => new Set(list.map((o) => o.source_name).filter(Boolean)).size
   const live = offers.filter((o) => !o.dead && o.in_stock)
   const liveSellers = sellers(live)
+  // The title's 'N sellers compared' counts only the sellers whose price the
+  // page shows (live, not held for review, priced): the hub's rule too.
+  const pricedSellers = sellers(live.filter((o) => !o.flagged && Number.isFinite(o.price_inr) && o.price_inr > 0))
   const checkedSellers = sellers(offers.filter((o) => !o.dead))
   const when = (o) => o?.last_checked ?? o?.last_seen
   const on = (ms) => (ms ? ` on ${dayOf(ms)}` : '')
@@ -371,7 +374,7 @@ export function productSnippet(m, offers, specs, { headlineOffer, liveMin, price
     .find((d) => d.length <= PRODUCT_DESC_MAX)
   const cut = () => `${name.slice(0, PRODUCT_DESC_MAX - bare.length - 2).replace(/\s+\S*$/, '')}… ${bare}`
   return {
-    title: `${name} price in India${liveMin && liveSellers >= 2 ? `: ${liveSellers} sellers compared` : ''} | narenana`,
+    title: `${name} price in India${liveMin && pricedSellers >= 2 ? `: ${pricedSellers} sellers compared` : ''} | narenana`,
     desc: fits ?? cut(),
   }
 }
