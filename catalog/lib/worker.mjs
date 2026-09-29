@@ -6,7 +6,7 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
-import { gridDataNext, renderGridNext, resolveLanding, validLandings, browseData, renderBrowse } from './grid-next.mjs'
+import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
 import {
   MFR_WEEKLY_CRON,
@@ -49,6 +49,11 @@ async function categories(env) {
 
 const html = (body, status = 200) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate' } })
+// Relative Location, as src/index.js does: behind latest-router this Worker
+// sees the workers.dev host. Revalidated like the pages, because a landing
+// redirect can end (landingRedirect), so browsers must not keep it forever.
+const redirect = (location) =>
+  new Response(null, { status: 301, headers: { location, 'cache-control': 'public, max-age=0, must-revalidate' } })
 
 // IndexNow key — PUBLIC (served at /<key>.txt to prove ownership so Bing /
 // Yandex accept our URL submissions). Not a secret; safe in the repo.
@@ -141,14 +146,27 @@ export async function handleCatalog(request, url, env, ctx) {
     const cache = caches.default
     const cached = async (key, render, status = 200) => {
       const hit = await cache.match(key)
-      if (hit) return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
+      if (hit) {
+        // A stored landing redirect (electric-X → X) keeps its status on the side.
+        if (hit.headers.get('x-cat-status') === '301') {
+          const headers = new Headers(hit.headers)
+          headers.delete('x-cat-status')
+          return new Response(null, { status: 301, headers })
+        }
+        return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
+      }
       const res = await render()
+      // Page URLs may also answer with a landing redirect; it is cached like the
+      // page, so crawlers re-fetching the old URL cost no D1 read. Its key is
+      // the page's own (never the shared 404 entry), and it expires with it.
+      const moved = status === 200 && res?.status === 301 && res.headers.has('location')
       if (
-        res && res.status === status
-        && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
+        res && (moved || (res.status === status
+        && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')))
       ) {
         // Stored as 200 whatever it is served as: the Cache API need not keep error statuses.
-        const store = new Response(res.clone().body, { status: 200, headers: res.headers })
+        const store = new Response(moved ? null : res.clone().body, { status: 200, headers: res.headers })
+        if (moved) store.headers.set('x-cat-status', '301')
         store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
         store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
         ctx.waitUntil(cache.put(key, store))
@@ -181,10 +199,14 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       const p = url.searchParams.get('power') === 'gas' ? 'gas' : 'electric'
       const roles = (url.searchParams.get('role') || '').split(',').filter(Boolean)
       const sizes = (url.searchParams.get('size') || '').split(',').filter(Boolean)
-      // Search spans BOTH power classes — fetch 'all' and let the renderer filter.
+      // Search spans BOTH power classes — the renderer filters the 'all' rows.
+      // One 'all' query also gives the power counts and the valid landing set
+      // (for the Browse-by-type nav and the Nitro tab).
       const q = (url.searchParams.get('q') || '').trim().slice(0, 60)
-      const [rows, counts] = await Promise.all([gridDataNext(env, cat, q ? 'all' : p), gridCounts(env, cat)])
-      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts }))
+      const allRows = await gridDataNext(env, cat, 'all')
+      const rows = q ? allRows : allRows.filter((r) => (r.power || 'electric') === p)
+      const valid = new Set(validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
+      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts: powerCounts(allRows), valid }))
     }
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
     const sort = ['price-desc', 'price-asc', 'span-desc', 'span-asc'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'price-desc'
@@ -207,17 +229,20 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
     const L = resolveLanding(slug)
     if (L) {
       // All in-stock rows once: this landing renders its power's subset, and the
-      // full set tells the Electric/Nitro tabs which sibling landings exist, so
-      // they link to those indexable pages instead of noindex filter URLs.
-      const [allRows, counts] = await Promise.all([gridDataNext(env, cat, 'all'), gridCounts(env, cat)])
+      // full set gives the valid (indexable) landing set, so the Electric/Nitro
+      // tabs and the Browse-by-type nav link only indexable pages, plus the tab
+      // counts, scoped to this landing's role.
+      const allRows = await gridDataNext(env, cat, 'all')
       const rows = L.power === 'all' ? allRows : allRows.filter((r) => (r.power || 'electric') === L.power)
       const valid = new Set(validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
-      const matched = L.roles.length
-        ? rows.filter((r) => { try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }).length
-        : rows.length
-      if (matched >= 1) {
+      const inRole = (r) => { if (!L.roles.length) return true; try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }
+      // No match at all (e.g. nitro-gliders) stays a 404: nothing links there.
+      if (rows.some(inRole)) {
+        // electric-X folds into X while there is no nitro-X to split from.
+        const to = landingRedirect(slug, valid)
+        if (to) return redirect(`${cat.path_prefix}/${to}/`)
         const lp = await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, slug)
-        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '', valid }, counts }))
+        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '' }, valid, counts: powerCounts(allRows.filter(inRole)) }))
       }
     }
   }

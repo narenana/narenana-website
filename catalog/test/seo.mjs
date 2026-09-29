@@ -173,6 +173,82 @@ test('catalog edge cache: page-parameter keys, HEAD, one shared 404, per-deploy 
   }
 })
 
+// SEO rec 2 (2026-09): electric-X 301s to the all-power X while nitro-X is too
+// thin to be its own page. The redirect is edge-cached AS a redirect (never
+// replayed as a 200 page), HEAD shares it, the 404 and noindex pages keep their
+// own behaviour, and it undoes itself once nitro stock arrives.
+test('landing merge: electric-X 301s to X only while nitro-X is thin, cached as a redirect', async () => {
+  const { handleCatalog, catalogScheduled } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const model = (id, power, role) => ({ id, slug: `model-${id}`, brand: 'Test', name: `Model ${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1 })
+  let rows = [model(1, 'electric', 'Jet / EDF'), model(2, 'electric', 'Jet / EDF'), model(3, 'electric', 'Jet / EDF'), model(4, 'gas', 'Jet / EDF'),
+    model(5, 'gas', 'Trainer'), model(6, 'gas', 'Trainer'), model(7, 'electric', 'Airliner')]
+  let gridQueries = 0
+  const env = (id) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind() { return this }, first: async () => null,
+      all: async () => { if (/GROUP BY m\.id/.test(sql)) { gridQueries++; return { results: rows } } return { results: /FROM category/.test(sql) ? [CAT] : [] } } }) },
+  })
+  const go = async (path, { method = 'GET', id = 'merge-1' } = {}) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url, { method }), url, env(id), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/electric-jets/?utm_source=x')
+    assert.equal(r.status, 301)
+    assert.equal(r.headers.get('location'), '/wings/jets/', 'relative Location, no query string carried into a shared entry')
+    const before = gridQueries
+    r = await go('/wings/electric-jets/')
+    assert.equal(r.status, 301, 'the cached entry is replayed as a redirect, not a 200 page')
+    assert.equal(r.headers.get('location'), '/wings/jets/')
+    assert.equal(r.headers.get('x-cat-status'), null, 'the internal status marker never reaches the client')
+    r = await go('/wings/electric-jets/', { method: 'HEAD' })
+    assert.equal(r.status, 301)
+    assert.equal(await r.text(), '', 'HEAD has no body')
+    assert.equal(gridQueries, before, 'repeat GET and HEAD are served from the cache')
+
+    r = await go('/wings/jets/')
+    assert.equal(r.status, 200)
+    const jets = await r.text()
+    assert.ok(!jets.includes('/wings/electric-jets/'), 'the surviving page does not link the folded one')
+    assert.match(jets, /href="\/wings\/nitro\/">Nitro \/ Gas <span>1</, 'Nitro tab: the role\'s count, linking /wings/nitro/')
+    assert.equal((await go('/wings/nitro-gliders/')).status, 404, 'a landing with no models is a 404, not a redirect')
+    r = await go('/wings/airliners/')
+    assert.equal(r.status, 200)
+    assert.match(await r.text(), /name="robots" content="noindex,follow"/, 'a thin landing serves noindex,follow')
+    let xml = await (await go('/sitemap.xml')).text()
+    assert.ok(xml.includes('/wings/jets/</loc>') && !xml.includes('/wings/electric-jets/</loc>') && !xml.includes('/wings/airliners/</loc>'))
+    // IndexNow's first run submits the same landing set as the sitemap.
+    const original = globalThis.fetch
+    let submitted = []
+    globalThis.fetch = async (u, init) => { submitted = JSON.parse(init.body).urlList; return new Response('', { status: 200 }) }
+    try {
+      const waits = []
+      const db = env('merge-1').CATALOG_DB
+      catalogScheduled({ cron: '0 * * * *' }, { CATALOG_DB: { prepare: (sql) => ({ ...db.prepare(sql), run: async () => ({}) }) } }, { waitUntil: (p) => waits.push(p) })
+      await Promise.all(waits)
+    } finally { globalThis.fetch = original }
+    assert.ok(submitted.includes('https://www.narenana.com/wings/jets/'), 'IndexNow submits the surviving landing')
+    assert.ok(!submitted.some((u) => /\/wings\/(electric-jets|airliners)\/$/.test(u)), 'and never the redirected or thin one')
+
+    // Two more nitro jets: nitro-jets qualifies, so electric-jets is its own page
+    // again (live once the 15-minute entry expires; a new deploy's keys here).
+    rows = [...rows, model(8, 'gas', 'Jet / EDF'), model(9, 'gas', 'Jet / EDF')]
+    r = await go('/wings/electric-jets/', { id: 'merge-2' })
+    assert.equal(r.status, 200)
+    assert.ok(!/name="robots" content="noindex/.test(await r.text()), 'electric-jets is indexable again')
+    xml = await (await go('/sitemap.xml', { id: 'merge-2' })).text()
+    assert.ok(xml.includes('/wings/electric-jets/</loc>') && xml.includes('/wings/nitro-jets/</loc>'))
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
 test('sitemap preserves editorial dates in the Worker and static fallback', async () => {
   const { handleCatalog } = await import('../lib/worker.mjs')
   const editedAt = Date.UTC(2026, 8, 20, 12)

@@ -94,18 +94,45 @@ function landingMeta(cat, L, slug) {
   return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare latest checked prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
 }
 
-// landing slugs with >= min in-stock masters (for the sitemap). masters rows
+// A landing is an indexable page only with at least this many in-stock models.
+export const LANDING_MIN = 3
+
+// Indexable landing slugs: the sitemap, IndexNow, the /browse/ hub, the grid's
+// Browse-by-type nav and the power tabs all use this one set. masters rows
 // need: power, role_tags, any_stock.
-export function validLandings(masters, min = 3) {
+// electric-X is listed only when nitro-X also qualifies. Without a nitro half,
+// electric-X shows (almost) the same models as the all-power X page, and the
+// two compete as near-duplicates; X carries the role alone (the landing route
+// 301s electric-X to it, see landingRedirect).
+export function validLandings(masters, min = LANDING_MIN) {
   const parse = (rt) => { try { return JSON.parse(rt || '[]') } catch { return [] } }
   const live = masters.filter((m) => m.any_stock)
+  const n = (pw, role) => live.filter((m) => (!pw || (m.power || 'electric') === pw) && (!role || parse(m.role_tags).includes(role))).length
   const out = []
-  for (const [slug, role] of Object.entries(ROLE_SLUG)) if (live.filter((m) => parse(m.role_tags).includes(role)).length >= min) out.push(slug)
+  for (const [slug, role] of Object.entries(ROLE_SLUG)) if (n(null, role) >= min) out.push(slug)
   for (const [pslug, pw] of [['electric', 'electric'], ['nitro', 'gas']]) {
-    if (live.filter((m) => (m.power || 'electric') === pw).length >= min) out.push(pslug)
-    for (const [rslug, role] of Object.entries(ROLE_SLUG)) if (live.filter((m) => (m.power || 'electric') === pw && parse(m.role_tags).includes(role)).length >= min) out.push(`${pslug}-${rslug}`)
+    if (n(pw) >= min) out.push(pslug)
+    for (const [rslug, role] of Object.entries(ROLE_SLUG))
+      if (n(pw, role) >= min && (pw === 'gas' || n('gas', role) >= min)) out.push(`${pslug}-${rslug}`)
   }
   return out
+}
+
+// electric-X → X while nitro-X does not qualify (validLandings has dropped
+// electric-X). Returns the slug to 301 to, or null. Dynamic: once nitro-X has
+// the stock, electric-X serves again and returns to the sitemap.
+export function landingRedirect(slug, valid) {
+  if (!slug.startsWith('electric-')) return null
+  const rslug = slug.slice('electric-'.length)
+  return ROLE_SLUG[rslug] && !valid.has(`nitro-${rslug}`) ? rslug : null
+}
+
+// { electric, gas } in-stock model counts for the power tabs, from
+// gridDataNext rows (the same numbers as the worker's gridCounts).
+export function powerCounts(rows) {
+  const c = { electric: 0, gas: 0 }
+  for (const r of rows) c[r.power === 'gas' ? 'gas' : 'electric']++
+  return c
 }
 
 // Every IN-STOCK ready master (>=1 live approved offer). Powers the /browse/
@@ -265,7 +292,10 @@ export function renderGridNext(cat, rows, opts = {}) {
   const cond = ['new', 'pre-owned'].includes(opts.cond) ? opts.cond : 'all'
   const selRoles = (opts.roles || []).filter((t) => ROLE_VOCAB.includes(t))
   const selSizes = (opts.sizes || []).filter((k) => SIZE_BUCKETS.some((s) => s[0] === k))
+  // Power-tab counts. The worker scopes them to the role on a role landing.
   const counts = opts.counts || { electric: 0, gas: 0 }
+  // Indexable landing slugs (validLandings). null in unit renders that omit it.
+  const valid = opts.valid || null
   const pref = cat.path_prefix
   // Search mode: rows arrive power='all' and get filtered here; facet chips are
   // built from the filtered items, so they narrow WITHIN the results.
@@ -306,13 +336,24 @@ export function renderGridNext(cat, rows, opts = {}) {
   }
   const ordered = [...items].sort(cmp)
 
+  // Power tabs. A power with no models here gets no tab (a role with no nitro
+  // stock shows no Nitro tab, instead of a link to an empty filter page). An
+  // all-power role landing whose models are all one power IS that power's view.
+  const hasPower = (p) => counts[p] > 0
+  const onPower = power === 'all' && landing?.L.roles.length && hasPower('electric') !== hasPower('gas') ? (hasPower('electric') ? 'electric' : 'gas') : power
   const powerHref = (p) => {
-    // On a landing page, link to the sibling landing (electric-warbirds <->
-    // nitro-warbirds, electric <-> nitro) when it is a valid, indexable page.
-    if (landing?.valid) {
+    if (landing) {
+      if (p === onPower) return Lmeta.path
+      // The sibling landing (electric-warbirds <-> nitro-warbirds, electric <->
+      // nitro) when it is a valid, indexable page.
       const ps = p === 'gas' ? 'nitro' : 'electric'
       const sibling = landing.L.roleSlug ? `${ps}-${landing.L.roleSlug}` : ps
-      if (landing.valid.has(sibling)) return `${pref}/${sibling}/`
+      if (valid?.has(sibling)) return `${pref}/${sibling}/`
+    }
+    // Otherwise the power's own indexable page: Electric → the hub, Nitro → /nitro/.
+    if (sort === DEFAULT_SORT) {
+      if (p === 'electric') return `${pref}/`
+      if (valid ? valid.has('nitro') : counts.gas >= LANDING_MIN) return `${pref}/nitro/`
     }
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
@@ -322,8 +363,8 @@ export function renderGridNext(cat, rows, opts = {}) {
     return `${pref}/${s ? '?' + s : ''}`
   }
   const powerSeg = (id) => `<div class="fx-seg" id="${id}" role="navigation" aria-label="Power category">` +
-    `<a class="fx-seg-b ${power === 'electric' ? 'is-on' : ''}" href="${powerHref('electric')}">Electric <span>${counts.electric}</span></a>` +
-    `<a class="fx-seg-b ${power === 'gas' ? 'is-on' : ''}" href="${powerHref('gas')}">Nitro / Gas <span>${counts.gas}</span></a></div>`
+    [['electric', 'Electric'], ['gas', 'Nitro / Gas']].filter(([p]) => p === onPower || hasPower(p))
+      .map(([p, label]) => `<a class="fx-seg-b ${onPower === p ? 'is-on' : ''}" href="${powerHref(p)}">${label} <span>${counts[p]}</span></a>`).join('') + '</div>'
 
   const roleChips = rolesPresent.map((t) => chip('role', t, t, roleCount(t), selRoles.includes(t), `fx-cb fx-r-${ri(t)}`)).join('')
   const sizeChips = sizesPresent.map(([k, label]) => chip('size', k, label, sizeCount(k), selSizes.includes(k), 'fx-cb fx-size')).join('')
@@ -359,10 +400,11 @@ export function renderGridNext(cat, rows, opts = {}) {
     itemListElement: ordered.filter(visible).slice(0, 24).map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: `${it.m.brand ?? ''} ${it.m.name}`.trim(), url: `${SITE}${pref}/${it.m.slug}/` })),
   }
   const gridLd = { '@context': 'https://schema.org', '@graph': [crumbLd, listLd] }
-  // Crawlable internal links — but ONLY to landings that will actually serve
-  // (a role with no stock in this power 404s; the other power's grid and the
-  // sitemap still link roles that live only there).
-  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.filter((s) => rolesPresent.includes(ROLE_SLUG[s])).map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}${counts.electric > 0 ? `<a href="${pref}/electric/">Electric</a>` : ''}${counts.gas > 0 ? `<a href="${pref}/nitro/">Nitro / gas</a>` : ''}</nav>`
+  // Crawlable internal links — ONLY to indexable landings, the same valid set
+  // as the sitemap (a thin landing such as 2 airliners serves noindex and is
+  // not linked). Unit renders without the set fall back to what this page has.
+  const linkable = (s) => (valid ? valid.has(s) : s === 'electric' ? counts.electric > 0 : s === 'nitro' ? counts.gas > 0 : rolesPresent.includes(ROLE_SLUG[s]))
+  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.filter(linkable).map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}${linkable('electric') ? `<a href="${pref}/electric/">Electric</a>` : ''}${linkable('nitro') ? `<a href="${pref}/nitro/">Nitro / gas</a>` : ''}</nav>`
 
   const body = `
   <div class="shop-head"><div class="shop-head-in">
@@ -406,13 +448,16 @@ export function renderGridNext(cat, rows, opts = {}) {
   // whose content is disjoint (the case where Google ignores the canonical).
   // Any other non-default filter/sort state is noindex — crawlable, not indexed.
   const filtered = !landing && (!!q || selRoles.length > 0 || selSizes.length > 0 || cond !== 'all' || sort !== DEFAULT_SORT)
+  // A landing below the stock threshold still serves (visitors, old links) but
+  // is noindex,follow: it is not in the sitemap or the nav either.
+  const thin = !!(landing && valid && !valid.has(landing.slug))
   return page({
     title: Lmeta ? Lmeta.title : `${cat.name} in India — compare latest checked prices | narenana`,
     desc: Lmeta ? Lmeta.desc : `Compare latest checked prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
     path: Lmeta ? Lmeta.path : power === 'gas' ? `${pref}/nitro/` : `${pref}/`,
     body,
     jsonld: gridLd,
-    noindex: filtered || undefined,
+    noindex: filtered || thin || undefined,
   })
 }
 

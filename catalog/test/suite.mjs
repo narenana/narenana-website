@@ -10,7 +10,7 @@ import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct,
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
-import { renderGridNext, searchRows, resolveLanding } from '../lib/grid-next.mjs'
+import { renderGridNext, searchRows, resolveLanding, validLandings, landingRedirect, powerCounts, LANDING_ROLE_SLUGS } from '../lib/grid-next.mjs'
 import { HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL } from '../lib/home-queries.mjs'
 import { planAssetVersions } from '../../scripts/version-assets.mjs'
 import { ASSET_VERSIONS } from '../../src/asset-versions.mjs'
@@ -714,6 +714,60 @@ test('catalog search: name/brand/type matching + search-mode grid', () => {
   assert.ok(plain.includes('class="fx-qform"') && !plain.includes('class="fx-qclear"'), 'normal grid shows the search box, no clear link')
 })
 
+// SEO rec 2 (2026-09): electric-X is its own page only beside a real nitro-X;
+// otherwise it duplicates the all-power X page. Nav and power tabs link only
+// indexable landings, and a thin landing serves noindex.
+test('landing merge: electric-X only beside nitro-X; nav and power tabs link indexable pages', () => {
+  const m = (id, power, role) => ({ id, slug: `m${id}`, brand: 'B', name: `M${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, hero_any: null, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1 })
+  const rows = [
+    ...[1, 2, 3, 4].map((i) => m(i, 'electric', 'Jet / EDF')), m(5, 'gas', 'Jet / EDF'),
+    ...[6, 7, 8].map((i) => m(i, 'electric', 'Glider / Sailplane')),
+    ...[9, 10, 11].map((i) => m(i, 'electric', 'Trainer')), ...[12, 13, 14].map((i) => m(i, 'gas', 'Trainer')),
+    m(15, 'electric', 'Airliner'),
+  ]
+  const valid = new Set(validLandings(rows))
+  assert.ok(valid.has('jets') && !valid.has('electric-jets') && !valid.has('nitro-jets'), 'no nitro half: jets carries the role alone')
+  assert.ok(valid.has('gliders') && !valid.has('electric-gliders'), 'an all-electric role has no electric- page')
+  assert.ok(valid.has('electric-trainers') && valid.has('nitro-trainers'), 'both halves qualify: both pages stay')
+  assert.ok(!valid.has('airliners'), '1 airliner is below the threshold')
+  assert.equal(landingRedirect('electric-jets', valid), 'jets')
+  assert.equal(landingRedirect('electric-gliders', valid), 'gliders')
+  assert.equal(landingRedirect('electric-trainers', valid), null, 'a real electric/nitro split is not redirected')
+  assert.equal(landingRedirect('nitro-jets', valid), null)
+  assert.equal(landingRedirect('jets', valid), null)
+  assert.deepEqual(powerCounts(rows), { electric: 11, gas: 4 })
+
+  const cat = { name: 'RC planes', path_prefix: '/wings' }
+  const seg = (html) => html.match(/<div class="fx-seg" id="fx-powmain"[\s\S]*?<\/div>/)[0]
+  const nav = (html) => [...html.match(/<nav class="fx-browse"[\s\S]*?<\/nav>/)[0].matchAll(/href="\/wings\/([a-z-]+)\/"/g)].map((x) => x[1])
+  const land = (slug) => {
+    const L = resolveLanding(slug)
+    const counts = powerCounts(rows.filter((r) => JSON.parse(r.role_tags).some((t) => L.roles.includes(t))))
+    return renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: '' }, valid, counts })
+  }
+
+  const hub = renderGridNext(cat, rows.filter((r) => r.power === 'electric'), { power: 'electric', counts: powerCounts(rows), valid })
+  assert.match(seg(hub), /href="\/wings\/nitro\/">Nitro \/ Gas <span>4</, 'hub Nitro tab links /wings/nitro/, not ?power=gas')
+  assert.ok(nav(hub).length && nav(hub).every((s) => valid.has(s)), 'Browse by type links only valid landings')
+  assert.ok(!nav(hub).includes('airliners'), 'a thin landing is not linked, though the hub has an airliner')
+
+  const jets = land('jets')
+  assert.match(jets, /name="robots" content="index,follow/)
+  assert.match(seg(jets), />Electric <span>4</, 'tab counts are the role\'s')
+  assert.match(seg(jets), /href="\/wings\/nitro\/">Nitro \/ Gas <span>1</, 'no nitro-jets page: Nitro links /wings/nitro/')
+  assert.ok(!jets.includes('/wings/electric-jets/') && !jets.includes('power=gas'), 'links neither the folded page nor a filter URL')
+
+  const gliders = land('gliders')
+  assert.ok(!seg(gliders).includes('Nitro'), 'a role with no nitro models has no Nitro tab')
+  assert.match(seg(gliders), /class="fx-seg-b is-on" href="\/wings\/gliders\/">Electric <span>3</, 'all-electric role: Electric is this page')
+
+  const trainers = land('trainers')
+  assert.match(seg(trainers), /href="\/wings\/electric-trainers\/">Electric <span>3</)
+  assert.match(seg(trainers), /href="\/wings\/nitro-trainers\/">Nitro \/ Gas <span>3</)
+
+  assert.ok(land('airliners').includes('name="robots" content="noindex,follow"'), 'a thin landing serves noindex,follow')
+})
+
 // The admin SPA is a huge inline <script> inside a backtick template. A stray
 // escaping bug there (e.g. \' vs \\' inside a single-quoted string) is a syntax
 // error the browser hits at parse time — the whole panel dies, silently, and
@@ -788,6 +842,39 @@ test('in-stock only: sitemap and /browse/ list exactly the grid\'s in-stock mode
   assert.deepEqual(diff(browseSlugs, gridSlugs), [], '/browse/ lists products the grid does not (out of stock?)')
   assert.deepEqual(diff(gridSlugs, browseSlugs), [], '/browse/ is missing in-stock products')
   assert.ok(!/Currently unavailable|out of stock/i.test(browse), '/browse/ must not advertise unavailable models')
+})
+
+// Live data, SEO rec 2: the sitemap lists electric-X only beside nitro-X, every
+// listed landing serves 200 and indexable, electric-X without nitro-X 301s to
+// X (or stays a 404 with no models), thin role landings are noindex, and grids
+// link only listed landings from Browse by type and the power tabs.
+test('landings: sitemap set, electric-X redirects, thin pages noindex, grids link listed landings only', async () => {
+  const xml = await (await get('/sitemap.xml')).text()
+  const listed = new Set([...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1]).filter((s) => resolveLanding(s)))
+  assert.ok(listed.size >= 5, `the sitemap should list landings (got ${listed.size})`)
+  for (const x of LANDING_ROLE_SLUGS) {
+    if (listed.has(`electric-${x}`)) assert.ok(listed.has(`nitro-${x}`), `electric-${x} is listed only beside nitro-${x}`)
+    else if (!listed.has(`nitro-${x}`)) {
+      const r = await get(`/wings/electric-${x}/`)
+      assert.ok([301, 404].includes(r.status), `electric-${x} with no nitro-${x}: 301 or 404, got ${r.status}`)
+      if (r.status === 301) assert.equal(new URL(r.headers.get('location'), BASE).pathname, `/wings/${x}/`)
+    }
+    if (!listed.has(x)) {
+      const r = await get(`/wings/${x}/`)
+      if (r.status === 200) assert.match(await r.text(), /name="robots" content="noindex,follow"/, `thin landing /wings/${x}/ is noindex`)
+    }
+  }
+  for (const s of listed) {
+    const r = await get(`/wings/${s}/`)
+    assert.equal(r.status, 200, `listed landing ${s} serves`)
+    assert.ok(!/name="robots" content="noindex/.test(await r.text()), `listed landing ${s} is indexable`)
+  }
+  for (const p of ['/wings/', '/wings/?power=gas', ...[...listed].map((s) => `/wings/${s}/`)]) {
+    const html = await (await get(p)).text()
+    const nav = html.match(/<nav class="fx-browse"[\s\S]*?<\/nav>/)?.[0] || ''
+    const tabs = html.match(/<div class="fx-seg" id="fx-powmain"[\s\S]*?<\/div>/)?.[0] || ''
+    for (const [, s] of (nav + tabs).matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(listed.has(s), `${p} links /wings/${s}/, which is not a listed landing`)
+  }
 })
 
 // Live data: every in-stock flagged listing (admin "flagged" queue) must show
