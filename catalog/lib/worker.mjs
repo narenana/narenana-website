@@ -7,7 +7,7 @@ import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
 import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse, productLandings } from './grid-next.mjs'
-import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
+import { runSlice, upsertProducts, mergeMasters, dedupSlice, hasSlugAlias } from './jobs.mjs'
 import {
   MFR_WEEKLY_CRON,
   enqueueManufacturerHarvests,
@@ -175,7 +175,7 @@ export async function handleCatalog(request, url, env, ctx) {
     const cached = async (key, render, status = 200) => {
       const hit = await cache.match(key)
       if (hit) {
-        // A stored landing redirect (electric-X → X) keeps its status on the side.
+        // A stored redirect (electric-X → X, an old product slug) keeps its status on the side.
         if (hit.headers.get('x-cat-status') === '301') {
           const headers = new Headers(hit.headers)
           headers.delete('x-cat-status')
@@ -184,7 +184,7 @@ export async function handleCatalog(request, url, env, ctx) {
         return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
       }
       const res = await render()
-      // Page URLs may also answer with a landing redirect; it is cached like the
+      // Page URLs may also answer with a redirect (landing fold, slug alias); cached like the
       // page, so crawlers re-fetching the old URL cost no D1 read. Its key is
       // the page's own (never the shared 404 entry), and it expires with it.
       const moved = status === 200 && res?.status === 301 && res.headers.has('location')
@@ -316,6 +316,19 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       const landings = productLandings(cat, m, await landingSet(env, cat).catch(() => null))
       return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference), landings))
     }
+    // A merged-away or renamed model's old slug 301s to the model that owns it
+    // now (SEO rec 6), cached like the landing folds. Only a public survivor
+    // counts; without the table (migration 0018 not applied yet) or a match,
+    // it is the shared 404 as before.
+    const alias = await one(
+      env,
+      `SELECT m.slug, m.category_id FROM slug_alias a JOIN master_model m ON m.id=a.master_model_id
+       WHERE a.category_id=? AND a.old_slug=? AND m.status IN ('ready','retired')`,
+      cat.id,
+      slug,
+    ).catch(() => null)
+    const home = alias && cats.find((c) => c.id === alias.category_id && c.live)
+    if (home && !(home.id === cat.id && alias.slug === slug)) return redirect(`${home.path_prefix}/${alias.slug}/`)
   }
   return notFound(cat)
 }
@@ -1071,6 +1084,25 @@ async function api(request, url, env, ep, actor) {
       const missing = req.filter((k2) => specs[k2] == null || specs[k2] === '')
       if (missing.length) return json({ error: `cannot publish: missing required spec(s): ${missing.join(', ')}` }, 400)
     }
+    // Slug rename (SEO rec 6): the old address 301s to the new one through
+    // slug_alias, written in the same batch, so a rename never leaves a 404.
+    const newSlug = typeof body.slug === 'string' ? body.slug.trim() : ''
+    let slugStmts = []
+    if (newSlug && newSlug !== m.slug) {
+      if (!/^[a-z0-9-]{3,60}$/.test(newSlug)) return json({ error: 'The page address takes 3 to 60 lower-case letters, digits and hyphens.' }, 400)
+      if (newSlug === 'browse' || resolveLanding(newSlug)) return json({ error: `"${newSlug}" is a reserved page name (landing/hub route) — pick another slug` }, 400)
+      if (await one(env, `SELECT id FROM master_model WHERE category_id=? AND slug=? AND id<>?`, m.category_id, newSlug, m.id)) return json({ error: `Another model already uses "${newSlug}".` }, 409)
+      if (!(await hasSlugAlias(env))) return json({ error: 'Apply migration 0018_slug_alias first, so the old address can redirect to the new one.' }, 409)
+      const t = now()
+      slugStmts = [
+        q(env, `UPDATE master_model SET slug=?, updated_at=? WHERE id=?`, newSlug, t, m.id),
+        q(env, `INSERT INTO slug_alias (category_id, old_slug, master_model_id, created_at) VALUES (?,?,?,?)
+                ON CONFLICT(category_id, old_slug) DO UPDATE SET master_model_id=excluded.master_model_id, created_at=excluded.created_at`,
+          m.category_id, m.slug, m.id, t),
+        // The new address is live now, so it is nobody's alias.
+        q(env, `DELETE FROM slug_alias WHERE category_id=? AND old_slug=?`, m.category_id, newSlug),
+      ]
+    }
     await batch(env, [
       q(env, `UPDATE master_model SET brand=COALESCE(?, brand), name=COALESCE(?, name),
               brand_norm=COALESCE(?, brand_norm), name_norm=COALESCE(?, name_norm),
@@ -1079,7 +1111,8 @@ async function api(request, url, env, ep, actor) {
         body.brand ?? null, body.name ?? null,
         body.brand ? normName(body.brand) : null, body.name ? normName(body.name) : null,
         body.blurb ?? null, body.specs ?? null, body.status ?? null, body.brand ?? null, now(), body.id),
-      audit(env, actor, 'master-update', 'master_model', body.id, body),
+      ...slugStmts,
+      audit(env, actor, 'master-update', 'master_model', body.id, slugStmts.length ? { ...body, fromSlug: m.slug } : body),
     ])
     catCache.at = 0
     return json({ ok: true })

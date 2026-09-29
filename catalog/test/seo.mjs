@@ -650,6 +650,157 @@ test('product pages reuse one landing set per cache cycle', async () => {
   }
 })
 
+// SEO rec 6 (2026-09): a merged-away or renamed model's old slug 301s to the
+// model that owns it now (slug_alias), cached as a redirect like the landing
+// folds. A live slug always wins, and until migration 0018 is applied (no
+// table) or without a match an old slug is the shared 404, as before.
+test('old product slugs 301 through slug_alias; no table or no match stays the shared 404', async () => {
+  const { handleCatalog } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const live = { id: 3, slug: 'x-uav-sky-surfer-v3', brand: 'X-UAV', name: 'Sky Surfer V3', specs: '{}', power: 'electric', role_tags: '["FPV / Flying Wing"]', status: 'ready', category_id: 'wings' }
+  // old slug → survivor slug; 'x-uav-sky-surfer-v3' is also an old alias row, but it is live.
+  const aliases = { 'x-uav-sky-surfer-x8-sunny-sky': 'x-uav-sky-surfer-v3', 'x-uav-sky-surfer-v3': 'someone-else' }
+  let aliasQueries = 0, gridQueries = 0
+  const env = (id, table = true) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind(...args) { this.args = args; return this },
+      first: async function () {
+        if (/FROM master_model WHERE category_id=\? AND slug=\?/.test(sql)) return this.args[1] === live.slug ? live : null
+        if (/FROM slug_alias a JOIN master_model/.test(sql)) {
+          aliasQueries++
+          if (!table) throw new Error('D1_ERROR: no such table: slug_alias')
+          const to = aliases[this.args[1]]
+          return to ? { slug: to, category_id: 'wings' } : null
+        }
+        return null
+      },
+      all: async () => {
+        if (/GROUP BY m\.id/.test(sql)) { gridQueries++; return { results: [] } }
+        if (/FROM offer o JOIN sku k/.test(sql)) return { results: [offer({ source_name: 'seller.example' })] }
+        return { results: /FROM category/.test(sql) ? [CAT] : [] }
+      } }) },
+  })
+  const go = async (path, { method = 'GET', id = 'alias-1', table = true } = {}) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url, { method }), url, env(id, table), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/?utm_source=gsc')
+    assert.equal(r.status, 301)
+    assert.equal(r.headers.get('location'), '/wings/x-uav-sky-surfer-v3/', 'relative Location to the survivor, no query string')
+    assert.equal(aliasQueries, 1)
+    r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/')
+    assert.equal(r.status, 301, 'replayed from the cache as a redirect')
+    assert.equal(r.headers.get('x-cat-status'), null)
+    r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/', { method: 'HEAD' })
+    assert.equal(r.status, 301)
+    assert.equal(await r.text(), '')
+    assert.equal(aliasQueries, 1, 'repeat GET and HEAD cost no D1 read')
+
+    r = await go('/wings/x-uav-sky-surfer-v3/')
+    assert.equal(r.status, 200, 'a live slug always wins over an alias row')
+    assert.equal(aliasQueries, 1, 'the alias table is read only after the live lookup misses')
+
+    r = await go('/wings/never-existed/')
+    assert.equal(r.status, 404)
+    assert.match(await r.text(), /<html/, 'no alias: the real 404 grid')
+    assert.equal(aliasQueries, 2)
+
+    // Code shipped before the migration: the lookup fails, the page is the 404.
+    r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/', { id: 'alias-2', table: false })
+    assert.equal(r.status, 404, 'no slug_alias table yet: a 404, not a 500')
+    assert.match(await r.text(), /<html/)
+    const grids = gridQueries
+    r = await go('/wings/another-old-slug/', { id: 'alias-2', table: false })
+    assert.equal(r.status, 404)
+    assert.equal(gridQueries, grids, 'every unknown slug still shares one 404 entry')
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
+// mergeMasters writes the absorbed slug (and re-points older aliases) in the
+// SAME batch as the DELETE, before it; without the table it merges as before.
+test('mergeMasters writes the absorbed slug as an alias in the same batch', async () => {
+  const { mergeMasters } = await import('../lib/jobs.mjs')
+  const masters = { 1: { id: 1, category_id: 'wings', slug: 'x-uav-sky-surfer-v3', specs: '{}' }, 2: { id: 2, category_id: 'wings', slug: 'x-uav-sky-surfer-x8-sunny-sky', specs: '{"spanMM":1400}', hero_image: null } }
+  const run = async (table) => {
+    let batched = null
+    const env = { CATALOG_DB: {
+      prepare: (sql) => ({ sql, args: [], bind(...args) { return { ...this, args } },
+        first: async function () {
+          if (/^SELECT \* FROM master_model WHERE id=\?$/.test(sql)) return masters[this.args[0]] ?? null
+          if (/FROM slug_alias LIMIT 1/.test(sql)) { if (!table) throw new Error('no such table: slug_alias'); return null }
+          return { t: '' }
+        },
+        run: async () => ({}) }),
+      batch: async (stmts) => { batched = stmts; return [] },
+    } }
+    await mergeMasters(env, 1, 2, 'owner', 'test')
+    return batched
+  }
+  let stmts = await run(true)
+  const at = (re) => stmts.findIndex((s) => re.test(s.sql))
+  const del = at(/^DELETE FROM master_model WHERE id=\?$/)
+  const repoint = at(/^UPDATE slug_alias SET master_model_id=\? WHERE master_model_id=\?$/)
+  const insert = at(/^INSERT INTO slug_alias/)
+  assert.ok(del > 0 && repoint >= 0 && insert >= 0 && repoint < del && insert < del, 'alias writes run before the DELETE, in the same batch')
+  assert.deepEqual(stmts[repoint].args, [1, 2], 'aliases that pointed at B now point at A (no chains)')
+  assert.deepEqual(stmts[insert].args.slice(0, 3), ['wings', 'x-uav-sky-surfer-x8-sunny-sky', 1], "B's slug now leads to A")
+  assert.match(stmts.at(-1).args.at(-1), /"slug":"x-uav-sky-surfer-x8-sunny-sky"/, 'the audit row records the absorbed slug')
+  stmts = await run(false)
+  assert.equal(stmts.filter((s) => /slug_alias/.test(s.sql)).length, 0, 'before migration 0018: no alias statements')
+  assert.ok(stmts.some((s) => /^DELETE FROM master_model WHERE id=\?$/.test(s.sql)), 'and the merge still runs')
+})
+
+// Admin slug rename: the old address becomes an alias of the same model, in the
+// same batch; bad, reserved or taken slugs are refused, and so is any rename
+// before migration 0018 (the old URL would otherwise become a 404).
+test('admin slug rename writes an alias for the old address', async () => {
+  const { handleCatalog } = await import('../lib/worker.mjs')
+  const master = { id: 5, category_id: 'wings', slug: 'volantex-rc-phoenix-2000-v2-soar-to-new-heights-with-precisi', spec_schema: '[]' }
+  const post = async (body, { table = true, taken = false } = {}) => {
+    let batched = null
+    const env = { ADMIN_PASS: 'pw', CATALOG_DB: {
+      prepare: (sql) => ({ sql, args: [], bind(...args) { return { ...this, args } },
+        first: async function () {
+          if (/FROM master_model m JOIN category c/.test(sql)) return master
+          if (/SELECT id FROM master_model WHERE category_id=\? AND slug=\? AND id<>\?/.test(sql)) return taken ? { id: 9 } : null
+          if (/FROM slug_alias LIMIT 1/.test(sql)) { if (!table) throw new Error('no such table: slug_alias'); return null }
+          return null
+        },
+        all: async () => ({ results: [] }), run: async () => ({}) }),
+      batch: async (stmts) => { batched = stmts; return [] },
+    } }
+    const url = new URL('https://www.narenana.com/api/master')
+    const r = await handleCatalog(new Request(url, { method: 'POST', headers: { authorization: 'Basic ' + btoa('admin:pw'), 'content-type': 'application/json' }, body: JSON.stringify(body) }), url, env, { waitUntil() {} })
+    return { status: r.status, body: await r.json(), batched }
+  }
+  let r = await post({ id: 5, slug: 'volantex-phoenix-2000-v2' })
+  assert.equal(r.status, 200)
+  const sqls = r.batched.map((s) => s.sql.replace(/\s+/g, ' '))
+  const i = (re) => sqls.findIndex((s) => re.test(s))
+  assert.deepEqual(r.batched[i(/^UPDATE master_model SET slug=\?/)].args.slice(0, 1), ['volantex-phoenix-2000-v2'])
+  assert.deepEqual(r.batched[i(/^INSERT INTO slug_alias/)].args.slice(0, 3), ['wings', master.slug, 5], 'the old address leads to the same model')
+  assert.deepEqual(r.batched[i(/^DELETE FROM slug_alias/)].args, ['wings', 'volantex-phoenix-2000-v2'], 'the new, live address is nobody\'s alias')
+  assert.equal((await post({ id: 5, slug: 'Bad Slug!' })).status, 400)
+  assert.equal((await post({ id: 5, slug: 'trainers' })).status, 400, 'a landing slug is reserved')
+  assert.equal((await post({ id: 5, slug: 'taken-slug' }, { taken: true })).status, 409)
+  r = await post({ id: 5, slug: 'volantex-phoenix-2000-v2' }, { table: false })
+  assert.equal(r.status, 409, 'no rename before the alias table exists')
+  assert.equal(r.batched, null, 'and nothing was written')
+  r = await post({ id: 5, name: 'Phoenix 2000 V2' })
+  assert.equal(r.status, 200)
+  assert.ok(!r.batched.some((s) => /slug/.test(s.sql)), 'a name edit touches no slug')
+  r = await post({ id: 5, slug: master.slug, name: 'Phoenix 2000 V2' })
+  assert.ok(!r.batched.some((s) => /slug_alias/.test(s.sql)), 'the unchanged slug is not an alias of itself')
+})
+
 test('manufacturer physical overrides and explicit clears override harvested facts',()=>{
  const row={match_status:'accepted',url:'https://manufacturer.example/wing',title:'Wing',body_text:'Minimum 4 channels.',overrides_json:JSON.stringify({channels:6,motorCount:null})};
  assert.equal(manufacturerReference(row).properties.find(p=>p.name==='Minimum channels')?.value,6);

@@ -1510,6 +1510,53 @@ test('approve-time name lint: seller titles are refused, model names pass', () =
     assert.equal(nameLint(n), '', `${n} passes`)
 })
 
+// SEO rec 6: an old product slug either 301s once to a live product page (the
+// alias table is applied) or is a plain 404 (not yet), never a loop or a 500.
+// Slug renames refuse bad, reserved and taken slugs before writing anything.
+test('old product slugs: one 301 to a live page, or a 404 before migration 0018', async () => {
+  for (const old of ['havoc-hobby-spacewalker', 'wltoys-f959-sky-king', 'x-uav-sky-surfer-v3-with-a2212-2200kv-1400mm-wingspan']) {
+    const r = await get(`/wings/${old}/`)
+    assert.ok([301, 404].includes(r.status), `${old}: ${r.status}`)
+    if (r.status !== 301) continue
+    const to = r.headers.get('location')
+    assert.match(to, /^\/wings\/[a-z0-9-]+\/$/, 'a relative product URL')
+    assert.notEqual(to, `/wings/${old}/`)
+    assert.equal((await get(to)).status, 200, `${old} → ${to} lands on a live page in one hop`)
+  }
+  assert.equal((await get('/wings/nitro-gliders/')).status, 404, 'an empty landing stays a 404')
+})
+
+test('slug rename guards: bad, reserved and taken slugs are refused', async () => {
+  const masters = (await api('catalog')).body.masters ?? []
+  assert.ok(masters.length >= 2, 'need two masters')
+  const [a, b] = masters
+  assert.equal((await api('master', { id: a.id, slug: 'Not A Slug!' })).status, 400)
+  assert.equal((await api('master', { id: a.id, slug: 'trainers' })).status, 400, 'landing slugs are reserved')
+  assert.equal((await api('master', { id: a.id, slug: 'browse' })).status, 400)
+  assert.equal((await api('master', { id: a.id, slug: b.slug })).status, 409, "another model's slug")
+})
+
+test('slug rename round trip: the old address 301s, renaming back clears it', { skip: !MUTATE && 'set CATALOG_TEST_MUTATE=1' }, async () => {
+  const m = ((await api('catalog')).body.masters ?? []).find((x) => x.status === 'ready')
+  assert.ok(m, 'need a published master')
+  const tmp = `zz-renamed-${Date.now().toString(36)}`
+  const r = await api('master', { id: m.id, slug: tmp })
+  if (r.status === 409 && /0018/.test(r.body.error || '')) return // migration not applied locally
+  assert.equal(r.status, 200, JSON.stringify(r.body))
+  try {
+    const old = await get(`/wings/${m.slug}/`)
+    assert.equal(old.status, 301)
+    assert.equal(old.headers.get('location'), `/wings/${tmp}/`)
+    assert.equal((await get(`/wings/${tmp}/`)).status, 200)
+  } finally {
+    assert.equal((await api('master', { id: m.id, slug: m.slug })).status, 200, 'renamed back')
+  }
+  assert.equal((await get(`/wings/${m.slug}/`)).status, 200, 'the original address is live again, not an alias')
+  const back = await get(`/wings/${tmp}/`)
+  assert.equal(back.status, 301, 'the temporary address now leads back')
+  assert.equal(back.headers.get('location'), `/wings/${m.slug}/`)
+})
+
 test('sources add: invalid URL 400; broken root rejected at add-time', async () => {
   assert.equal((await api('sources', { url: 'not a url', categories: ['wings'] })).status, 400)
   const dead = await api('sources', { url: 'https://example.com/definitely-not-a-shop/', categories: ['wings'] })
