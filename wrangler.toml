@@ -129,11 +129,22 @@ LOG_VIEWER_ORIGIN_LATEST = "https://latest.edgetx-log-parser.pages.dev"
 binding = "VIDEOS_KV"
 id = "e048dd7b7b0849bcba7b51557c4c6752"
 
-# Workers AI — used by the catalog enrich job to classify listings (aircraft
-# vs accessory) and clean model names. Optional: all code guards on env.AI, so
-# removing this binding just degrades enrichment to pure heuristics.
+# Workers AI — used by the catalog's daily AI curator (catalog/lib/curator/,
+# every call through catalog/lib/ai.mjs) to sort new listings, fill blank
+# model data and clean names. Optional: all code guards on env.AI, so removing
+# this binding leaves the curator on rules only.
 [ai]
 binding = "AI"
+
+# Workers Logs keeps console output (3 days on Free), so the curator's
+# console.error lines (every AI failure, with run, phase, item, model and
+# code) can be read after the fact. invocation_logs is off: only console
+# output is kept, so the site's crawler traffic does not flood the logs.
+# https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+[observability]
+enabled = true
+[observability.logs]
+invocation_logs = false
 
 # Browser Rendering — a real headless Chrome for sellers whose WAFs 403 plain
 # Worker fetches (rcdhamaka). Free-plan allocation ≈10 browser-min/day, so it

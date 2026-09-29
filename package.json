@@ -13,6 +13,7 @@
     "catalog:migrate:remote": "wrangler d1 migrations apply CATALOG_DB --remote",
     "catalog:test": "node --test catalog/test/suite.mjs",
     "seo:test": "node --test catalog/test/seo.mjs",
+    "curator:test": "node --test catalog/test/curator.mjs",
     "seo:audit": "node scripts/sitemap-audit.mjs && node scripts/seo-audit.mjs --local && node scripts/release-link-audit.mjs",
     "sitemap:audit": "node scripts/sitemap-audit.mjs",
     "assets:version": "node scripts/version-assets.mjs",

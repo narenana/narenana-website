@@ -5,9 +5,12 @@ import { manufacturerReference, nameLint } from './product-overview.mjs'
 import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
-import { renderGrid, renderMaster, powerType } from './public.mjs'
+import { renderGrid, renderMaster, powerType, ROLE_TAGS, normalizeRoleTags } from './public.mjs'
 import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse, productLandings } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice, hasSlugAlias } from './jobs.mjs'
+import { runCuratorNow, curatorReport } from './curator/index.mjs'
+import { hasCuratorTables, lockOwner, revertAction } from './curator/store.mjs'
+import { validModels } from './ai.mjs'
 import {
   MFR_WEEKLY_CRON,
   enqueueManufacturerHarvests,
@@ -799,9 +802,14 @@ async function api(request, url, env, ep, actor) {
       ])
       return json({ ok: true })
     }
+    // Restore and Unapprove also lock the listing's review as the owner's
+    // (migration 0019): the curator never auto-rejects or auto-attaches a
+    // listing the owner has put back.
+    const reviewLock = async () => ((await hasCuratorTables(env)) ? [lockOwner(env, 'sku', k.id, 'review', t)] : [])
     if (body.action === 'restore') {
       await batch(env, [
         q(env, `UPDATE sku SET review_status='new', reject_reason=NULL, reviewed_at=NULL WHERE id=?`, k.id),
+        ...(await reviewLock()),
         audit(env, actor, 'restore', 'sku', k.id),
       ])
       return json({ ok: true })
@@ -828,6 +836,7 @@ async function api(request, url, env, ep, actor) {
       await batch(env, [
         q(env, `DELETE FROM offer WHERE sku_id=?`, k.id),
         q(env, `UPDATE sku SET review_status='new', reviewed_at=NULL, flagged=NULL WHERE id=?`, k.id),
+        ...(await reviewLock()),
         audit(env, actor, 'unapprove', 'sku', k.id),
       ])
       return json({ ok: true })
@@ -874,6 +883,14 @@ async function api(request, url, env, ep, actor) {
           // snapshot the good price at approval → a guaranteed D1 recovery point
           q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`, k.id, t, null, k.price_inr, k.in_stock),
           audit(env, actor, 'approve-new-master', 'sku', k.id, { slug: m.slug }),
+          // Provenance (migration 0019): the values the owner accepted here.
+          // The curator may fill their blanks, nothing more.
+          ...((await hasCuratorTables(env))
+            ? [q(env, `INSERT OR IGNORE INTO field_src (entity, entity_id, field, src, confidence, run_id, at)
+                      SELECT 'master', m.id, f.field, 'owner-approved', NULL, NULL, ?
+                      FROM master_model m CROSS JOIN (SELECT 'brand' AS field UNION ALL SELECT 'name' UNION ALL SELECT 'slug' UNION ALL SELECT 'specs.spanMM') f
+                      WHERE m.category_id=? AND m.slug=?`, t, catId, m.slug)]
+            : []),
         ])
       } catch (e) {
         if (/UNIQUE/.test(String(e))) return json({ error: 'a master with that slug or brand+name already exists — use its suggestion button instead' }, 409)
@@ -1103,6 +1120,31 @@ async function api(request, url, env, ep, actor) {
         q(env, `DELETE FROM slug_alias WHERE category_id=? AND old_slug=?`, m.category_id, newSlug),
       ]
     }
+    // Role tags from the Catalog tab: the owner's own ('human'), which no
+    // automation ever changes.
+    let roleStmts = []
+    if (body.role_tags !== undefined) {
+      const tags = Array.isArray(body.role_tags) ? normalizeRoleTags(body.role_tags) : []
+      if (!tags.length || body.role_tags.some((x) => !ROLE_TAGS.includes(x))) return json({ error: `role_tags takes one or more of: ${ROLE_TAGS.join(', ')}` }, 400)
+      roleStmts = [q(env, `UPDATE master_model SET role_tags=?, role_source='human', updated_at=? WHERE id=?`, JSON.stringify(tags), now(), m.id)]
+    }
+    // Every field the owner changes here is locked as the owner's (migration
+    // 0019), so the curator never fills or rewrites it.
+    let lockStmts = []
+    if (await hasCuratorTables(env)) {
+      const t = now()
+      const changed = []
+      for (const f of ['brand', 'name', 'blurb']) if (typeof body[f] === 'string' && body[f] !== (m[f] ?? '')) changed.push(f)
+      if (newSlug && newSlug !== m.slug) changed.push('slug')
+      if (typeof body.specs === 'string') {
+        let before = {}, after = {}
+        try { before = JSON.parse(m.specs || '{}') } catch {}
+        try { after = JSON.parse(body.specs || '{}') } catch {}
+        for (const k2 of new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])) if (String(before?.[k2] ?? '') !== String(after?.[k2] ?? '')) changed.push(`specs.${k2}`)
+      }
+      if (roleStmts.length) changed.push('role_tags')
+      lockStmts = changed.map((f) => lockOwner(env, 'master', m.id, f, t))
+    }
     await batch(env, [
       q(env, `UPDATE master_model SET brand=COALESCE(?, brand), name=COALESCE(?, name),
               brand_norm=COALESCE(?, brand_norm), name_norm=COALESCE(?, name_norm),
@@ -1112,6 +1154,8 @@ async function api(request, url, env, ep, actor) {
         body.brand ? normName(body.brand) : null, body.name ? normName(body.name) : null,
         body.blurb ?? null, body.specs ?? null, body.status ?? null, body.brand ?? null, now(), body.id),
       ...slugStmts,
+      ...roleStmts,
+      ...lockStmts,
       audit(env, actor, 'master-update', 'master_model', body.id, slugStmts.length ? { ...body, fromSlug: m.slug } : body),
     ])
     catCache.at = 0
@@ -1628,6 +1672,53 @@ async function api(request, url, env, ep, actor) {
     }
   }
 
+  // ---- AI curator (curator/index.mjs) ----
+  // The report: the run (latest by default), its actions, what needs the
+  // owner, and the last 14 runs.
+  if (ep === 'curator' && request.method === 'GET') {
+    if (!(await hasCuratorTables(env))) return json({ error: 'apply migration 0019_curator first' }, 409)
+    return json(await curatorReport(env, url.searchParams.get('run')))
+  }
+  // Run now: start or resume today's run (force: a second run today) and do
+  // one tick under the jobs lease; cron continues from there.
+  if (ep === 'curator-run' && request.method === 'POST') {
+    if (body.mode != null && !['dry', 'live'].includes(body.mode)) return json({ error: 'mode is dry or live' }, 400)
+    // scope: check a handful of listings/pages only ({skus, masters}, ≤ 50 ids)
+    const ids = (v) => (v === undefined ? [] : Array.isArray(v) && v.length <= 50 && v.every((x) => Number.isInteger(x) && x > 0) ? v : null)
+    let scope = null
+    if (body.scope != null) {
+      scope = { skus: ids(body.scope.skus), masters: ids(body.scope.masters) }
+      if (!scope.skus || !scope.masters) return json({ error: 'scope takes {skus, masters}: up to 50 ids each' }, 400)
+    }
+    const res = await runCuratorNow(env, { mode: body.mode ?? null, force: !!body.force, scope })
+    await audit(env, actor, 'curator-run', 'jobs', '', { mode: body.mode ?? null, force: !!body.force, scope, res }).run?.()
+    return json(res)
+  }
+  // Apply this plan: the next ticks apply a dry run's planned changes (all
+  // open ones when no run is named), skipping any whose field changed since.
+  if (ep === 'curator-apply' && request.method === 'POST') {
+    if (!(await hasCuratorTables(env))) return json({ error: 'apply migration 0019_curator first' }, 409)
+    const runId = typeof body.run === 'string' && body.run ? body.run : null
+    if (runId && !(await one(env, `SELECT id FROM curator_run WHERE id=?`, runId))) return json({ error: 'unknown run' }, 404)
+    let state = {}
+    try { state = JSON.parse((await getSetting(env, 'curator_state')) ?? '{}') ?? {} } catch {}
+    await batch(env, [
+      q(env, `INSERT INTO setting (k, v) VALUES ('curator_state', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, JSON.stringify({ ...state, apply: { run: runId, at: now(), by: actor } })),
+      audit(env, actor, 'curator-apply', 'jobs', runId ?? '', null),
+    ])
+    return json({ ok: true, note: 'the next curator ticks apply the plan' })
+  }
+  // Revert one applied change: the old value comes back and the field is
+  // locked as the owner's, so the curator never fills it again.
+  if (ep === 'curator-revert' && request.method === 'POST') {
+    const id = Number(body.actionId)
+    if (!Number.isInteger(id) || id <= 0) return json({ error: 'actionId required' }, 400)
+    const r = await revertAction(env, id, actor)
+    if (!r.ok) return json({ error: r.error }, r.status ?? 400)
+    catCache.at = 0
+    return json(r)
+  }
+
   if (ep === 'system' && request.method === 'GET') {
     const settings = {}
     for (const r of await all(env, 'SELECT k, v FROM setting')) settings[r.k] = r.v
@@ -1647,7 +1738,20 @@ async function api(request, url, env, ep, actor) {
     return json({ settings, audit: auditRows, health: Object.values(byId).sort((a, b) => (a.source_id < b.source_id ? -1 : 1)) })
   }
   if (ep === 'system' && request.method === 'POST') {
-    if (!/^(scan|verify|enrich|dedup|classify|warm|popularity|mfr)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
+    const v = String(body.v ?? '')
+    const num = (lo, hi) => v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= lo && Number(v) <= hi
+    const CURATOR = {
+      curator_enabled: () => v === '0' || v === '1',
+      curator_ai: () => v === '0' || v === '1',
+      curator_mode: () => v === 'dry' || v === 'live',
+      curator_neuron_cap: () => num(0, 100000) && Number.isInteger(Number(v)),
+      curator_automerge_max: () => num(0, 100) && Number.isInteger(Number(v)),
+      curator_scale: () => num(0.25, 20),
+      curator_models: () => validModels(v),
+    }
+    if (Object.hasOwn(CURATOR, body.k)) {
+      if (!CURATOR[body.k]()) return json({ error: `invalid value for ${body.k}` }, 400)
+    } else if (!/^(scan|verify|enrich|dedup|classify|warm|popularity|mfr)_paused$/.test(body.k)) return json({ error: 'unknown setting' }, 400)
     await setSetting(env, body.k, body.v)
     await audit(env, actor, 'setting', 'setting', body.k, { v: body.v }).run?.()
     return json({ ok: true })
@@ -1674,10 +1778,19 @@ async function runSliceLogged(env) {
   const t = now()
   try {
     const res = await runSlice(env, 'cron')
-    const job = res?.job ?? (res?.skipped ? 'skipped' : res?.idle ? 'idle' : 'unknown')
+    const job = res?.job ?? res?.slice ?? (res?.skipped ? 'skipped' : res?.idle ? 'idle' : 'unknown')
     await setSetting(env, 'job:last', JSON.stringify({ at: t, job, res }).slice(0, 1900))
   } catch (e) {
-    await setSetting(env, 'job:last_error', JSON.stringify({ at: t, msg: String(e.message || e).slice(0, 500) }))
+    const msg = String(e?.message || e).slice(0, 500)
+    console.error(JSON.stringify({ at: 'jobs', msg }))
+    // The latest error, plus the last 10 (the latest used to overwrite the one before).
+    let ring = []
+    try { ring = JSON.parse((await getSetting(env, 'job:errors')) ?? '[]') } catch {}
+    ring = [{ at: t, msg: msg.slice(0, 300) }, ...(Array.isArray(ring) ? ring : [])].slice(0, 10)
+    await batch(env, [
+      q(env, 'INSERT INTO setting (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v', 'job:last_error', JSON.stringify({ at: t, msg })),
+      q(env, 'INSERT INTO setting (k,v) VALUES (?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v', 'job:errors', JSON.stringify(ring)),
+    ])
   }
 }
 

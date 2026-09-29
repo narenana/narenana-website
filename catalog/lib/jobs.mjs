@@ -19,9 +19,10 @@ import puppeteer from '@cloudflare/puppeteer'
 import { feedPage, checkPage, checkWooProduct, parseProductPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
 import { findDuplicates, bestSurvivor } from './dedup.mjs'
-import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
+import { powerType, roleTags } from './public.mjs'
 import { popScores, videoRelevant } from './popularity.mjs'
-import { storeSnapshot } from './snapshot.mjs'
+import { storeSnapshot, extractSnapshot } from './snapshot.mjs'
+import { curatorSlice } from './curator/index.mjs'
 import { now, imgKey } from './util.mjs'
 
 // Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
@@ -57,6 +58,11 @@ export async function runSlice(env, trigger = 'cron') {
       const e = await enrichSlice(env, trigger)
       if (e) return e
     }
+    // The daily AI curator (curator/index.mjs). Reaching this line means the
+    // day's scan has finished (or is paused). It returns null when no run is
+    // active or due, so the jobs below get the tick.
+    const cu = await curatorSlice(env, trigger, { scanDone: true })
+    if (cu) return cu
     if ((await getSetting(env, 'dedup_paused')) !== '1') {
       const dd = await dedupSlice(env, trigger)
       if (dd) return dd
@@ -321,9 +327,11 @@ export async function upsertProducts(env, su, products, spent) {
 // -------------------------------------------------------------- enrich slice
 // The system fills in as much data as it can BEFORE the owner reviews: one
 // product-page fetch per new sku → wingspan, config, image, price/stock (for
-// feed-less HTML/Zoho sources), brand matched against the category's brand
-// list (D1 data), plus an optional Workers-AI pass for kind + clean name.
-// Runs after the daily scan finishes, before verify; one-shot per sku.
+// feed-less HTML/Zoho sources), and a brand matched against the category's
+// brand list (D1 data) in the title or the product's own text. Heuristics
+// only: the curator's triage phase adds the AI's kind, brand and clean name
+// afterwards (curator/triage.mjs). Runs after the daily scan finishes, before
+// verify; one-shot per sku.
 async function enrichSlice(env, trigger) {
   const t = now()
   const rows = await all(
@@ -363,8 +371,13 @@ async function buildGuess(env, k) {
   // visible-ish text only: strip tags/scripts so regexes see prose, not markup
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 20000)
 
+  // Brand: the title, else the product's own text (the snapshot extract: its
+  // JSON-LD and meta descriptions), never the page as a whole. Page chrome
+  // (menus, "shop by brand" lists) named FMS on 83 havochobby listings and
+  // Dynam on 12 tahorizons ones. Else the shop's own house brand.
   const findBrand = (s) => brands.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(s))
-  let brand = findBrand(title) ?? findBrand(text.slice(0, 3000)) ?? (brands.find((b) => b.toLowerCase().replace(/[^a-z0-9]/g, '') === String(k.source_id).replace(/[^a-z0-9]/g, '')) || '')
+  const productText = html ? extractSnapshot(html).description : ''
+  let brand = findBrand(title) ?? findBrand(productText) ?? (brands.find((b) => b.toLowerCase().replace(/[^a-z0-9]/g, '') === String(k.source_id).replace(/[^a-z0-9]/g, '')) || '')
   let spanMM = extractSpanMM(title)
   let via = spanMM ? 'title' : ''
   if (!spanMM) {
@@ -390,67 +403,14 @@ async function buildGuess(env, k) {
     _stock = chk?.inStock == null ? null : chk.inStock ? 1 : 0
   }
 
-  // optional Workers AI: kind + cleaner name (+ span only as a last resort)
-  let kind = null
-  const ai = await aiGuess(env, title, text.slice(0, 1600))
-  if (ai) {
-    kind = ai.kind ?? null
-    if (!brand && ai.brand) brand = String(ai.brand).slice(0, 40)
-    if (ai.name) name = String(ai.name).slice(0, 60)
-    if (!spanMM && Number(ai.spanMM) >= 200 && Number(ai.spanMM) <= 4000) {
-      spanMM = Math.round(Number(ai.spanMM))
-      via = 'ai'
-    }
-    via = via ? via + '+ai' : 'ai'
-  }
-  return { brand, name: name.slice(0, 60), spanMM, config, kind, via: via || 'none', at: now(), _img, _price, _stock }
-}
-
-async function aiGuess(env, title, snippet) {
-  if (!env.AI) return null
-  try {
-    const r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      max_tokens: 180,
-      messages: [
-        { role: 'system', content: 'You classify RC hobby-shop listings. Reply with ONLY a JSON object: {"kind":"aircraft"|"accessory"|"other","brand":string,"name":string,"spanMM":number}. kind=aircraft only for fixed-wing airplane/flying-wing/glider AIRFRAMES (kits/PNP/RTF). Motors, ESCs, servos, batteries, props, radios, FPV gear, spare parts, multirotors are accessory/other. name = clean model name without brand or marketing text. spanMM = wingspan in millimetres, 0 if unknown. brand = manufacturer if identifiable, else "".' },
-        { role: 'user', content: `Title: ${title}\nPage: ${snippet}` },
-      ],
-    })
-    const m = String(r?.response ?? '').match(/\{[\s\S]*?\}/)
-    if (!m) return null
-    const j = JSON.parse(m[0])
-    return { kind: ['aircraft', 'accessory', 'other'].includes(j.kind) ? j.kind : null, brand: j.brand, name: j.name, spanMM: j.spanMM }
-  } catch {
-    return null
-  }
-}
-
-// Role/type tags via Workers AI — the fallback for models the deterministic
-// roleTags() rules can't confidently place. Free-tier binding; validated & pruned
-// through normalizeRoleTags so the model can only emit vocabulary tags.
-async function aiRoleTags(env, text) {
-  if (!env.AI) return null
-  try {
-    const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-      max_tokens: 120,
-      messages: [
-        { role: 'system', content: `You tag fixed-wing RC model aircraft by role/type. Use ONLY these tags: ${ROLE_TAGS.join(', ')}. A model may have more than one. Rules: military JETS => "Jet / EDF" plus "Warbird"; prop military scale => "Warbird"; civilian replicas (Cessna, Piper Cub, Decathlon, Beaver) => "Scale Civilian"; dedicated aerobats (Extra, MXS, Sbach, Pitts) => "Aerobatic / 3D"; FPV platforms and flying wings => "FPV / Flying Wing"; gliders/sailplanes => "Glider / Sailplane"; commercial airliners => "Airliner"; beginner trainers => "Trainer"; generic foam sport models => "Sport / Park Flyer". Reply with ONLY a JSON array of tag strings, most defining first, e.g. ["Warbird"].` },
-        { role: 'user', content: String(text).slice(0, 600) },
-      ],
-    })
-    const m = String(r?.response ?? '').match(/\[[\s\S]*?\]/)
-    if (!m) return null
-    const tags = normalizeRoleTags(JSON.parse(m[0]))
-    return tags.length ? { tags } : null
-  } catch {
-    return null
-  }
+  return { brand, name: name.slice(0, 60), spanMM, config, kind: null, via: via || 'none', at: now(), _img, _price, _stock }
 }
 
 // ---------------------------------------------------------------- classify slice
 // Assigns role_tags to masters that lack them (new/inbound; the existing catalog
-// was seeded from a reviewed pass). Rules place the confident majority for free;
-// only the uncertain tail spends a Workers AI call (capped per slice). Returns null
+// was seeded from a reviewed pass), by rules only, so a new page has tags at
+// once. The uncertain ones (the Sport / Park Flyer catch-all) are reconsidered
+// by the curator's roles phase, under the owner's taxonomy rules. Returns null
 // when there's no backlog, so verify still gets the tick.
 const CLASSIFY_EVERY = 30 * 60e3
 async function classifySlice(env, trigger) {
@@ -472,22 +432,15 @@ async function classifySlice(env, trigger) {
   if (!rows.length) return null // no backlog — let verify have the slice
   const stmts = []
   const log = []
-  let aiCalls = 0
   for (const m of rows) {
     const text = `${m.brand ?? ''} ${m.name ?? ''} ${m.titles ?? ''}`.trim()
-    const r = roleTags(text)
-    let tags = r.tags
-    let source = 'rules'
-    if (!r.confident && aiCalls < 8) {
-      aiCalls++
-      const ai = await aiRoleTags(env, text)
-      if (ai) { tags = ai.tags; source = 'ai' }
-    }
-    stmts.push(q(env, `UPDATE master_model SET role_tags=?, role_source=?, updated_at=? WHERE id=?`, JSON.stringify(tags), source, t, m.id))
-    log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: ${tags.join('+')} [${source}]`)
+    const { tags, confident } = roleTags(text)
+    // role_tags IS NULL guards an owner edit that lands after the read
+    stmts.push(q(env, `UPDATE master_model SET role_tags=?, role_source='rules', updated_at=? WHERE id=? AND role_tags IS NULL`, JSON.stringify(tags), t, m.id))
+    log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: ${tags.join('+')} [rules${confident ? '' : ', unsure'}]`)
   }
   await batch(env, stmts)
-  return { job: 'classify', trigger, classified: rows.length, ai: aiCalls, log }
+  return { job: 'classify', trigger, classified: rows.length, log }
 }
 
 // ---------------------------------------------------------------- popularity slice
