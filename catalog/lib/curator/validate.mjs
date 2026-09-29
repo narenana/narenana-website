@@ -86,8 +86,8 @@ export function checkBrand(brand, quote, text) {
 
 // -------------------------------------------------------------------- names
 // Why a name reads like a seller's title rather than a model name, or ''.
-const CONFIG_WORDS = /\b(kits?|arf|pnp|pnf|bnf|rtf|combo|set|crash[\s-]?a[\s-]?lot|with(?:out)?\s+electronics?|air[\s-]?frame|frame[\s-]?only|plug[\s-]?(?:n|and|&)[\s-]?play|ready[\s-]?to[\s-]?fly|almost[\s-]?ready)\b/i
-const COLOUR_WORDS = /\b(white|black|red|blue|green|orange|yellow|grey|gray|silver|pink|purple|camo|camouflage|livery|scheme)\b/i
+export const CONFIG_WORDS = /\b(kits?|arf|pnp|pnf|bnf|rtf|combo|set|crash[\s-]?a[\s-]?lot|with(?:out)?\s+electronics?|air[\s-]?frame|frame[\s-]?only|plug[\s-]?(?:n|and|&)[\s-]?play|ready[\s-]?to[\s-]?fly|almost[\s-]?ready)\b/i
+export const COLOUR_WORDS = /\b(white|black|red|blue|green|orange|yellow|grey|gray|silver|pink|purple|camo|camouflage|livery|scheme)\b/i
 const SHOP_WORDS = /\brc\s+(?:plane|planes|airplane|aeroplane|aircraft)\b|\bfor\s+beginners?\b|\bindia\b|\bbuy\b|^rc\b/i
 export function nameSmell(name, brand = '') {
   const n = String(name ?? '').trim()

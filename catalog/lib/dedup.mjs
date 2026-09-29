@@ -8,7 +8,7 @@
 
 // Marketing / config / colour words that don't identify the aircraft. NOT
 // stripped: real model names, type words (trainer/glider) that can distinguish.
-const NOISE = new Set([
+export const NOISE = new Set([
   'rc', 'r/c', 'airplane', 'aeroplane', 'plane', 'aircraft', 'model', 'kit', 'kits',
   'pnp', 'pnf', 'rtf', 'arf', 'bnf', 'combo', 'set', 'version', 'edition', 'premium',
   'with', 'and', 'the', 'for', 'new', 'original', 'buy', 'india', 'sale', 'used',
@@ -88,9 +88,14 @@ export function compareCross(a, b) {
   return 0
 }
 
+// The brand a master is grouped by: brand_key when the caller supplies one
+// (the curator's brandKey, which unifies spellings such as Havoc / Havoc
+// Hobby), else brand_norm.
+const keyOf = (m) => m.brand_key ?? m.brand_norm
+
 // compare(a, b) → { score 0..1, obvious, reason }. Order-independent.
 export function compare(a, b) {
-  if (!a.brand_norm || a.brand_norm !== b.brand_norm) return { score: 0, obvious: false, reason: 'different brand' }
+  if (!keyOf(a) || keyOf(a) !== keyOf(b)) return { score: 0, obvious: false, reason: 'different brand' }
 
   const na = sizeTokens(a.name_norm)
   const nb = sizeTokens(b.name_norm)
@@ -128,17 +133,12 @@ export function compare(a, b) {
   return { score, obvious, reason }
 }
 
-// The preferred survivor of a set: ready>draft, then more offers, then the
-// shorter (cleaner) name, then lower id.
-const survivorRank = (m) => [m.status === 'ready' ? 0 : 1, -(m.offers ?? 0), (m.name || '').length, m.id]
-export function bestSurvivor(list) {
-  return list.reduce((x, y) => {
-    const rx = survivorRank(x)
-    const ry = survivorRank(y)
-    for (let i = 0; i < rx.length; i++) if (rx[i] !== ry[i]) return rx[i] < ry[i] ? x : y
-    return x
-  })
-}
+// The preferred survivor of a set: the curator's shared rule
+// (curator/merge.mjs pickSurvivor): ready over draft, live sellers, the
+// owner's work on the page, approved offers, a clean name and slug, then the
+// lower id. It no longer prefers the shorter name: on 2026-09-29 that rule
+// absorbed the owner's cleaned #141 into the all-caps #120.
+export { pickSurvivor as bestSurvivor } from './curator/merge.mjs'
 
 // Given all masters, return { obviousClusters, candidatePairs }.
 //   obviousClusters: [[master,…]] connected components of obvious dupes —
@@ -149,10 +149,10 @@ export function bestSurvivor(list) {
 export function findDuplicates(masters) {
   const byBrand = new Map()
   for (const m of masters) {
-    if (!m.brand_norm) continue
-    const g = byBrand.get(m.brand_norm) ?? []
+    if (!keyOf(m)) continue
+    const g = byBrand.get(keyOf(m)) ?? []
     g.push(m)
-    byBrand.set(m.brand_norm, g)
+    byBrand.set(keyOf(m), g)
   }
   const byId = new Map(masters.map((m) => [m.id, m]))
   const parent = new Map()
@@ -176,8 +176,7 @@ export function findDuplicates(masters) {
         if (c.obvious) {
           union(group[i].id, group[j].id)
         } else {
-          const a = bestSurvivor([group[i], group[j]])
-          const b = a === group[i] ? group[j] : group[i]
+          const [a, b] = group[i].id < group[j].id ? [group[i], group[j]] : [group[j], group[i]]
           candidatePairs.push({ a, b, score: c.score, reason: c.reason })
         }
       }
@@ -214,13 +213,13 @@ export function findDuplicates(masters) {
     // (b) unconfirmed brand + strong match to an other-brand master → the owner
     //     confirms whether it's the same product mislabelled, or a real sibling.
     for (const o of byCat.get(m.category_id) ?? []) {
-      if (o.id === m.id || o.brand_norm === m.brand_norm) continue
+      if (o.id === m.id || keyOf(o) === keyOf(m)) continue
       const key = m.id < o.id ? m.id + ':' + o.id : o.id + ':' + m.id
       if (seenCross.has(key)) continue
       const score = compareCross(m, o)
       if (score <= 0) continue
       seenCross.add(key)
-      const a = bestSurvivor([m, o]); const b = a === m ? o : m
+      const [a, b] = m.id < o.id ? [m, o] : [o, m]
       candidatePairs.push({ a, b, score: +score.toFixed(2), reason: `possible mislabel — same model, brand differs (${a.brand || '—'} vs ${b.brand || '—'})` })
     }
   }

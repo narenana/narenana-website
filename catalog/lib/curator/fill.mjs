@@ -177,7 +177,9 @@ async function masterPhase(ctx, { build, perMaster, finish }) {
         // the chunk's plans are written by finish(), so reserve room for them too
         if (ctx.late() || !ctx.room(3 * (plans.length + 1) + 1)) { stop = true; break }
         const m = chunk.byId.get(id)
-        if (!m) { cursor.idx++; continue } // merged away or retired since the queue was built
+        // merged away or retired since the queue was built (or, in a dry run,
+        // planned to be merged away)
+        if (!m || (cursor.absorbed ?? []).includes(id)) { cursor.idx++; continue }
         const outcome = await ctx.item(`master:${id}`, async () => {
           const p = await perMaster(ctx, m, chunk)
           if (p === 'stop') return 'stop'
@@ -321,6 +323,15 @@ function writeFill(ctx, chunk, p, clashId) {
   }
 
   if (ctx.live && Object.keys(ch).length) ctx.write(masterUpdate(ctx.env, id, ch, ctx.t))
+  // A dry run judges pairs on what a live run would see: the brand and span
+  // it has planned (dedup.mjs eff()).
+  if (!ctx.live && (ch.brand || ch.spanMM)) {
+    const pl = ((ctx.cursor.planned ??= {})[id] ??= {})
+    if (ch.brand) pl.brand = ch.brand.to
+    if (ch.spanMM) pl.spanMM = ch.spanMM.to
+  }
+  // the checked model name, for the dedup name gate (G4)
+  if (c?.model && c.modelConf >= NAME_CONF) (ctx.cursor.models ??= {})[id] = c.model
 }
 
 // =============================================================== names

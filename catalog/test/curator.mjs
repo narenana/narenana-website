@@ -414,10 +414,10 @@ test('live run: fills blanks with provenance, cleans a seller name, applies the 
   assert.equal(g20.kind, 'aircraft')
   assert.equal(g20.via, 'page+ai')
   assert.equal(g20.ai.confidence, 0.93)
-  const g21 = JSON.parse(d1.one(`SELECT guess FROM sku WHERE id=21`).guess)
-  assert.equal(g21.kind, 'accessory')
-  assert.equal(g21.ai.kind, 'electronics')
-  assert.equal(d1.one(`SELECT review_status FROM sku WHERE id=21`).review_status, 'new', 'triage never decides a listing here')
+  // #21: a motor; the AI is sure (0.97) and a rule agrees ("motor" is an
+  // exclude keyword), so it is auto-rejected as an accessory (part 2)
+  assert.deepEqual({ ...d1.one(`SELECT review_status, reject_reason FROM sku WHERE id=21`) }, { review_status: 'rejected', reject_reason: 'accessory' })
+  assert.equal(d1.one(`SELECT status FROM curator_action WHERE kind='reject' AND entity_id=21`).status, 'applied')
 
   // tick budgets
   for (const t of ticks) {

@@ -151,8 +151,10 @@ function changeFor(action, direction) {
 // first, at most `limit`. Each is CAS'd on the value it was planned against:
 // a field that changed since, or that the owner has since locked, is skipped
 // as stale. Returns the statements to run and how many were taken.
-export async function planApplyStatements(env, { runId = null, limit = 8, t = Date.now() } = {}) {
-  const rows = (await env.CATALOG_DB.prepare(
+// rows: the planned actions to apply (the caller's read), else the next
+// `limit` fill / rename / roles actions.
+export async function planApplyStatements(env, { runId = null, limit = 8, t = Date.now(), rows: given = null } = {}) {
+  const rows = given ?? (await env.CATALOG_DB.prepare(
     `SELECT * FROM curator_action WHERE status='planned' AND kind IN ('fill','rename','roles') ${runId ? 'AND run_id=?' : ''} ORDER BY id LIMIT ?`,
   ).bind(...(runId ? [runId, limit] : [limit])).all()).results ?? []
   const locks = await loadLocks(env, 'master', [...new Set(rows.filter((r) => r.entity === 'master').map((r) => r.entity_id))])

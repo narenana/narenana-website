@@ -8,8 +8,10 @@ import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType, ROLE_TAGS, normalizeRoleTags } from './public.mjs'
 import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse, productLandings } from './grid-next.mjs'
 import { runSlice, upsertProducts, mergeMasters, dedupSlice, hasSlugAlias } from './jobs.mjs'
-import { runCuratorNow, curatorReport } from './curator/index.mjs'
-import { hasCuratorTables, lockOwner, revertAction } from './curator/store.mjs'
+import { runCuratorNow, curatorReport, curatorNeeds } from './curator/index.mjs'
+import { hasCuratorTables, lockOwner } from './curator/store.mjs'
+import { unmergeMasters, attachSku, survivorInfo, pickSurvivor } from './curator/merge.mjs'
+import { revertCuratorAction, dismissEscalation } from './curator/apply.mjs'
 import { validModels } from './ai.mjs'
 import {
   MFR_WEEKLY_CRON,
@@ -746,6 +748,16 @@ async function api(request, url, env, ep, actor) {
     // that seller's own storefront, so its unlabeled products carry its brand.
     const KNOWN = triage.brands ?? []
     const houseBrandOf = (srcId) => KNOWN.find((b) => slugify(b) === srcId) ?? ''
+    // The curator's open question per listing (migration 0019): its proposal
+    // and the embedding matches, which replace the name-substring guesses.
+    const asks = new Map()
+    if (skus.length && (await hasCuratorTables(env))) {
+      for (const a of await all(env, `SELECT entity_id, other_id, after, evidence FROM curator_action WHERE entity='sku' AND kind='escalate' AND status='planned'
+          AND entity_id IN (SELECT value FROM json_each(?)) ORDER BY id`, JSON.stringify(skus.map((k) => k.id)))) {
+        try { asks.set(a.entity_id, { proposal: JSON.parse(a.after ?? 'null')?.value ?? null, ...JSON.parse(a.evidence ?? '{}') }) } catch {}
+      }
+    }
+    const byId = new Map(masters.map((mm) => [mm.id, mm]))
     for (const k of skus) {
       k.score = score(k.title)
       const t = k.title ?? ''
@@ -780,12 +792,18 @@ async function api(request, url, env, ep, actor) {
         kind: stored?.kind,
         via: stored?.via,
       }
-      const tn = normName(t)
-      k.suggestions = masters
-        .map((mm) => ({ ...mm, s: tn.includes(mm.name_norm) ? 2 : mm.name_norm.split(' ').filter((w) => w.length > 2 && tn.includes(w)).length }))
-        .filter((mm) => mm.s >= 2)
-        .sort((a, b) => b.s - a.s)
-        .slice(0, 3)
+      const ask = asks.get(k.id)
+      if (ask) k.ai = { why: ask.why ?? null, kind: ask.kind ?? null, confidence: ask.confidence ?? null, proposal: ask.proposal ?? null, verdict: ask.verdict?.verdict ?? null }
+      if (ask?.matches?.length) {
+        k.suggestions = ask.matches.map((x) => byId.get(x.id) && { ...byId.get(x.id), cos: x.cos }).filter(Boolean).slice(0, 3)
+      } else {
+        const tn = normName(t)
+        k.suggestions = masters
+          .map((mm) => ({ ...mm, s: tn.includes(mm.name_norm) ? 2 : mm.name_norm.split(' ').filter((w) => w.length > 2 && tn.includes(w)).length }))
+          .filter((mm) => mm.s >= 2)
+          .sort((a, b) => b.s - a.s)
+          .slice(0, 3)
+      }
     }
     return json({ counts, srcCounts, stockCounts, sources, skus, specFields, cat: { id: cat?.id, configs }, page: rpage, pageSize: RPAGE })
   }
@@ -795,9 +813,14 @@ async function api(request, url, env, ep, actor) {
     if (!k) return json({ error: 'unknown sku' }, 404)
     const t = now()
 
+    // The owner decided this listing: the curator's open question about it is closed.
+    const closeAsk = async () => ((await hasCuratorTables(env))
+      ? [q(env, `UPDATE curator_action SET status='skipped', evidence=json_set(COALESCE(evidence,'{}'),'$.closed',?) WHERE entity='sku' AND entity_id=? AND kind='escalate' AND status='planned'`, `decided in Review: ${body.action}`, k.id)]
+      : [])
     if (body.action === 'reject') {
       await batch(env, [
         q(env, `UPDATE sku SET review_status='rejected', reject_reason=?, reviewed_at=? WHERE id=?`, body.reason ?? 'junk', t, k.id),
+        ...(await closeAsk()),
         audit(env, actor, 'reject', 'sku', k.id, { reason: body.reason }),
       ])
       return json({ ok: true })
@@ -844,13 +867,8 @@ async function api(request, url, env, ep, actor) {
     if (body.action === 'attach') {
       const mm = await one(env, 'SELECT id FROM master_model WHERE id=?', body.masterId)
       if (!mm) return json({ error: 'unknown master' }, 404)
-      await batch(env, [
-        q(env, `INSERT OR IGNORE INTO offer (sku_id, master_model_id, config, pack_qty, created_at) VALUES (?,?,?,?,?)`, k.id, mm.id, body.config ?? 'kit', body.packQty ?? 1, t),
-        q(env, `UPDATE sku SET review_status='approved', reviewed_at=? WHERE id=?`, t, k.id),
-        // snapshot the good price at approval → a guaranteed D1 recovery point
-        q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`, k.id, t, null, k.price_inr, k.in_stock),
-        audit(env, actor, 'approve-attach', 'sku', k.id, { master: mm.id }),
-      ])
+      // the same statements as the curator's auto-attach (curator/merge.mjs)
+      await batch(env, [...attachSku(env, k.id, mm.id, body.config ?? 'kit', body.packQty ?? 1, actor, { t }), ...(await closeAsk())])
       await setMasterPower(env, mm.id)
       return json({ ok: true })
     }
@@ -883,6 +901,7 @@ async function api(request, url, env, ep, actor) {
           // snapshot the good price at approval → a guaranteed D1 recovery point
           q(env, `INSERT INTO observation (sku_id, at, vkey, price_inr, in_stock) VALUES (?,?,?,?,?)`, k.id, t, null, k.price_inr, k.in_stock),
           audit(env, actor, 'approve-new-master', 'sku', k.id, { slug: m.slug }),
+          ...(await closeAsk()),
           // Provenance (migration 0019): the values the owner accepted here.
           // The curator may fill their blanks, nothing more.
           ...((await hasCuratorTables(env))
@@ -1036,6 +1055,18 @@ async function api(request, url, env, ep, actor) {
       LEFT JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
       ${where} GROUP BY m.id ${having} ${orderBy} LIMIT ? OFFSET ?`, ...condParams, PAGE, (page - 1) * PAGE)
     for (const m of masters) m.path = `${cats.find((c) => c.id === m.category_id)?.path_prefix ?? ''}/${m.slug}/`
+    // Who set each field (migration 0019): "you", "curator 0.94", "rules",
+    // with the applied curator change a Revert button undoes.
+    if (masters.length && (await hasCuratorTables(env))) {
+      const ids = JSON.stringify(masters.map((m) => m.id))
+      const src = await all(env, `SELECT entity_id, field, src, confidence FROM field_src WHERE entity='master' AND entity_id IN (SELECT value FROM json_each(?))`, ids)
+      const acts = await all(env, `SELECT id, entity_id, json_extract(after,'$.field') AS field FROM curator_action WHERE entity='master' AND status='applied' AND kind IN ('fill','rename','roles')
+          AND entity_id IN (SELECT value FROM json_each(?)) ORDER BY id`, ids)
+      const by = {}
+      for (const r of src) ((by[r.entity_id] ??= {})[r.field] = { src: r.src, confidence: r.confidence })
+      for (const a of acts) if (by[a.entity_id]?.[a.field]) by[a.entity_id][a.field].action = a.id
+      for (const m of masters) m.field_src = by[m.id] ?? {}
+    }
     // Attach the matched YouTube videos — only for the popularity view, so the
     // ordinary Catalog tab never touches master_video (top by views; excluded
     // ones last so admin can still see and reconsider them).
@@ -1193,12 +1224,16 @@ async function api(request, url, env, ep, actor) {
 
   if (ep === 'duplicates' && request.method === 'GET') {
     const cats = await categories(env)
-    const rows = await all(env, `SELECT mc.id, mc.a_id, mc.b_id, mc.score, mc.reason,
+    const curated = await hasCuratorTables(env)
+    // ?view=dismissed: the pairs the AI said are different (hidden by default;
+    // never the owner's rejection).
+    const view = url.searchParams.get('view') === 'dismissed' && curated ? 'dismissed' : 'pending'
+    const rows = await all(env, `SELECT mc.id, mc.a_id, mc.b_id, mc.score, mc.reason, mc.status${curated ? ', mc.ai_verdict, mc.keep_id, mc.source' : ''},
         a.slug a_slug, a.brand a_brand, a.name a_name, a.status a_status, a.category_id a_cat, a.specs a_specs, a.power a_power,
         b.slug b_slug, b.brand b_brand, b.name b_name, b.status b_status, b.specs b_specs, b.power b_power
       FROM merge_candidate mc
       JOIN master_model a ON a.id=mc.a_id JOIN master_model b ON b.id=mc.b_id
-      WHERE mc.status='pending' ORDER BY mc.score DESC, mc.id`)
+      WHERE mc.status=? ORDER BY mc.score DESC, mc.id`, view)
     // Pull each involved master's actual offers (photo comes from /img/master/id)
     // so the reviewer sees seller, price and title — not just a name + score.
     const ids = [...new Set(rows.flatMap((r) => [r.a_id, r.b_id]))]
@@ -1211,7 +1246,10 @@ async function api(request, url, env, ep, actor) {
         ORDER BY k.dead ASC, k.price_inr ASC`, ...chunk)
       for (const o of offers) (byMaster[o.mid] ??= []).push(o)
     }
-    const hasSpan = (s) => { try { return JSON.parse(s || '{}').spanMM > 0 ? 0 : 1 } catch { return 1 } }
+    // Which side to KEEP: the curator's shared survivor rule (ready, live
+    // sellers, the owner's work, approved offers, clean name and slug, id).
+    const info = new Map()
+    for (let i = 0; i < ids.length; i += 90) for (const [k2, v] of await survivorInfo(env, ids.slice(i, i + 90), { fieldSrc: curated })) info.set(k2, v)
     for (const r of rows) {
       r.prefix = cats.find((c) => c.id === r.a_cat)?.path_prefix ?? ''
       r.a_offers = byMaster[r.a_id] ?? []
@@ -1220,36 +1258,68 @@ async function api(request, url, env, ep, actor) {
       r.a_in_stock = r.a_offers.some((o) => o.in_stock && !o.dead)
       r.b_in_stock = r.b_offers.some((o) => o.in_stock && !o.dead)
       r.both_in_stock = r.a_in_stock && r.b_in_stock
-      // Which side to KEEP: ready>draft, then more offers, then has-span, then lower id.
-      const ra = [r.a_status === 'ready' ? 0 : 1, -r.a_offers.length, hasSpan(r.a_specs), r.a_id]
-      const rb = [r.b_status === 'ready' ? 0 : 1, -r.b_offers.length, hasSpan(r.b_specs), r.b_id]
-      let keepA = true
-      for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) { keepA = ra[i] < rb[i]; break }
-      r.keepId = keepA ? r.a_id : r.b_id
+      const x = info.get(r.a_id)
+      const y = info.get(r.b_id)
+      r.keepId = x && y ? pickSurvivor([x, y]).id : r.keep_id ?? r.a_id
+      if (r.ai_verdict) { try { r.ai = JSON.parse(r.ai_verdict) } catch { r.ai = null } }
+      delete r.ai_verdict
     }
     // Surface the merges that actually matter first: when BOTH masters are in
     // stock, merging changes what a shopper sees; if one side is out of stock the
     // dupe collapses to the in-stock side either way (cosmetic). Keep the finder's
     // confidence order (score DESC, then id) within each tier.
     rows.sort((x, y) => Number(y.both_in_stock) - Number(x.both_in_stock) || y.score - x.score || x.id - y.id)
-    return json({ candidates: rows })
+    const dismissed = curated ? (await one(env, `SELECT COUNT(*) n FROM merge_candidate WHERE status='dismissed'`))?.n ?? 0 : 0
+    const merges = curated
+      ? await all(env, `SELECT u.id, u.survivor_id, u.absorbed_id, u.actor, u.created_at, u.undone_at, json_extract(u.snapshot,'$.b.brand') AS absorbed_brand,
+          json_extract(u.snapshot,'$.b.name') AS absorbed_name, m.brand AS survivor_brand, m.name AS survivor_name
+          FROM merge_undo u LEFT JOIN master_model m ON m.id=u.survivor_id ORDER BY u.id DESC LIMIT 15`)
+      : []
+    return json({ candidates: rows, view, dismissed, merges })
   }
 
   if (ep === 'merge' && request.method === 'POST') {
     const a = await one(env, 'SELECT id FROM master_model WHERE id=?', body.aId)
     const b = await one(env, 'SELECT id FROM master_model WHERE id=?', body.bId)
     if (!a || !b) return json({ error: 'unknown master' }, 404)
-    await mergeMasters(env, body.aId, body.bId, actor, body.reason ?? 'owner-confirmed')
+    if (a.id === b.id) return json({ error: 'pick two different pages' }, 400)
+    try {
+      // the same merge as the curator's: with a snapshot, so it can be undone
+      const r = await mergeMasters(env, body.aId, body.bId, actor, body.reason ?? 'owner-confirmed')
+      catCache.at = 0
+      return json({ ok: true, undoId: r?.undoId ?? null, took: r?.took ?? [], slug: r?.slug ?? null })
+    } catch (e) {
+      if (/migration 0019/.test(String(e?.message))) return json({ error: e.message }, 409)
+      throw e
+    }
+  }
+
+  // Undo a merge (the curator's, a directive's or the owner's): B comes back
+  // with its offers, videos, manufacturer rows, aliases and candidate pairs,
+  // and the pair is rejected so it is never proposed again.
+  if (ep === 'unmerge' && request.method === 'POST') {
+    if (!(await hasCuratorTables(env))) return json({ error: 'apply migration 0019_curator first' }, 409)
+    const id = Number(body.undoId)
+    if (!Number.isInteger(id) || id <= 0) return json({ error: 'undoId required' }, 400)
+    const r = await unmergeMasters(env, id, actor)
+    if (!r.ok) return json({ error: r.error }, r.status ?? 400)
     catCache.at = 0
-    return json({ ok: true })
+    return json(r)
   }
 
   if (ep === 'reject-merge' && request.method === 'POST') {
+    const lo = Math.min(body.aId, body.bId)
+    const hi = Math.max(body.aId, body.bId)
     await batch(env, [
       q(env, `INSERT INTO merge_candidate (a_id, b_id, score, reason, status, created_at, decided_at)
               VALUES (?,?,0,'owner: not duplicates','rejected',?,?)
-              ON CONFLICT(a_id,b_id) DO UPDATE SET status='rejected', decided_at=excluded.decided_at`,
-        Math.min(body.aId, body.bId), Math.max(body.aId, body.bId), now(), now()),
+              ON CONFLICT(a_id,b_id) DO UPDATE SET status='rejected', reason='owner: not duplicates', decided_at=excluded.decided_at`,
+        lo, hi, now(), now()),
+      // the curator's open question about this pair is answered
+      ...((await hasCuratorTables(env))
+        ? [q(env, `UPDATE curator_action SET status='skipped', evidence=json_set(COALESCE(evidence,'{}'),'$.closed','owner: not duplicates')
+            WHERE kind='escalate' AND status='planned' AND entity='master' AND entity_id=? AND other_id=?`, lo, hi)]
+        : []),
       audit(env, actor, 'reject-merge', 'master_model', body.bId, { with: body.aId }),
     ])
     return json({ ok: true })
@@ -1677,6 +1747,7 @@ async function api(request, url, env, ep, actor) {
   // owner, and the last 14 runs.
   if (ep === 'curator' && request.method === 'GET') {
     if (!(await hasCuratorTables(env))) return json({ error: 'apply migration 0019_curator first' }, 409)
+    if (url.searchParams.get('brief') === '1') return json({ needs: await curatorNeeds(env) })
     return json(await curatorReport(env, url.searchParams.get('run')))
   }
   // Run now: start or resume today's run (force: a second run today) and do
@@ -1710,13 +1781,67 @@ async function api(request, url, env, ep, actor) {
   }
   // Revert one applied change: the old value comes back and the field is
   // locked as the owner's, so the curator never fills it again.
+  // Any applied change: a merge is unmerged, an attach or draft un-approved,
+  // a reject restored (and the listing locked as the owner's).
   if (ep === 'curator-revert' && request.method === 'POST') {
     const id = Number(body.actionId)
     if (!Number.isInteger(id) || id <= 0) return json({ error: 'actionId required' }, 400)
-    const r = await revertAction(env, id, actor)
+    const r = await revertCuratorAction(env, id, actor)
     if (!r.ok) return json({ error: r.error }, r.status ?? 400)
     catCache.at = 0
     return json(r)
+  }
+  // Close one open question without acting on it.
+  if (ep === 'curator-dismiss' && request.method === 'POST') {
+    const id = Number(body.actionId)
+    if (!Number.isInteger(id) || id <= 0) return json({ error: 'actionId required' }, 400)
+    const r = await dismissEscalation(env, id, actor)
+    if (!r.ok) return json({ error: r.error }, r.status ?? 400)
+    return json(r)
+  }
+  // The owner's decisions queue (design § 10): GET lists it; POST queues one
+  // for the next curator tick. merge {keep, absorb}, rename {id, name?, slug?},
+  // brand {id, brand}; the ids' current slugs become its expectations.
+  if (ep === 'directive' && request.method === 'GET') {
+    if (!(await hasCuratorTables(env))) return json({ error: 'apply migration 0019_curator first' }, 409)
+    const rows = await all(env, `SELECT * FROM curator_directive ORDER BY id DESC LIMIT 100`)
+    return json({ directives: rows.map((d) => ({ ...d, payload: JSON.parse(d.payload), result: d.result ? JSON.parse(d.result) : null })) })
+  }
+  if (ep === 'directive' && request.method === 'POST') {
+    if (!(await hasCuratorTables(env))) return json({ error: 'apply migration 0019_curator first' }, 409)
+    const int = (v) => (Number.isInteger(Number(v)) && Number(v) > 0 ? Number(v) : null)
+    const slugOf = async (id) => (await one(env, `SELECT slug FROM master_model WHERE id=?`, id))?.slug ?? null
+    let payload
+    if (body.kind === 'merge') {
+      const keep = int(body.keep)
+      const absorb = int(body.absorb)
+      if (!keep || !absorb || keep === absorb) return json({ error: 'merge takes two different page ids: keep and absorb' }, 400)
+      const [ks, as] = [await slugOf(keep), await slugOf(absorb)]
+      if (!ks || !as) return json({ error: `unknown page #${ks ? absorb : keep}` }, 404)
+      payload = { keep, absorb, expect: { keep_slug: ks, absorb_slug: as } }
+    } else if (body.kind === 'rename' || body.kind === 'brand') {
+      const id = int(body.id)
+      const cur = id ? await slugOf(id) : null
+      if (!cur) return json({ error: 'unknown page' }, 404)
+      if (body.kind === 'rename') {
+        const name = typeof body.name === 'string' ? body.name.trim() : ''
+        const slug = typeof body.slug === 'string' ? body.slug.trim() : ''
+        if (!name && !slug) return json({ error: 'rename takes a name and/or a slug' }, 400)
+        if (name && nameLint(name)) return json({ error: `The name ${nameLint(name)}.` }, 400)
+        if (slug && !/^[a-z0-9-]{3,60}$/.test(slug)) return json({ error: 'The page address takes 3 to 60 lower-case letters, digits and hyphens.' }, 400)
+        payload = { id, ...(name ? { name } : {}), ...(slug ? { slug } : {}), expect: { slug: cur } }
+      } else {
+        const brand = typeof body.brand === 'string' ? body.brand.trim() : ''
+        if (!brand) return json({ error: 'brand takes a brand' }, 400)
+        payload = { id, brand, expect: { slug: cur } }
+      }
+    } else return json({ error: 'kind is merge, rename or brand' }, 400)
+    const t = now()
+    await batch(env, [
+      q(env, `INSERT INTO curator_directive (kind, payload, status, approved_by, approved_at, source) VALUES (?,?,'approved',?,?,'admin')`, body.kind, JSON.stringify(payload), actor, t),
+      audit(env, actor, 'curator-directive', 'curator_directive', body.kind, payload),
+    ])
+    return json({ ok: true, payload, note: 'queued: the next curator run applies it (Run now to do it today)' })
   }
 
   if (ep === 'system' && request.method === 'GET') {
@@ -1748,6 +1873,7 @@ async function api(request, url, env, ep, actor) {
       curator_automerge_max: () => num(0, 100) && Number.isInteger(Number(v)),
       curator_scale: () => num(0.25, 20),
       curator_models: () => validModels(v),
+      curator_drafts: () => v === '0' || v === '1',
     }
     if (Object.hasOwn(CURATOR, body.k)) {
       if (!CURATOR[body.k]()) return json({ error: `invalid value for ${body.k}` }, 400)

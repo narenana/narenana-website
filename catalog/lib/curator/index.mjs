@@ -25,15 +25,29 @@
 // about 8), 6 AI calls, 1 merge, 3,000 vector comparisons, and no new work
 // after 90 s (the jobs lease is 4 minutes). budgetedEnv counts them.
 //
-// Phases directives, embed, candidates, judge and merge are placeholders that
-// complete at once, until dedup and merging move into the curator.
+// A phase that leaves catalog writes pending ends the tick when it finishes,
+// so the next phase reads what it wrote (fill before embed, embed before the
+// vector comparison).
+//
+//   directives  the owner's queued decisions (directives.mjs)
+//   triage      pending listings: listing-v1, auto-reject (triage.mjs)
+//   fill        blank brand, span, power (fill.mjs)
+//   embed       vectors for changed pages and listings (embed.mjs)
+//   candidates  vector neighbours + heuristic pairs + pending pairs (dedup.mjs)
+//   judge       pair-v1, the gates, the second opinion (dedup.mjs)
+//   merge       auto-merges, auto-attaches, new drafts, questions (dedup.mjs)
+//   names, roles  on the survivors (fill.mjs)
 
 import { AiClient, aiSettingKeys, dayKey } from '../ai.mjs'
 import { claimLease } from '../db.mjs'
 import { PROBE_TASK } from './prompts.mjs'
 import { triagePhase } from './triage.mjs'
 import { fillPhase, namesPhase, rolesPhase } from './fill.mjs'
-import { insertActions, upsertFieldSrc, ACTIONS_PER_STMT, FIELD_SRC_PER_STMT, planApplyStatements } from './store.mjs'
+import { directivesPhase } from './directives.mjs'
+import { embedPhase } from './embed.mjs'
+import { candidatesPhase, judgePhase, mergePhase } from './dedup.mjs'
+import { planSliceStatements } from './apply.mjs'
+import { insertActions, upsertFieldSrc, ACTIONS_PER_STMT, FIELD_SRC_PER_STMT } from './store.mjs'
 
 export const PHASES = ['probe', 'directives', 'triage', 'fill', 'embed', 'candidates', 'judge', 'merge', 'names', 'roles', 'report']
 export const LIMITS = { stmts: 34, ai: 6, merges: 1, vec: 3000, wallMs: 90e3 }
@@ -106,8 +120,6 @@ export function budgetedEnv(env, meter) {
 }
 
 // ------------------------------------------------------------------ phases
-const notYet = async () => 'done' // dedup and merging do not run in the curator yet
-
 async function probePhase(ctx) {
   const { cursor, ai } = ctx
   if (!ai.enabled) { cursor.health = { off: true }; return 'done' }
@@ -134,20 +146,27 @@ async function probePhase(ctx) {
   return 'done'
 }
 
+// Open questions for the owner whose subject still exists (a page merged
+// away or a listing decided in Review closes its question).
+export const OPEN_QUESTIONS = `SELECT COUNT(*) AS n FROM curator_action a WHERE a.kind='escalate' AND a.status='planned'
+  AND (a.entity<>'master' OR EXISTS (SELECT 1 FROM master_model m WHERE m.id=a.entity_id))
+  AND (a.entity<>'master' OR a.other_id IS NULL OR EXISTS (SELECT 1 FROM master_model m WHERE m.id=a.other_id))
+  AND (a.entity<>'sku' OR EXISTS (SELECT 1 FROM sku k WHERE k.id=a.entity_id AND k.review_status='new'))`
+
 async function reportPhase(ctx) {
-  const rows = (await ctx.env.CATALOG_DB.prepare(`SELECT kind, entity, status, COUNT(*) AS n FROM curator_action WHERE run_id=? GROUP BY kind, entity, status`).bind(ctx.run.id).all()).results ?? []
+  const rows = (await ctx.env.CATALOG_DB.prepare(`SELECT kind, entity, status, (other_id IS NOT NULL) AS pair, COUNT(*) AS n FROM curator_action WHERE run_id=? GROUP BY kind, entity, status, pair`).bind(ctx.run.id).all()).results ?? []
   const tally = {}
-  const add = (kind, entity, status, n) => { const k = `${kind}:${entity}:${status}`; tally[k] = (tally[k] ?? 0) + n }
-  for (const r of rows) add(r.kind, r.entity, r.status, r.n)
-  for (const a of ctx.actions) add(a.kind, a.entity, a.status, 1)
-  const open = (await ctx.env.CATALOG_DB.prepare(`SELECT COUNT(*) AS n FROM curator_action WHERE kind='escalate' AND status='planned'`).first())?.n ?? 0
+  const add = (kind, entity, status, pair, n) => { const k = `${kind}:${entity}:${status}:${pair ? 1 : 0}`; tally[k] = (tally[k] ?? 0) + n }
+  for (const r of rows) add(r.kind, r.entity, r.status, r.pair, r.n)
+  for (const a of ctx.actions) add(a.kind, a.entity, a.status, a.otherId != null, 1)
+  const open = (await ctx.env.CATALOG_DB.prepare(OPEN_QUESTIONS).first())?.n ?? 0
   const openNow = open + ctx.actions.filter((a) => a.kind === 'escalate').length
   const dry = ctx.run.mode === 'dry'
-  const sum = (kinds, entity) => Object.entries(tally).reduce((s, [k, n]) => {
-    const [kind, ent, status] = k.split(':')
-    return kinds.includes(kind) && ent === entity && (status === 'applied' || (dry && status === 'planned')) ? s + n : s
+  const sum = (kinds, entity, pairOnly = false) => Object.entries(tally).reduce((s, [k, n]) => {
+    const [kind, ent, status, pair] = k.split(':')
+    return kinds.includes(kind) && ent === entity && (!pairOnly || pair === '1') && (status === 'applied' || (dry && status === 'planned')) ? s + n : s
   }, 0)
-  const merged = sum(['merge'], 'master')
+  const merged = sum(['merge'], 'master') + sum(['directive'], 'master', true)
   const filled = sum(['fill', 'rename', 'roles'], 'master')
   const sorted = sum(['fill', 'reject', 'attach', 'draft'], 'sku')
   const neurons = Math.round((ctx.run.neurons ?? 0) + ctx.ai.neurons)
@@ -164,13 +183,13 @@ async function reportPhase(ctx) {
 
 export const HANDLERS = {
   probe: probePhase,
-  directives: notYet,
+  directives: directivesPhase,
   triage: triagePhase,
   fill: fillPhase,
-  embed: notYet,
-  candidates: notYet,
-  judge: notYet,
-  merge: notYet,
+  embed: embedPhase,
+  candidates: candidatesPhase,
+  judge: judgePhase,
+  merge: mergePhase,
   names: namesPhase,
   roles: rolesPhase,
   report: reportPhase,
@@ -201,7 +220,11 @@ function makeCtx({ env, raw, t, day, run, cursor, state, settings, meter, ai }) 
       ctx.actions.push({ ...a, status, runId: run.id, t })
       if (status === 'applied') {
         if (a.fieldSrc) ctx.fieldSrc.push({ entity: a.entity, entityId: a.entityId, field: a.fieldSrc.field, src: a.fieldSrc.src, confidence: a.fieldSrc.confidence, runId: run.id, t })
-        if (a.stmt) ctx.stmts.push(a.stmt())
+        if (a.stmt) {
+          const s = a.stmt()
+          if (Array.isArray(s)) ctx.stmts.push(...s)
+          else if (s) ctx.stmts.push(s)
+        }
       }
     },
     // Something for the owner: never applied by automation.
@@ -244,7 +267,7 @@ function makeCtx({ env, raw, t, day, run, cursor, state, settings, meter, ai }) 
 }
 
 // ------------------------------------------------------------------ the tick
-const settingKeys = (day) => ['curator_enabled', 'curator_state', 'curator_mode', 'curator_scale', 'curator_automerge_max', ...aiSettingKeys(day)]
+const settingKeys = (day) => ['curator_enabled', 'curator_state', 'curator_mode', 'curator_scale', 'curator_automerge_max', 'curator_drafts', ...aiSettingKeys(day)]
 
 // Returns null when there is nothing to do (so later jobs get the tick), or a
 // log object. opts: { scanDone, explicit, mode, force, now, limits }
@@ -370,7 +393,8 @@ async function tick(rawEnv, { t, day, runId, state, settings, opts }) {
     cursor.idx = 0
     if (!next) { finished = true; break }
     cursor.phase = next
-    if (ctx.late() || !ctx.room(4)) break
+    // pending catalog or vector writes: flush them before the next phase reads
+    if (ctx.late() || !ctx.room(4) || ctx.stmts.length) break
   }
 
   return flush(ctx, { finished })
@@ -435,18 +459,34 @@ async function flush(ctx, { finished }) {
 }
 
 // ------------------------------------------------------------ apply a plan
+// A slice of the plan per tick (apply.mjs): light changes up to the budget,
+// at most one merge. A slice whose batch fails is marked failed, so the rest
+// of the plan still goes through.
 async function applyTick(rawEnv, { t, state, settings, opts }) {
   const meter = makeMeter(settings.curator_scale, t, opts.limits)
   meter.stmts = 1
   const env = budgetedEnv(rawEnv, meter)
-  const limit = Math.max(1, Math.floor((meter.lim.stmts - 6) / 4))
-  const { stmts, taken } = await planApplyStatements(env, { runId: state.apply.run ?? null, limit, t })
-  const doneApplying = taken < limit
-  const next = doneApplying ? { ...state, apply: null } : state
-  const all = [...stmts.map((s) => s.__real ?? s)]
-  if (doneApplying) all.push(rawEnv.CATALOG_DB.prepare(`INSERT INTO setting (k, v) VALUES ('curator_state', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`).bind(JSON.stringify(next)))
-  if (all.length) await rawEnv.CATALOG_DB.batch(all)
-  return { job: 'curator', applying: state.apply.run ?? 'all', taken, done: doneApplying, statements: meter.stmts + all.length }
+  let res
+  try {
+    res = await planSliceStatements(env, { runId: state.apply.run ?? null, t, budget: meter.lim.stmts - 8 })
+  } catch (e) {
+    if (!(e instanceof BudgetExhausted)) throw e
+    return { job: 'curator', applying: state.apply.run ?? 'all', note: 'tick budget spent; continuing next tick' }
+  }
+  const next = res.done ? { ...state, apply: null } : state
+  const setState = rawEnv.CATALOG_DB.prepare(`INSERT INTO setting (k, v) VALUES ('curator_state', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`).bind(JSON.stringify(next))
+  const all = [...res.stmts.map((s) => s.__real ?? s), ...(res.done ? [setState] : [])]
+  let failed = null
+  if (all.length) {
+    try {
+      await rawEnv.CATALOG_DB.batch(all)
+    } catch (e) {
+      failed = String(e?.message ?? e).slice(0, 300)
+      console.error(JSON.stringify({ at: 'curator', run: state.apply.run ?? null, phase: 'apply', item: res.ids.join(','), code: 'batch', msg: failed }))
+      if (res.ids.length) await rawEnv.CATALOG_DB.batch(res.ids.map((id) => rawEnv.CATALOG_DB.prepare(`UPDATE curator_action SET status='failed', evidence=json_set(COALESCE(evidence,'{}'),'$.error',?) WHERE id=? AND status='planned'`).bind(failed, id)))
+    }
+  }
+  return { job: 'curator', applying: state.apply.run ?? 'all', taken: res.taken, done: res.done, statements: meter.stmts + all.length, ...(failed ? { failed } : {}) }
 }
 
 // ---------------------------------------------------------- admin helpers
@@ -467,10 +507,44 @@ export async function curatorReport(env, runId = null) {
   const state = parse((await db.prepare(`SELECT v FROM setting WHERE k='curator_state'`).first())?.v, {}) ?? {}
   const id = runId || state.run || (await db.prepare(`SELECT id FROM curator_run ORDER BY started_at DESC LIMIT 1`).first())?.id
   const run = id ? await db.prepare(`SELECT * FROM curator_run WHERE id=?`).bind(id).first() : null
-  const actions = id ? (await db.prepare(`SELECT * FROM curator_action WHERE run_id=? ORDER BY id LIMIT 500`).bind(id).all()).results ?? [] : []
-  const needsYou = (await db.prepare(`SELECT * FROM curator_action WHERE kind='escalate' AND status='planned' ORDER BY id DESC LIMIT 300`).all()).results ?? []
+  const actions = id ? (await db.prepare(`SELECT * FROM curator_action WHERE run_id=? ORDER BY id LIMIT 800`).bind(id).all()).results ?? [] : []
+  const open = (await db.prepare(`SELECT * FROM curator_action WHERE kind='escalate' AND status='planned' ORDER BY id DESC LIMIT 400`).all()).results ?? []
   const history = (await db.prepare(`SELECT id, mode, trig, status, phase, started_at, finished_at, ticks, ai_calls, cache_hits, neurons, neuron_cap, errors, summary FROM curator_run ORDER BY started_at DESC LIMIT 14`).all()).results ?? []
+  const directives = (await db.prepare(`SELECT * FROM curator_directive ORDER BY id DESC LIMIT 50`).all()).results ?? []
+  const merges = (await db.prepare(
+    `SELECT u.id, u.survivor_id, u.absorbed_id, u.actor, u.created_at, u.undone_at,
+       json_extract(u.snapshot,'$.b.name') AS absorbed_name, json_extract(u.snapshot,'$.b.brand') AS absorbed_brand, json_extract(u.snapshot,'$.b.slug') AS absorbed_slug,
+       m.brand AS survivor_brand, m.name AS survivor_name, m.slug AS survivor_slug
+     FROM merge_undo u LEFT JOIN master_model m ON m.id=u.survivor_id ORDER BY u.id DESC LIMIT 30`,
+  ).all()).results ?? []
+  const settings = Object.fromEntries(((await db.prepare(`SELECT k, v FROM setting WHERE k LIKE 'curator%' OR k=?`).bind(`ai_neurons:${dayKey(Date.now())}`).all()).results ?? []).map((r) => [r.k, r.v]))
+  // names for everything shown, and which subjects still exist / are pending
   const decode = (a) => ({ ...a, before: parse(a.before, null), after: parse(a.after, null), evidence: parse(a.evidence, null) })
-  if (run) run.cursor = { ...parse(run.cursor, {}), queue: undefined }
-  return { state, run, actions: actions.map(decode), needsYou: needsYou.map(decode), history }
+  const all = [...actions, ...open]
+  const mids = [...new Set(all.flatMap((a) => (a.entity === 'master' ? [a.entity_id, a.other_id] : a.entity === 'sku' ? [a.other_id] : [])).filter(Number.isInteger))]
+  const sids = [...new Set(all.filter((a) => a.entity === 'sku').map((a) => a.entity_id).filter(Number.isInteger))]
+  const masters = new Map(((await db.prepare(`SELECT id, brand, name, slug, status, category_id FROM master_model WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(mids)).all()).results ?? []).map((m) => [m.id, m]))
+  const skus = new Map(((await db.prepare(`SELECT id, title, source_id, review_status, url_canonical FROM sku WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(sids)).all()).results ?? []).map((k) => [k.id, k]))
+  const needsYou = open.filter((a) => (a.entity !== 'master' || (masters.has(a.entity_id) && (a.other_id == null || masters.has(a.other_id)))) && (a.entity !== 'sku' || skus.get(a.entity_id)?.review_status === 'new'))
+  if (run) {
+    const c = parse(run.cursor, {}) ?? {}
+    run.cursor = { phase: c.phase, idx: c.idx, health: c.health ?? null, counts: c.counts ?? {}, tally: c.tally ?? null, scope: c.scope ?? null }
+  }
+  return {
+    state,
+    run,
+    settings,
+    actions: actions.map(decode),
+    needsYou: needsYou.map(decode),
+    history,
+    directives: directives.map((d) => ({ ...d, payload: parse(d.payload, null), result: parse(d.result, null) })),
+    merges,
+    masters: Object.fromEntries(masters),
+    skus: Object.fromEntries(skus),
+  }
+}
+
+// The "needs you" count for the tab label: one statement.
+export async function curatorNeeds(env) {
+  return (await env.CATALOG_DB.prepare(OPEN_QUESTIONS).first())?.n ?? 0
 }
