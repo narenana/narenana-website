@@ -1,4 +1,4 @@
-import { manufacturerReference } from './product-overview.mjs'
+import { manufacturerReference, nameLint } from './product-overview.mjs'
 // Catalog worker: public pages from D1, admin panel + API behind HTTP Basic
 // auth, image proxy, and the */15 job-slice dispatcher.
 
@@ -6,8 +6,8 @@ import puppeteer from '@cloudflare/puppeteer'
 import { CSS } from './styles.mjs'
 import { ADMIN_HTML } from './admin-ui.mjs'
 import { renderGrid, renderMaster, powerType } from './public.mjs'
-import { gridDataNext, renderGridNext, resolveLanding, validLandings, browseData, renderBrowse } from './grid-next.mjs'
-import { runSlice, upsertProducts, mergeMasters, dedupSlice } from './jobs.mjs'
+import { gridDataNext, renderGridNext, resolveLanding, validLandings, landingRedirect, powerCounts, browseData, renderBrowse, productLandings } from './grid-next.mjs'
+import { runSlice, upsertProducts, mergeMasters, dedupSlice, hasSlugAlias } from './jobs.mjs'
 import {
   MFR_WEEKLY_CRON,
   enqueueManufacturerHarvests,
@@ -49,6 +49,11 @@ async function categories(env) {
 
 const html = (body, status = 200) =>
   new Response(body, { status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=0, must-revalidate' } })
+// Relative Location, as src/index.js does: behind latest-router this Worker
+// sees the workers.dev host. Revalidated like the pages, because a landing
+// redirect can end (landingRedirect), so browsers must not keep it forever.
+const redirect = (location) =>
+  new Response(null, { status: 301, headers: { location, 'cache-control': 'public, max-age=0, must-revalidate' } })
 
 // IndexNow key — PUBLIC (served at /<key>.txt to prove ownership so Bing /
 // Yandex accept our URL submissions). Not a secret; safe in the repo.
@@ -76,6 +81,34 @@ export function publicCacheKey(url, env, { path = url.pathname, params = PAGE_PA
 }
 // HEAD shares the GET entry; it just never carries the body.
 export const forMethod = (request, res) => (request.method === 'HEAD' ? new Response(null, res) : res)
+
+// The valid (indexable) landing set that product pages link to (SEO rec 3).
+// It needs a catalog-wide aggregation, so it is worked out once per edge-cache
+// cycle (15 min, the pages' s-maxage) per isolate, not on every product render.
+// Keyed by cacheRelease, so a deploy starts fresh; the hub, landing, browse and
+// sitemap routes compute the same set anyway and refresh it for free.
+const LANDING_SET_TTL = 900e3
+const landingMemo = new Map() // `${cacheRelease}|${category id}` → { at, set }
+function rememberLandings(env, cat, slugs) {
+  if (landingMemo.size > 16) landingMemo.clear()
+  const set = slugs instanceof Set ? slugs : new Set(slugs)
+  landingMemo.set(`${cacheRelease(env)}|${cat.id}`, { at: now(), set })
+  return set
+}
+async function landingSet(env, cat) {
+  const hit = landingMemo.get(`${cacheRelease(env)}|${cat.id}`)
+  if (hit && now() - hit.at < LANDING_SET_TTL) return hit.set
+  const rows = await all(
+    env,
+    `SELECT COALESCE(m.power,'electric') AS power, m.role_tags
+     FROM master_model m CROSS JOIN offer o ON o.master_model_id=m.id
+     CROSS JOIN sku k ON k.id=o.sku_id AND k.review_status='approved'
+     WHERE m.category_id=? AND m.status='ready' GROUP BY m.id
+     HAVING MAX(CASE WHEN k.in_stock=1 AND k.dead=0 THEN 1 ELSE 0 END) = 1`,
+    cat.id,
+  )
+  return rememberLandings(env, cat, validLandings(rows.map((r) => ({ ...r, any_stock: 1 }))))
+}
 
 // Manufacturer-sourced facts (harvested specs, manufacturer link, retrieval
 // date) on public product pages and in their JSON-LD. OFF by owner decision
@@ -141,14 +174,27 @@ export async function handleCatalog(request, url, env, ctx) {
     const cache = caches.default
     const cached = async (key, render, status = 200) => {
       const hit = await cache.match(key)
-      if (hit) return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
+      if (hit) {
+        // A stored redirect (electric-X → X, an old product slug) keeps its status on the side.
+        if (hit.headers.get('x-cat-status') === '301') {
+          const headers = new Headers(hit.headers)
+          headers.delete('x-cat-status')
+          return new Response(null, { status: 301, headers })
+        }
+        return status === 200 ? hit : new Response(hit.body, { status, headers: hit.headers })
+      }
       const res = await render()
+      // Page URLs may also answer with a redirect (landing fold, slug alias); cached like the
+      // page, so crawlers re-fetching the old URL cost no D1 read. Its key is
+      // the page's own (never the shared 404 entry), and it expires with it.
+      const moved = status === 200 && res?.status === 301 && res.headers.has('location')
       if (
-        res && res.status === status
-        && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')
+        res && (moved || (res.status === status
+        && /text\/html|application\/xml/.test(res.headers.get('content-type') || '')))
       ) {
         // Stored as 200 whatever it is served as: the Cache API need not keep error statuses.
-        const store = new Response(res.clone().body, { status: 200, headers: res.headers })
+        const store = new Response(moved ? null : res.clone().body, { status: 200, headers: res.headers })
+        if (moved) store.headers.set('x-cat-status', '301')
         store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
         store.headers.set('x-cat-cache', 'HIT') // only ever seen on responses served FROM the cache
         ctx.waitUntil(cache.put(key, store))
@@ -181,10 +227,19 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       const p = url.searchParams.get('power') === 'gas' ? 'gas' : 'electric'
       const roles = (url.searchParams.get('role') || '').split(',').filter(Boolean)
       const sizes = (url.searchParams.get('size') || '').split(',').filter(Boolean)
-      // Search spans BOTH power classes — fetch 'all' and let the renderer filter.
+      // Search spans BOTH power classes — the renderer filters the 'all' rows.
+      // One 'all' query also gives the power counts and the valid landing set
+      // (for the Browse-by-type nav and the Nitro tab).
       const q = (url.searchParams.get('q') || '').trim().slice(0, 60)
-      const [rows, counts] = await Promise.all([gridDataNext(env, cat, q ? 'all' : p), gridCounts(env, cat)])
-      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts }))
+      const allRows = await gridDataNext(env, cat, 'all')
+      const rows = q ? allRows : allRows.filter((r) => (r.power || 'electric') === p)
+      const valid = rememberLandings(env, cat, validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
+      // The hub is the 'RC plane prices in India' page: its price table covers
+      // both powers (all), and it carries the editorial of the /electric/ page
+      // it replaced (that URL 301s here).
+      const hub = !q && p === 'electric'
+      const lp = hub ? await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, HUB_EDITORIAL_SLUG) : null
+      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts: powerCounts(allRows), valid, all: allRows, content: lp?.body || '' }))
     }
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
     const sort = ['price-desc', 'price-asc', 'span-desc', 'span-asc'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'price-desc'
@@ -199,7 +254,7 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
   // product page is orphaned. Reserved slug, checked before the master lookup.
   if (slug === 'browse') {
     const rows = await browseData(env, cat)
-    return html(renderBrowse(cat, rows, validLandings(rows)))
+    return html(renderBrowse(cat, rows, [...rememberLandings(env, cat, validLandings(rows))]))
   }
   // SEO landing pages — flat slugs (warbirds, electric-warbirds, nitro, …).
   // Checked before the master lookup; reserved slugs can't collide with product slugs.
@@ -207,17 +262,21 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
     const L = resolveLanding(slug)
     if (L) {
       // All in-stock rows once: this landing renders its power's subset, and the
-      // full set tells the Electric/Nitro tabs which sibling landings exist, so
-      // they link to those indexable pages instead of noindex filter URLs.
-      const [allRows, counts] = await Promise.all([gridDataNext(env, cat, 'all'), gridCounts(env, cat)])
+      // full set gives the valid (indexable) landing set, so the Electric/Nitro
+      // tabs and the Browse-by-type nav link only indexable pages, plus the tab
+      // counts, scoped to this landing's role.
+      const allRows = await gridDataNext(env, cat, 'all')
       const rows = L.power === 'all' ? allRows : allRows.filter((r) => (r.power || 'electric') === L.power)
-      const valid = new Set(validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
-      const matched = L.roles.length
-        ? rows.filter((r) => { try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }).length
-        : rows.length
-      if (matched >= 1) {
+      const valid = rememberLandings(env, cat, validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
+      const inRole = (r) => { if (!L.roles.length) return true; try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }
+      // No match at all (e.g. nitro-gliders) stays a 404: nothing links there.
+      if (rows.some(inRole)) {
+        // electric-X folds into X while there is no nitro-X to split from, and
+        // /electric/ into the hub ('').
+        const to = landingRedirect(slug, valid)
+        if (to !== null) return redirect(`${cat.path_prefix}/${to ? `${to}/` : ''}`)
         const lp = await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, slug)
-        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '', valid }, counts }))
+        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '' }, valid, counts: powerCounts(allRows.filter(inRole)) }))
       }
     }
   }
@@ -251,13 +310,33 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
             LEFT JOIN mfr_profile pr ON pr.master_model_id=x.master_model_id AND pr.source_mfr_product_id=x.mfr_product_id
             WHERE x.master_model_id=? AND x.status='accepted' AND mf.status='active'`, m.id).catch(()=>null)
         : null
-      return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference)))
+      // Breadcrumb role + Type/Power rows link only valid landings; the set is
+      // memoised per cache cycle (landingSet), not queried per product. If it
+      // cannot be worked out, the page still renders, with no landing links.
+      const landings = productLandings(cat, m, await landingSet(env, cat).catch(() => null))
+      return html(renderMaster(cat, m, offers, similar, videos, manufacturerReference(reference), landings))
     }
+    // A merged-away or renamed model's old slug 301s to the model that owns it
+    // now (SEO rec 6), cached like the landing folds. Only a public survivor
+    // counts; without the table (migration 0018 not applied yet) or a match,
+    // it is the shared 404 as before.
+    const alias = await one(
+      env,
+      `SELECT m.slug, m.category_id FROM slug_alias a JOIN master_model m ON m.id=a.master_model_id
+       WHERE a.category_id=? AND a.old_slug=? AND m.status IN ('ready','retired')`,
+      cat.id,
+      slug,
+    ).catch(() => null)
+    const home = alias && cats.find((c) => c.id === alias.category_id && c.live)
+    if (home && !(home.id === cat.id && alias.slug === slug)) return redirect(`${home.path_prefix}/${alias.slug}/`)
   }
   return notFound(cat)
 }
 
 const GRID_PAGE = 24
+// The hub shows this landing_page row's editorial: the /electric/ page's copy
+// (the hub is the electric grid, and /electric/ now 301s to it).
+const HUB_EDITORIAL_SLUG = 'electric'
 
 // One page of in-stock masters, filtered by power, cheapest-last (price
 // high→low). Power is a stored column (0006) so this filters + paginates in
@@ -390,7 +469,7 @@ async function sitemapResponse(env, cats) {
        WHERE m.category_id=? AND m.status='ready' GROUP BY m.id`,
       cat.id,
     )
-    for (const s of validLandings(masters)) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
+    for (const s of rememberLandings(env, cat, validLandings(masters))) urls.push({ u: `${SITE}${cat.path_prefix}/${s}/` })
     // Retired models are excluded by the query. Out-of-stock product pages stay
     // reachable (honest OutOfStock schema) but are not listed here.
     // In-stock only (owner decision) — don't feed Google product pages we can't
@@ -769,6 +848,9 @@ async function api(request, url, env, ep, actor) {
     if (body.action === 'approve') {
       const m = body.master ?? {}
       if (!m.brand || !m.name || !m.slug || !/^[a-z0-9-]{3,60}$/.test(m.slug)) return json({ error: 'brand, name and a valid slug are required' }, 400)
+      // The name becomes the public <title>, H1 and card name (SEO rec 4).
+      const lint = nameLint(m.name)
+      if (lint) return json({ error: `The name ${lint}, so it looks like the seller's listing title. Enter the plain model name (for example "Phoenix 2000 V2"). Kit or PNP goes in Config; colour and condition stay on the listing.` }, 400)
       // Reserved slugs resolve BEFORE the master lookup (landing pages, browse
       // hub, power slugs) — a master with one of these would be unreachable.
       if (m.slug === 'browse' || resolveLanding(m.slug)) return json({ error: `"${m.slug}" is a reserved page name (landing/hub route) — pick another slug` }, 400)
@@ -1002,6 +1084,25 @@ async function api(request, url, env, ep, actor) {
       const missing = req.filter((k2) => specs[k2] == null || specs[k2] === '')
       if (missing.length) return json({ error: `cannot publish: missing required spec(s): ${missing.join(', ')}` }, 400)
     }
+    // Slug rename (SEO rec 6): the old address 301s to the new one through
+    // slug_alias, written in the same batch, so a rename never leaves a 404.
+    const newSlug = typeof body.slug === 'string' ? body.slug.trim() : ''
+    let slugStmts = []
+    if (newSlug && newSlug !== m.slug) {
+      if (!/^[a-z0-9-]{3,60}$/.test(newSlug)) return json({ error: 'The page address takes 3 to 60 lower-case letters, digits and hyphens.' }, 400)
+      if (newSlug === 'browse' || resolveLanding(newSlug)) return json({ error: `"${newSlug}" is a reserved page name (landing/hub route) — pick another slug` }, 400)
+      if (await one(env, `SELECT id FROM master_model WHERE category_id=? AND slug=? AND id<>?`, m.category_id, newSlug, m.id)) return json({ error: `Another model already uses "${newSlug}".` }, 409)
+      if (!(await hasSlugAlias(env))) return json({ error: 'Apply migration 0018_slug_alias first, so the old address can redirect to the new one.' }, 409)
+      const t = now()
+      slugStmts = [
+        q(env, `UPDATE master_model SET slug=?, updated_at=? WHERE id=?`, newSlug, t, m.id),
+        q(env, `INSERT INTO slug_alias (category_id, old_slug, master_model_id, created_at) VALUES (?,?,?,?)
+                ON CONFLICT(category_id, old_slug) DO UPDATE SET master_model_id=excluded.master_model_id, created_at=excluded.created_at`,
+          m.category_id, m.slug, m.id, t),
+        // The new address is live now, so it is nobody's alias.
+        q(env, `DELETE FROM slug_alias WHERE category_id=? AND old_slug=?`, m.category_id, newSlug),
+      ]
+    }
     await batch(env, [
       q(env, `UPDATE master_model SET brand=COALESCE(?, brand), name=COALESCE(?, name),
               brand_norm=COALESCE(?, brand_norm), name_norm=COALESCE(?, name_norm),
@@ -1010,7 +1111,8 @@ async function api(request, url, env, ep, actor) {
         body.brand ?? null, body.name ?? null,
         body.brand ? normName(body.brand) : null, body.name ? normName(body.name) : null,
         body.blurb ?? null, body.specs ?? null, body.status ?? null, body.brand ?? null, now(), body.id),
-      audit(env, actor, 'master-update', 'master_model', body.id, body),
+      ...slugStmts,
+      audit(env, actor, 'master-update', 'master_model', body.id, slugStmts.length ? { ...body, fromSlug: m.slug } : body),
     ])
     catCache.at = 0
     return json({ ok: true })

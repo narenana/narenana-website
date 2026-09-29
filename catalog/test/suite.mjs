@@ -10,7 +10,7 @@ import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct,
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
-import { renderGridNext, searchRows, resolveLanding } from '../lib/grid-next.mjs'
+import { renderGridNext, searchRows, resolveLanding, validLandings, landingRedirect, powerCounts, LANDING_ROLE_SLUGS, priceSummary, checkedRange } from '../lib/grid-next.mjs'
 import { HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL } from '../lib/home-queries.mjs'
 import { planAssetVersions } from '../../scripts/version-assets.mjs'
 import { ASSET_VERSIONS } from '../../src/asset-versions.mjs'
@@ -20,6 +20,7 @@ import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
 import { enqueueManufacturerHarvests, MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
 import { extractManufacturerFacts, mergeProfile, normalizeProfilePatch, PROFILE_FIELDS, validateProfileValues } from '../lib/mfr-profile.mjs'
 import { fetchWithAllowedRedirects, imageCacheHeaders } from '../lib/util.mjs'
+import { nameLint, statedConfig, configLabel } from '../lib/product-overview.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -714,6 +715,175 @@ test('catalog search: name/brand/type matching + search-mode grid', () => {
   assert.ok(plain.includes('class="fx-qform"') && !plain.includes('class="fx-qclear"'), 'normal grid shows the search box, no clear link')
 })
 
+// SEO rec 2 (2026-09): electric-X is its own page only beside a real nitro-X;
+// otherwise it duplicates the all-power X page. Nav and power tabs link only
+// indexable landings, and a thin landing serves noindex.
+test('landing merge: electric-X only beside nitro-X; nav and power tabs link indexable pages', () => {
+  const m = (id, power, role) => ({ id, slug: `m${id}`, brand: 'B', name: `M${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, hero_any: null, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1 })
+  const rows = [
+    ...[1, 2, 3, 4].map((i) => m(i, 'electric', 'Jet / EDF')), m(5, 'gas', 'Jet / EDF'),
+    ...[6, 7, 8].map((i) => m(i, 'electric', 'Glider / Sailplane')),
+    ...[9, 10, 11].map((i) => m(i, 'electric', 'Trainer')), ...[12, 13, 14].map((i) => m(i, 'gas', 'Trainer')),
+    m(15, 'electric', 'Airliner'),
+  ]
+  const valid = new Set(validLandings(rows))
+  assert.ok(valid.has('jets') && !valid.has('electric-jets') && !valid.has('nitro-jets'), 'no nitro half: jets carries the role alone')
+  assert.ok(valid.has('gliders') && !valid.has('electric-gliders'), 'an all-electric role has no electric- page')
+  assert.ok(valid.has('electric-trainers') && valid.has('nitro-trainers'), 'both halves qualify: both pages stay')
+  assert.ok(!valid.has('airliners'), '1 airliner is below the threshold')
+  assert.equal(landingRedirect('electric-jets', valid), 'jets')
+  assert.equal(landingRedirect('electric-gliders', valid), 'gliders')
+  assert.equal(landingRedirect('electric-trainers', valid), null, 'a real electric/nitro split is not redirected')
+  assert.equal(landingRedirect('nitro-jets', valid), null)
+  assert.equal(landingRedirect('jets', valid), null)
+  assert.deepEqual(powerCounts(rows), { electric: 11, gas: 4 })
+
+  const cat = { name: 'RC planes', path_prefix: '/wings' }
+  const seg = (html) => html.match(/<div class="fx-seg" id="fx-powmain"[\s\S]*?<\/div>/)[0]
+  const nav = (html) => [...html.match(/<nav class="fx-browse"[\s\S]*?<\/nav>/)[0].matchAll(/href="\/wings\/([a-z-]+)\/"/g)].map((x) => x[1])
+  const land = (slug) => {
+    const L = resolveLanding(slug)
+    const counts = powerCounts(rows.filter((r) => JSON.parse(r.role_tags).some((t) => L.roles.includes(t))))
+    return renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: '' }, valid, counts })
+  }
+
+  const hub = renderGridNext(cat, rows.filter((r) => r.power === 'electric'), { power: 'electric', counts: powerCounts(rows), valid })
+  assert.match(seg(hub), /href="\/wings\/nitro\/">Nitro \/ Gas <span>4</, 'hub Nitro tab links /wings/nitro/, not ?power=gas')
+  assert.ok(nav(hub).length && nav(hub).every((s) => valid.has(s)), 'Browse by type links only valid landings')
+  assert.ok(!nav(hub).includes('airliners'), 'a thin landing is not linked, though the hub has an airliner')
+
+  const jets = land('jets')
+  assert.match(jets, /name="robots" content="index,follow/)
+  assert.match(seg(jets), />Electric <span>4</, 'tab counts are the role\'s')
+  assert.match(seg(jets), /href="\/wings\/nitro\/">Nitro \/ Gas <span>1</, 'no nitro-jets page: Nitro links /wings/nitro/')
+  assert.ok(!jets.includes('/wings/electric-jets/') && !jets.includes('power=gas'), 'links neither the folded page nor a filter URL')
+
+  const gliders = land('gliders')
+  assert.ok(!seg(gliders).includes('Nitro'), 'a role with no nitro models has no Nitro tab')
+  assert.match(seg(gliders), /class="fx-seg-b is-on" href="\/wings\/gliders\/">Electric <span>3</, 'all-electric role: Electric is this page')
+
+  const trainers = land('trainers')
+  assert.match(seg(trainers), /href="\/wings\/electric-trainers\/">Electric <span>3</)
+  assert.match(seg(trainers), /href="\/wings\/nitro-trainers\/">Nitro \/ Gas <span>3</)
+
+  assert.ok(land('airliners').includes('name="robots" content="noindex,follow"'), 'a thin landing serves noindex,follow')
+})
+
+// SEO rec 5 (2026-09): the hub and the landings quote our own ₹ figures, from
+// the listings a product page would quote (in stock, still listed, not held
+// for review, priced, one new unit), each under the configuration the listing
+// states. A stored 'kit' is often only detectConfig's fallback.
+test('price figures: stated configurations, comparable listings only, sellers and check dates', () => {
+  const kit = (title, url = 'https://seller.example/p/x') => statedConfig({ config: 'kit', title, url_canonical: url })
+  assert.equal(kit('VT-Simple Trainer'), '', 'nothing named: not stated')
+  assert.equal(kit('Boomerang 40 balsa build up kit'), 'kit')
+  assert.equal(kit('Clouds Survey 1880mm KITNE', 'https://seller.example/product/clouds-survey-rc-airplane-kit'), 'kit', 'the URL path counts when the title is silent')
+  assert.equal(kit('Volantex RC Ranger 600 | Ready-to-Fly Glider Plane'), 'rtf', 'a stored kit whose title names RTF is RTF')
+  assert.equal(kit('HEEWING  T1 Ranger – PNP PRO GRY'), 'pnp')
+  assert.equal(kit('Seagull Arising Star 46Size High Wing Trainer ARF KIT'), 'arf')
+  assert.equal(kit('Phoenix Model P-40 Kitty Hawk ARF Nitro', 'https://seller.example/products/p-40-kitty-hawk-nitro-rtf'), 'arf', 'the title wins over the URL')
+  assert.equal(kit('Phoenix Model P-40 Kitty Hawk'), '', "'Kitty' is not 'kit'")
+  assert.equal(statedConfig({ config: 'pnp', title: 'Wing' }), 'pnp', 'a stored config other than kit came from a positive match')
+  assert.equal(configLabel({ config: 'kit', title: 'VT-Simple Trainer' }), 'Configuration not stated')
+  assert.equal(configLabel({ config: 'kit', title: 'VT-Simple Trainer' }, 'Not stated'), 'Not stated')
+  assert.equal(configLabel({ config: 'rtf', title: 'Cub' }), 'RTF')
+
+  const day = (d) => Date.UTC(2026, 8, d, 10)
+  const lo = (s, p, c, t, more = {}) => ({ s, p, q: 1, c, t, u: `https://${s}.example/p`, at: day(28), ...more })
+  const rows = [
+    { live_offers: JSON.stringify([lo('a', 1650, 'kit', 'VT-Simple Trainer'), lo('b', 2189, 'kit', 'Trainer balsa kit'), null]) },
+    { live_offers: [lo('a', 7790, 'kit', 'Sport Cub Ready-to-Fly', { at: day(27) }), lo('c', 7000, 'rtf', 'Sport Cub RTF (pre-owned)'), lo('c', 5000, 'rtf', 'Sport Cub RTF', { q: 2 })] },
+    { live_offers: '[]' }, // in stock, but every live listing is held for review
+  ]
+  const sum = priceSummary(rows)
+  assert.equal(sum.models, 3, 'every in-stock model counts')
+  assert.equal(sum.sellers, 3, 'distinct sellers with a live, priced listing')
+  assert.equal(sum.multi, 2)
+  assert.equal(sum.from, 1650)
+  assert.deepEqual(sum.bands, { '': { n: 1, from: 1650 }, kit: { n: 1, from: 2189 }, rtf: { n: 1, from: 7790 } }, 'a pre-owned unit and a 2-pack never set a figure')
+  assert.equal(checkedRange(sum.first, sum.last), '27–28 Sep 2026')
+  assert.equal(checkedRange(day(28), day(28) + 3600e3), '28 Sep 2026')
+  assert.equal(checkedRange(Date.UTC(2026, 7, 30), Date.UTC(2026, 8, 2)), '30 Aug – 2 Sep 2026')
+  assert.equal(checkedRange(null, null), '')
+})
+
+test('hub and landings: sentence-case titles, ₹ figures from comparable listings, practise lines, plain links', () => {
+  const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings' }
+  const at = Date.UTC(2026, 8, 28, 10)
+  const lo = (s, p, c, t) => ({ s, p, q: 1, c, t, u: `https://${s}.example/p`, at })
+  // min_price is the card's figure; the copy and tables read only live_offers.
+  const m = (id, power, role, offers) => ({ id, slug: `m${id}`, brand: 'B', name: `M${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, hero_any: null, min_price: 999, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1, live_offers: offers })
+  const rows = [
+    m(1, 'electric', 'Trainer', [lo('a', 1650, 'kit', 'Simple Trainer'), lo('b', 2000, 'kit', 'Simple Trainer kit')]),
+    m(2, 'electric', 'Trainer', [lo('a', 7790, 'rtf', 'Cub RTF')]),
+    m(3, 'gas', 'Trainer', [lo('c', 15500, 'kit', 'Boomerang ARF')]),
+    ...[4, 5, 6].map((i) => m(i, 'electric', 'FPV / Flying Wing', [lo('d', 2300 + i, 'pnp', 'Wing PNP')])),
+    ...[7, 8, 9].map((i) => m(i, 'electric', 'Jet / EDF', [lo('a', 9000 + i, 'pnp', 'EDF PNP')])),
+    m(10, 'electric', 'Sport / Park Flyer', []), // every live listing held for review
+  ]
+  const valid = new Set(validLandings(rows))
+  assert.ok(!valid.has('electric'), 'no /electric/ page: the hub is the electric grid')
+  assert.equal(landingRedirect('electric', valid), '', '/electric/ folds into the hub')
+  const land = (slug) => {
+    const L = resolveLanding(slug)
+    return renderGridNext(cat, L.power === 'all' ? rows : rows.filter((r) => r.power === L.power), { power: L.power, roles: L.roles, landing: { L, slug, content: '<p>Editorial.</p>' }, valid, counts: powerCounts(rows) })
+  }
+  const unesc = (s) => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+  const head = (html) => ({
+    title: unesc(html.match(/<title>([^<]*)<\/title>/)[1]),
+    desc: unesc(html.match(/<meta name="description" content="([^"]*)"/)[1]),
+    h1: unesc(html.match(/<h1 class="shop-h1">([^<]*)<\/h1>/)[1]),
+    intro: html.match(/<p class="fx-intro">([\s\S]*?)<\/p>/)?.[1] || '',
+    glance: html.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || '',
+    more: html.match(/<section class="fx-more">[\s\S]*?<\/section>/)?.[0] || '',
+  })
+  // Sentence case: past the first letter, capitals only in acronyms and India.
+  const sentence = (s) => !/[A-Z]/.test(s.replace(/ \| narenana$/, '').replace(/\b(RC|FPV|EDF|3D|ARF|India)\b/g, '').slice(1))
+
+  const t = head(land('trainers'))
+  assert.equal(t.title, 'Trainer RC planes for beginners: prices in India | narenana')
+  assert.equal(t.h1, 'Trainer RC planes for beginners in India')
+  assert.equal(t.desc, '3 trainers in stock at 3 Indian sellers, from ₹1,650. Kits from ₹2,000, ready-to-fly from ₹7,790, ARFs from ₹15,500. Prices as last checked 28 Sep 2026.')
+  assert.equal(t.intro, '3 trainers in stock at 3 Indian sellers, from ₹1,650. Kits start at ₹2,000, ready-to-fly at ₹7,790 and ARFs at ₹15,500. 1 is sold by two or more sellers. Prices as last checked 28 Sep 2026.')
+  assert.match(t.glance, /<th scope="row">Configuration not stated<\/th><td>1<\/td><td>₹1,650<\/td>/, 'a kit the listing never calls one sits under not stated')
+  assert.match(t.glance, /<th scope="row">Kit \(airframe only\)<\/th><td>1<\/td><td>₹2,000<\/td>/)
+  assert.match(t.glance, /as last checked 28 Sep 2026/)
+  assert.ok(!(t.desc + t.intro + t.glance).includes('₹999'), 'a figure never comes from outside the live, priced listings')
+  assert.ok(t.more.includes('href="https://nanawing2.narenana.com/">Nanawing 2</a>') && t.more.includes('laptop or desktop'), 'trainers: the line-of-sight sim')
+  assert.ok(t.more.includes('href="/wings/browse/"') && t.more.includes('href="/catalog-methodology/"'))
+  for (const [, s] of t.more.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(s === 'browse' || valid.has(s), `related link /wings/${s}/ is an indexable landing`)
+  const fpv = head(land('fpv'))
+  assert.equal(fpv.title, 'FPV and flying wing RC planes: prices in India | narenana')
+  assert.match(fpv.desc, /^3 FPV planes and flying wings in stock at 1 Indian seller, from ₹2,304\. Plug-and-play from ₹2,304\./)
+  assert.ok(fpv.more.includes('href="https://sim.narenana.com/">Nanawing</a>'), 'FPV: the FPV wing sim')
+  assert.equal(head(land('jets')).title, 'RC jets and EDF planes: prices in India | narenana')
+  for (const h of [t, fpv]) assert.ok(!/\b(phone|mobile|android|iphone)\b/i.test(h.more), 'no phone claim for the sims')
+
+  // Every landing slug: a title of at most 60 characters, sentence case,
+  // acronyms kept, never a ₹ figure.
+  for (const slug of [...LANDING_ROLE_SLUGS, ...LANDING_ROLE_SLUGS.flatMap((s) => [`electric-${s}`, `nitro-${s}`]), 'nitro']) {
+    const L = resolveLanding(slug)
+    const h = head(renderGridNext(cat, [], { power: L.power, roles: L.roles, landing: { L, slug, content: '' }, valid, counts: { electric: 0, gas: 0 } }))
+    assert.ok(h.title.length <= 60, `${slug}: title ${h.title.length} > 60: ${h.title}`)
+    assert.ok(!h.title.includes('₹'), `${slug}: no ₹ in the title`)
+    assert.ok(sentence(h.title) && sentence(h.h1), `${slug}: sentence case: ${h.title} / ${h.h1}`)
+    assert.ok(!/\b(fpv|edf|3d|rc)\b/.test(h.title + h.h1 + h.desc), `${slug}: acronyms keep their capitals`)
+  }
+
+  // The hub: 'RC plane prices in India', a computed seller count, and a table
+  // that covers nitro too, though its grid shows the electric models.
+  const hubHtml = renderGridNext(cat, rows.filter((r) => r.power === 'electric'), { power: 'electric', counts: powerCounts(rows), valid, all: rows, content: '<p>Electric editorial.</p>' })
+  const hub = head(hubHtml)
+  assert.equal(hub.title, 'RC plane prices in India: 4 sellers compared | narenana')
+  assert.equal(hub.h1, 'RC plane prices in India')
+  assert.equal(hub.desc, '10 RC planes in stock at 4 Indian sellers: electric from ₹1,650, nitro and gas from ₹15,500. Prices as last checked 28 Sep 2026.')
+  assert.match(hub.glance, /<th scope="row"><a href="\/wings\/trainers\/">Trainers<\/a><span class="fx-gn">3 in stock<\/span><\/th><td>₹1,650<\/td><td>₹2,000<\/td><td class="is-none">—<\/td><td>₹7,790<\/td>/, 'types span both powers, as their landings do')
+  assert.match(hub.glance, /All nitro and gas<span class="fx-gn">1 in stock<\/span><\/th><td>₹15,500<\/td>/, 'the nitro row (not linked: /nitro/ is thin here)')
+  assert.ok(hubHtml.includes('<section class="fx-content"><p>Electric editorial.</p></section>'), 'the hub carries the folded /electric/ editorial')
+  assert.ok(!hubHtml.includes('/wings/electric/'), 'nothing links the folded /electric/ page')
+  assert.ok(!/live price/i.test(hubHtml + land('trainers')), 'prices are as last checked, never live')
+})
+
 // The admin SPA is a huge inline <script> inside a backtick template. A stray
 // escaping bug there (e.g. \' vs \\' inside a single-quoted string) is a syntax
 // error the browser hits at parse time — the whole panel dies, silently, and
@@ -788,6 +958,175 @@ test('in-stock only: sitemap and /browse/ list exactly the grid\'s in-stock mode
   assert.deepEqual(diff(browseSlugs, gridSlugs), [], '/browse/ lists products the grid does not (out of stock?)')
   assert.deepEqual(diff(gridSlugs, browseSlugs), [], '/browse/ is missing in-stock products')
   assert.ok(!/Currently unavailable|out of stock/i.test(browse), '/browse/ must not advertise unavailable models')
+})
+
+// Live data, SEO rec 2: the sitemap lists electric-X only beside nitro-X, every
+// listed landing serves 200 and indexable, electric-X without nitro-X 301s to
+// X (or stays a 404 with no models), thin role landings are noindex, and grids
+// link only listed landings from Browse by type and the power tabs.
+test('landings: sitemap set, electric-X redirects, thin pages noindex, grids link listed landings only', async () => {
+  const xml = await (await get('/sitemap.xml')).text()
+  const listed = new Set([...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1]).filter((s) => resolveLanding(s)))
+  assert.ok(listed.size >= 5, `the sitemap should list landings (got ${listed.size})`)
+  for (const x of LANDING_ROLE_SLUGS) {
+    if (listed.has(`electric-${x}`)) assert.ok(listed.has(`nitro-${x}`), `electric-${x} is listed only beside nitro-${x}`)
+    else if (!listed.has(`nitro-${x}`)) {
+      const r = await get(`/wings/electric-${x}/`)
+      assert.ok([301, 404].includes(r.status), `electric-${x} with no nitro-${x}: 301 or 404, got ${r.status}`)
+      if (r.status === 301) assert.equal(new URL(r.headers.get('location'), BASE).pathname, `/wings/${x}/`)
+    }
+    if (!listed.has(x)) {
+      const r = await get(`/wings/${x}/`)
+      if (r.status === 200) assert.match(await r.text(), /name="robots" content="noindex,follow"/, `thin landing /wings/${x}/ is noindex`)
+    }
+  }
+  for (const s of listed) {
+    const r = await get(`/wings/${s}/`)
+    assert.equal(r.status, 200, `listed landing ${s} serves`)
+    assert.ok(!/name="robots" content="noindex/.test(await r.text()), `listed landing ${s} is indexable`)
+  }
+  for (const p of ['/wings/', '/wings/?power=gas', ...[...listed].map((s) => `/wings/${s}/`)]) {
+    const html = await (await get(p)).text()
+    const nav = html.match(/<nav class="fx-browse"[\s\S]*?<\/nav>/)?.[0] || ''
+    const tabs = html.match(/<div class="fx-seg" id="fx-powmain"[\s\S]*?<\/div>/)?.[0] || ''
+    // Editorial links too (landing_page bodies, rec 3): never a thin or folded page.
+    const content = html.match(/<section class="fx-content">[\s\S]*?<\/section>/)?.[0] || ''
+    for (const [, s] of (nav + tabs + content).matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(listed.has(s), `${p} links /wings/${s}/, which is not a listed landing`)
+  }
+})
+
+// Live data, SEO recs 3 and 4, across every product page in the sitemap: no
+// title or H1 with a leading or trailing space, no ₹ in the title, no empty or
+// 'Unbranded' Brand, a meta description of at most 160 characters, and every
+// landing the page links (breadcrumb, Type, Power, 'More …') is a listed one.
+// A page with a linked Type has the 4-level breadcrumb through that role.
+test('product pages: clean names, own-data snippets, links to listed landings only', async () => {
+  const xml = await (await get('/sitemap.xml')).text()
+  const locs = [...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1])
+  const listed = new Set(locs.filter((s) => resolveLanding(s)))
+  const products = locs.filter((s) => s !== 'browse' && !resolveLanding(s))
+  assert.ok(products.length > 20, `the sitemap should list many products (got ${products.length})`)
+  const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+  const queue = [...products]
+  const problems = []
+  let fourLevel = 0
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    for (let slug; (slug = queue.shift());) {
+      const res = await get(`/wings/${slug}/`)
+      const html = await res.text()
+      const bad = (msg) => problems.push(`${slug}: ${msg}`)
+      if (res.status !== 200) { bad(`status ${res.status}`); continue }
+      const title = unesc(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? '')
+      const h1 = unesc(html.match(/<h1 class="kit-h">([^<]*)<\/h1>/)?.[1] ?? '')
+      const desc = unesc(html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? '')
+      if (!title || title !== title.trim() || /\s{2}/.test(title)) bad(`title ${JSON.stringify(title)}`)
+      if (!h1 || h1 !== h1.trim() || /\s{2}/.test(h1)) bad(`H1 ${JSON.stringify(h1)}`)
+      if (title.includes('₹')) bad(`₹ in the title ${JSON.stringify(title)}`)
+      if (!desc || desc !== desc.trim() || desc.length > 160) bad(`description (${desc.length}) ${JSON.stringify(desc)}`)
+      const graph = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].flatMap((m) => [].concat(JSON.parse(m[1])['@graph'] || []))
+      const product = graph.find((n) => n['@type'] === 'Product')
+      if (product && ('brand' in product) && (!product.brand?.name?.trim() || /^unbranded$/i.test(product.brand.name))) bad(`Brand ${JSON.stringify(product.brand)}`)
+      if (product && product.name !== h1) bad(`Product.name ${JSON.stringify(product.name)} differs from the H1`)
+      const crumbs = graph.find((n) => n['@type'] === 'BreadcrumbList')?.itemListElement || []
+      if (crumbs.at(-1)?.name !== h1) bad('the last breadcrumb is not the model name')
+      const main = html.slice(html.indexOf('<main'), html.indexOf('</main>'))
+      for (const [, s] of main.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) if (resolveLanding(s) && !listed.has(s)) bad(`links /wings/${s}/, which is not a listed landing`)
+      // The first linked type is the breadcrumb role (types are in priority order).
+      const typeLink = main.match(/<dt>Type<\/dt><dd>(.*?)<\/dd>/)?.[1].match(/href="\/wings\/([a-z0-9-]+)\/"/)?.[1]
+      if (typeLink) {
+        fourLevel++
+        if (crumbs.length !== 4 || crumbs[2].item !== `https://www.narenana.com/wings/${typeLink}/`) bad(`breadcrumb does not go through /wings/${typeLink}/`)
+        if (!main.includes(`<nav class="crumb" aria-label="Breadcrumb">`) || !main.includes(`<a href="/wings/${typeLink}/">`)) bad('no visible breadcrumb link to the role landing')
+      } else if (crumbs.length !== 3) bad(`${crumbs.length}-level breadcrumb without a role landing`)
+    }
+  }))
+  assert.deepEqual(problems, [])
+  assert.ok(fourLevel > products.length * 0.9, `most product pages link a role landing (${fourLevel} of ${products.length})`)
+})
+
+// Live data, SEO rec 5: the hub is 'RC plane prices in India' with the seller
+// count the homepage shows, /electric/ folds into it, every listed landing
+// quotes our own ₹ figures in sentence-case metadata, and a landing's table
+// matches what its models' product pages show, listing by listing.
+test('hub and landings: own ₹ figures that match the product pages, computed seller count, prices last checked', async () => {
+  const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+  const meta = (html) => ({
+    title: unesc(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? ''),
+    desc: unesc(html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? ''),
+  })
+  const hubHtml = await (await get('/wings/')).text()
+  const hub = meta(hubHtml)
+  assert.match(hub.title, /^RC plane prices in India(: \d+ sellers compared)? \| narenana$/)
+  assert.ok(hub.title.length <= 60, `hub title ${hub.title.length} characters`)
+  const sellers = Number(hub.title.match(/: (\d+) sellers compared/)?.[1])
+  const home = await (await get('/')).text()
+  const homeSellers = Number(home.match(/id="catalog-seller-count">Listings from (\d+) Indian sellers</)?.[1])
+  assert.ok(sellers > 1, 'the hub title names a computed seller count')
+  assert.equal(sellers, homeSellers, 'the hub and the homepage count sellers by the same rule')
+  assert.match(hub.desc, new RegExp(`^\\d+ RC planes in stock at ${sellers} Indian sellers: electric from ₹[\\d,]+, nitro and gas from ₹[\\d,]+\\.`))
+  const glance = hubHtml.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || ''
+  assert.match(glance, /All nitro and gas<\/a><span class="fx-gn">\d+ in stock<\/span><\/th><td>₹[\d,]+<\/td>/, 'the hub table has a nitro row linking /wings/nitro/')
+  assert.match(glance, /as last checked \d/)
+
+  const moved = await get('/wings/electric/')
+  assert.equal(moved.status, 301)
+  assert.equal(new URL(moved.headers.get('location'), BASE).pathname, '/wings/', '/electric/ folds into the hub')
+  const xml = await (await get('/sitemap.xml')).text()
+  assert.ok(!xml.includes('/wings/electric/</loc>'), 'the folded /electric/ page is not in the sitemap')
+
+  const listed = [...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1]).filter((s) => resolveLanding(s))
+  for (const s of listed) {
+    const html = await (await get(`/wings/${s}/`)).text()
+    const { title, desc } = meta(html)
+    assert.ok(title.length <= 60 && !title.includes('₹'), `${s}: title ${JSON.stringify(title)}`)
+    assert.ok(!/ RC Planes|Compare Prices| — /.test(title), `${s}: sentence-case title ${JSON.stringify(title)}`)
+    assert.match(desc, /in stock at \d+ Indian sellers?, from ₹[\d,]+\./, `${s}: the description quotes a ₹ from figure and the seller count`)
+    assert.ok(desc.length <= 160, `${s}: description ${desc.length} characters`)
+    assert.ok(!/\b(fpv|edf|3d)\b/.test(title + desc), `${s}: acronyms keep their capitals`)
+    assert.ok(html.includes('<h2 id="fx-glance">Prices at a glance</h2>'), `${s}: has the price table`)
+    assert.ok(!/live price/i.test(html), `${s}: no 'live prices'`)
+  }
+  for (const p of ['/wings/', '/wings/browse/', '/wings/?ui=classic', '/wings/no-such-model/']) assert.ok(!/live price/i.test(await (await get(p)).text()), `${p}: no 'live prices'`)
+
+  // Practise lines: Nanawing 2 (line of sight) for trainers, Nanawing for FPV.
+  const more = async (s) => (await (await get(`/wings/${s}/`)).text()).match(/<section class="fx-more">[\s\S]*?<\/section>/)?.[0] || ''
+  const trainersMore = await more('trainers'), fpvMore = await more('fpv')
+  assert.ok(trainersMore.includes('href="https://nanawing2.narenana.com/"'))
+  assert.ok(fpvMore.includes('href="https://sim.narenana.com/"'))
+  for (const x of [trainersMore, fpvMore]) {
+    assert.match(x, /laptop or desktop/)
+    assert.ok(!/\b(phone|mobile)\b/i.test(x), 'never a phone claim for the sims')
+    for (const [, s] of x.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(s === 'browse' || listed.includes(s), `links /wings/${s}/, not a listed landing`)
+  }
+
+  // The trainers table, row by row, against its models' product pages: each
+  // figure is the lowest in-stock, new, single-unit price the product pages
+  // show under that configuration (a withheld price shows no amount there).
+  const landing = await (await get('/wings/trainers/')).text()
+  const table = {}
+  for (const [, label, n, from] of (landing.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || '').matchAll(/<th scope="row">([^<]+)<\/th><td>(\d+)<\/td><td>₹([\d,]+)<\/td>/g)) table[label] = { n: Number(n), from: Number(from.replace(/,/g, '')) }
+  assert.ok(Object.keys(table).length, 'the trainers table has rows')
+  const CELL = { 'Kit (airframe only)': 'Kit', 'ARF (almost ready to fly)': 'ARF', 'PNP (plug and play)': 'PNP', 'RTF (ready to fly)': 'RTF', 'Combo (with motor or electronics)': 'Combo', 'Configuration not stated': 'Not stated' }
+  const slugs = [...landing.matchAll(/<li class="prod" data-id="\d+"[^>]*>\s*<a class="prod-link" href="\/wings\/([a-z0-9-]+)\/"/g)].map((m) => m[1])
+  const seen = {}
+  let from = null
+  for (const slug of slugs) {
+    const html = await (await get(`/wings/${slug}/`)).text()
+    const best = {}
+    for (const [, row] of html.matchAll(/<tr class="[^"]*">([\s\S]*?)<\/tr>/g)) {
+      const td = [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((x) => x[1])
+      const price = Number(td[2]?.match(/^₹([\d,]+)/)?.[1].replace(/,/g, '')) || 0
+      if (!price || !td[3]?.includes('In stock') || td[0].includes('pre-owned') || td[1].includes('×')) continue
+      best[td[1].trim()] = Math.min(best[td[1].trim()] ?? Infinity, price)
+    }
+    for (const [cfg, p] of Object.entries(best)) {
+      seen[cfg] = { n: (seen[cfg]?.n || 0) + 1, from: Math.min(seen[cfg]?.from ?? Infinity, p) }
+      from = Math.min(from ?? Infinity, p)
+    }
+  }
+  const expected = Object.fromEntries(Object.entries(CELL).filter(([, c]) => seen[c]).map(([label, c]) => [label, seen[c]]))
+  assert.deepEqual(table, expected, 'the trainers table matches the product pages')
+  assert.match(landing, new RegExp(`<p class="fx-intro">\\d+ trainers in stock at \\d+ Indian sellers?, from ₹${from.toLocaleString('en-IN')}\\.`), 'the intro quotes the lowest product-page price')
 })
 
 // Live data: every in-stock flagged listing (admin "flagged" queue) must show
@@ -1158,6 +1497,64 @@ test('decide guards: unknown sku 404, unknown action 400, bad approve 400', asyn
   assert.equal((await api('decide', { skuId: any.id, action: 'frobnicate' })).status, 400)
   const bad = await api('decide', { skuId: any.id, action: 'approve', master: { brand: '', name: '', slug: 'BAD SLUG' } })
   assert.equal(bad.status, 400)
+  // A seller-title name is refused before anything is written (SEO rec 4).
+  const slogan = await api('decide', { skuId: any.id, action: 'approve', master: { brand: 'Volantex', name: 'RC Phoenix 2000 V2: Soar to New Heights', slug: 'ztest-name-lint' } })
+  assert.equal(slogan.status, 400)
+  assert.match(slogan.body.error, /plain model name/)
+})
+
+test('approve-time name lint: seller titles are refused, model names pass', () => {
+  for (const n of ['RC Trainstar Ascent 1400mm 747-8 PNP: Unleash Superior Perfo', 'F959S SKY-KING 2.4G 3CH 6-AXIS RTF RC AIRPLANE BLUE', 'PEACE MAKER CONTROL LINE KIT', 'Ranger 2000 V757-8 2000mm Wingspan EPO FPV Aircraft RC Airpl'])
+    assert.ok(nameLint(n), `${n} is refused`)
+  for (const n of ['Phoenix 2000 V2', 'SU-27 Depron Jet', 'F-16 Falcon (2CH)', 'PT-19', 'TBS Chupito', 'X2', 'Laser Z2300 33in (RT scheme)', 'Suite Master 123'])
+    assert.equal(nameLint(n), '', `${n} passes`)
+})
+
+// SEO rec 6: an old product slug either 301s once to a live product page (the
+// alias table is applied) or is a plain 404 (not yet), never a loop or a 500.
+// Slug renames refuse bad, reserved and taken slugs before writing anything.
+test('old product slugs: one 301 to a live page, or a 404 before migration 0018', async () => {
+  for (const old of ['havoc-hobby-spacewalker', 'wltoys-f959-sky-king', 'x-uav-sky-surfer-v3-with-a2212-2200kv-1400mm-wingspan']) {
+    const r = await get(`/wings/${old}/`)
+    assert.ok([301, 404].includes(r.status), `${old}: ${r.status}`)
+    if (r.status !== 301) continue
+    const to = r.headers.get('location')
+    assert.match(to, /^\/wings\/[a-z0-9-]+\/$/, 'a relative product URL')
+    assert.notEqual(to, `/wings/${old}/`)
+    assert.equal((await get(to)).status, 200, `${old} → ${to} lands on a live page in one hop`)
+  }
+  assert.equal((await get('/wings/nitro-gliders/')).status, 404, 'an empty landing stays a 404')
+})
+
+test('slug rename guards: bad, reserved and taken slugs are refused', async () => {
+  const masters = (await api('catalog')).body.masters ?? []
+  assert.ok(masters.length >= 2, 'need two masters')
+  const [a, b] = masters
+  assert.equal((await api('master', { id: a.id, slug: 'Not A Slug!' })).status, 400)
+  assert.equal((await api('master', { id: a.id, slug: 'trainers' })).status, 400, 'landing slugs are reserved')
+  assert.equal((await api('master', { id: a.id, slug: 'browse' })).status, 400)
+  assert.equal((await api('master', { id: a.id, slug: b.slug })).status, 409, "another model's slug")
+})
+
+test('slug rename round trip: the old address 301s, renaming back clears it', { skip: !MUTATE && 'set CATALOG_TEST_MUTATE=1' }, async () => {
+  const m = ((await api('catalog')).body.masters ?? []).find((x) => x.status === 'ready')
+  assert.ok(m, 'need a published master')
+  const tmp = `zz-renamed-${Date.now().toString(36)}`
+  const r = await api('master', { id: m.id, slug: tmp })
+  if (r.status === 409 && /0018/.test(r.body.error || '')) return // migration not applied locally
+  assert.equal(r.status, 200, JSON.stringify(r.body))
+  try {
+    const old = await get(`/wings/${m.slug}/`)
+    assert.equal(old.status, 301)
+    assert.equal(old.headers.get('location'), `/wings/${tmp}/`)
+    assert.equal((await get(`/wings/${tmp}/`)).status, 200)
+  } finally {
+    assert.equal((await api('master', { id: m.id, slug: m.slug })).status, 200, 'renamed back')
+  }
+  assert.equal((await get(`/wings/${m.slug}/`)).status, 200, 'the original address is live again, not an alias')
+  const back = await get(`/wings/${tmp}/`)
+  assert.equal(back.status, 301, 'the temporary address now leads back')
+  assert.equal(back.headers.get('location'), `/wings/${m.slug}/`)
 })
 
 test('sources add: invalid URL 400; broken root rejected at add-time', async () => {

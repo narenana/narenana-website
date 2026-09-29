@@ -25,6 +25,23 @@ test('offer prices exclude suspicious listings and different configurations, pac
   assert.equal(schema.offerCount, 2)
   assert.equal(schema.offers.length, 2)
 })
+// SEO rec 5: 'kit' is detectConfig's fallback, so a stored kit shows as what
+// the listing says (RTF here) or 'Configuration not stated', never a false kit.
+test('product pages label a listing with the configuration it states', () => {
+  const cat = { name: 'RC planes', path_prefix: '/wings', spec_schema: '[]' }
+  const m = { id: 9, brand: 'Volantex', name: 'Ranger 600', slug: 'ranger-600', specs: '{}', power: 'electric', role_tags: '["Trainer"]' }
+  const ld = (html) => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'].find((n) => n['@type'] === 'Product').offers
+  let html = renderMaster(cat, m, [offer({ config: 'kit', price_inr: 13500, title: 'Volantex RC Ranger 600 | Ready-to-Fly Glider Plane' })])
+  assert.match(html, /<p class="price-context">RTF · 1 unit\(s\) · New<\/p>/)
+  assert.equal(ld(html).name, 'RTF · 1 unit(s)')
+  assert.match(html, /<td>RTF<\/td>/)
+  html = renderMaster(cat, m, [offer({ config: 'kit', title: 'VT-Simple Trainer' })])
+  assert.match(html, /<p class="price-context">Configuration not stated · /)
+  assert.equal(ld(html).name, 'Configuration not stated · 1 unit(s)')
+  assert.match(html, /<td>Not stated<\/td>/)
+  assert.ok(!/Compare kit \(airframe\)/.test(html), 'the lede does not call it a kit either')
+  assert.match(renderMaster(cat, m, [offer({ config: 'kit', title: 'Ranger 600 airframe kit' })]), /<p class="price-context">Kit · /)
+})
 test('unavailable products never advertise an in-stock structured offer', () => {
   assert.equal(comparableOfferSchema([offer({ in_stock: 0 })]).availability, 'https://schema.org/OutOfStock')
   assert.equal(comparableOfferSchema([offer({ price_inr: null })]), null)
@@ -173,6 +190,149 @@ test('catalog edge cache: page-parameter keys, HEAD, one shared 404, per-deploy 
   }
 })
 
+// SEO rec 2 (2026-09): electric-X 301s to the all-power X while nitro-X is too
+// thin to be its own page. The redirect is edge-cached AS a redirect (never
+// replayed as a 200 page), HEAD shares it, the 404 and noindex pages keep their
+// own behaviour, and it undoes itself once nitro stock arrives.
+test('landing merge: electric-X 301s to X only while nitro-X is thin, cached as a redirect', async () => {
+  const { handleCatalog, catalogScheduled } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const model = (id, power, role) => ({ id, slug: `model-${id}`, brand: 'Test', name: `Model ${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1 })
+  let rows = [model(1, 'electric', 'Jet / EDF'), model(2, 'electric', 'Jet / EDF'), model(3, 'electric', 'Jet / EDF'), model(4, 'gas', 'Jet / EDF'),
+    model(5, 'gas', 'Trainer'), model(6, 'gas', 'Trainer'), model(7, 'electric', 'Airliner')]
+  let gridQueries = 0
+  const env = (id) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind() { return this }, first: async () => null,
+      all: async () => { if (/GROUP BY m\.id/.test(sql)) { gridQueries++; return { results: rows } } return { results: /FROM category/.test(sql) ? [CAT] : [] } } }) },
+  })
+  const go = async (path, { method = 'GET', id = 'merge-1' } = {}) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url, { method }), url, env(id), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/electric-jets/?utm_source=x')
+    assert.equal(r.status, 301)
+    assert.equal(r.headers.get('location'), '/wings/jets/', 'relative Location, no query string carried into a shared entry')
+    const before = gridQueries
+    r = await go('/wings/electric-jets/')
+    assert.equal(r.status, 301, 'the cached entry is replayed as a redirect, not a 200 page')
+    assert.equal(r.headers.get('location'), '/wings/jets/')
+    assert.equal(r.headers.get('x-cat-status'), null, 'the internal status marker never reaches the client')
+    r = await go('/wings/electric-jets/', { method: 'HEAD' })
+    assert.equal(r.status, 301)
+    assert.equal(await r.text(), '', 'HEAD has no body')
+    assert.equal(gridQueries, before, 'repeat GET and HEAD are served from the cache')
+
+    r = await go('/wings/jets/')
+    assert.equal(r.status, 200)
+    const jets = await r.text()
+    assert.ok(!jets.includes('/wings/electric-jets/'), 'the surviving page does not link the folded one')
+    assert.match(jets, /href="\/wings\/nitro\/">Nitro \/ Gas <span>1</, 'Nitro tab: the role\'s count, linking /wings/nitro/')
+    assert.equal((await go('/wings/nitro-gliders/')).status, 404, 'a landing with no models is a 404, not a redirect')
+    r = await go('/wings/airliners/')
+    assert.equal(r.status, 200)
+    assert.match(await r.text(), /name="robots" content="noindex,follow"/, 'a thin landing serves noindex,follow')
+    let xml = await (await go('/sitemap.xml')).text()
+    assert.ok(xml.includes('/wings/jets/</loc>') && !xml.includes('/wings/electric-jets/</loc>') && !xml.includes('/wings/airliners/</loc>'))
+    // IndexNow's first run submits the same landing set as the sitemap.
+    const original = globalThis.fetch
+    let submitted = []
+    globalThis.fetch = async (u, init) => { submitted = JSON.parse(init.body).urlList; return new Response('', { status: 200 }) }
+    try {
+      const waits = []
+      const db = env('merge-1').CATALOG_DB
+      catalogScheduled({ cron: '0 * * * *' }, { CATALOG_DB: { prepare: (sql) => ({ ...db.prepare(sql), run: async () => ({}) }) } }, { waitUntil: (p) => waits.push(p) })
+      await Promise.all(waits)
+    } finally { globalThis.fetch = original }
+    assert.ok(submitted.includes('https://www.narenana.com/wings/jets/'), 'IndexNow submits the surviving landing')
+    assert.ok(!submitted.some((u) => /\/wings\/(electric-jets|airliners)\/$/.test(u)), 'and never the redirected or thin one')
+
+    // Two more nitro jets: nitro-jets qualifies, so electric-jets is its own page
+    // again (live once the 15-minute entry expires; a new deploy's keys here).
+    rows = [...rows, model(8, 'gas', 'Jet / EDF'), model(9, 'gas', 'Jet / EDF')]
+    r = await go('/wings/electric-jets/', { id: 'merge-2' })
+    assert.equal(r.status, 200)
+    assert.ok(!/name="robots" content="noindex/.test(await r.text()), 'electric-jets is indexable again')
+    xml = await (await go('/sitemap.xml', { id: 'merge-2' })).text()
+    assert.ok(xml.includes('/wings/electric-jets/</loc>') && xml.includes('/wings/nitro-jets/</loc>'))
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
+// SEO rec 5 (2026-09): the hub is the electric grid, so /electric/ 301s to it
+// (cached as a redirect like the other landing folds) and leaves the sitemap
+// and IndexNow; the hub carries its editorial and names the seller count
+// worked out from the live, priced listings, never a stored number.
+test('hub: /electric/ folds into it, its editorial moves, its seller count is computed', async () => {
+  const { handleCatalog, catalogScheduled } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const listing = (s, p, t = 'Wing kit') => ({ s, p, q: 1, c: 'kit', t, u: `https://${s}.example/p`, at: Date.UTC(2026, 8, 28, 10) })
+  const model = (id, power, role, offers) => ({ id, slug: `model-${id}`, brand: 'Test', name: `Model ${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1, live_offers: JSON.stringify(offers) })
+  const rows = [
+    model(1, 'electric', 'Trainer', [listing('a', 1650), listing('b', 1900)]),
+    model(2, 'electric', 'Trainer', [listing('c', 7790, 'Cub RTF')]),
+    model(3, 'electric', 'Trainer', []),
+    model(4, 'gas', 'Trainer', [listing('a', 15500, 'Trainer ARF')]),
+  ]
+  let gridQueries = 0
+  const env = (id) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind(...args) { this.args = args; return this },
+      first: async function () { return /FROM landing_page/.test(sql) && this.args?.[0] === 'electric' ? { body: '<p>Electric editorial.</p>' } : null },
+      all: async () => { if (/GROUP BY m\.id/.test(sql)) { gridQueries++; return { results: rows } } return { results: /FROM category/.test(sql) ? [CAT] : [] } } }) },
+  })
+  const go = async (path, { method = 'GET', id = 'hub-1' } = {}) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url, { method }), url, env(id), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/electric/')
+    assert.equal(r.status, 301)
+    assert.equal(r.headers.get('location'), '/wings/')
+    const before = gridQueries
+    r = await go('/wings/electric/')
+    assert.equal(r.status, 301, 'replayed from the cache as a redirect')
+    assert.equal(r.headers.get('location'), '/wings/')
+    assert.equal(gridQueries, before)
+
+    const hub = await (await go('/wings/')).text()
+    assert.match(hub, /<title>RC plane prices in India: 3 sellers compared \| narenana<\/title>/, 'sellers a, b, c: counted from the live, priced listings')
+    assert.match(hub, /<h1 class="shop-h1">RC plane prices in India<\/h1>/)
+    assert.ok(hub.includes('<section class="fx-content"><p>Electric editorial.</p></section>'), 'the /electric/ editorial is on the hub')
+    assert.match(hub, /<meta name="description" content="4 RC planes in stock at 3 Indian sellers: electric from ₹1,650, nitro and gas from ₹15,500\. Prices as last checked 28 Sep 2026\."/)
+    assert.ok(!hub.includes('/wings/electric/'), 'nothing links the folded page')
+    const nitro = await (await go('/wings/nitro/')).text()
+    assert.ok(!nitro.includes('/wings/electric/') && /class="fx-seg-b " href="\/wings\/">Electric/.test(nitro), "/nitro/'s Electric tab links the hub")
+
+    const xml = await (await go('/sitemap.xml')).text()
+    assert.ok(xml.includes('/wings/</loc>') && !xml.includes('/wings/electric/</loc>'))
+    const original = globalThis.fetch
+    let submitted = []
+    globalThis.fetch = async (u, init) => { submitted = JSON.parse(init.body).urlList; return new Response('', { status: 200 }) }
+    try {
+      const waits = []
+      const db = env('hub-1').CATALOG_DB
+      catalogScheduled({ cron: '0 * * * *' }, { CATALOG_DB: { prepare: (sql) => ({ ...db.prepare(sql), run: async () => ({}) }) } }, { waitUntil: (p) => waits.push(p) })
+      await Promise.all(waits)
+    } finally { globalThis.fetch = original }
+    assert.ok(submitted.includes('https://www.narenana.com/wings/') && !submitted.includes('https://www.narenana.com/wings/electric/'), 'IndexNow never submits the folded page')
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
 test('sitemap preserves editorial dates in the Worker and static fallback', async () => {
   const { handleCatalog } = await import('../lib/worker.mjs')
   const editedAt = Date.UTC(2026, 8, 20, 12)
@@ -308,6 +468,337 @@ test('flagged listings: stock is kept, price withheld, never a false or empty Pr
   const tbody = html.slice(html.indexOf('<tbody>'))
   assert.ok(tbody.indexOf('₹2,599') < tbody.indexOf('Price under review'), 'priced rows come before rows under review')
   assert.deepEqual([...new Set(availability(product(html)))], ['schema.org/InStock'])
+})
+
+// SEO rec 4 (2026-09): product names and snippets. A brandless model never
+// renders a leading space or an empty Brand; the title and description come
+// from our own price, stock and check date, and a withheld price never shows.
+test('product names and snippets: no empty brand, our own price, stock and date, no withheld amount', async () => {
+  const { displayName } = await import('../lib/product-overview.mjs')
+  const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings', spec_schema: '[]' }
+  const day = Date.UTC(2026, 8, 28, 9)
+  const model = (changes = {}) => ({ id: 7, brand: 'FMS', name: 'Ranger 1220', slug: 'fms-ranger-1220', specs: '{"spanMM":1220}', power: 'electric', role_tags: '["Sport / Park Flyer","Trainer"]', hero_image: 'https://seller.example/wing.jpg', ...changes })
+  const sold = (changes = {}) => offer({ last_checked: day, ...changes })
+  const head = (html) => ({
+    title: html.match(/<title>([^<]*)<\/title>/)[1],
+    desc: html.match(/<meta name="description" content="([^"]*)"/)[1].replace(/&amp;/g, '&'),
+    h1: html.match(/<h1 class="kit-h">([^<]*)<\/h1>/)[1],
+    graph: JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'],
+  })
+  const product = (h) => h.graph.find((n) => n['@type'] === 'Product')
+
+  assert.equal(displayName({ brand: '', name: 'Sky Surfer' }), 'Sky Surfer')
+  assert.equal(displayName({ brand: 'Unbranded', name: 'Sky Surfer V4' }), 'Sky Surfer V4')
+  assert.equal(displayName({ brand: ' X-UAV ', name: ' Sky Surfer V3 ' }), 'X-UAV Sky Surfer V3')
+
+  // Brandless: no leading space anywhere, no Brand in the Product.
+  for (const brand of ['', 'Unbranded']) {
+    const html = renderMaster(cat, model({ brand, name: 'Sky Surfer' }), [sold({ in_stock: 0, price_inr: 13760, source_name: 'havochobby.in' })])
+    const h = head(html)
+    assert.equal(h.title, 'Sky Surfer price in India | narenana')
+    assert.equal(h.h1, 'Sky Surfer')
+    assert.ok(html.includes('<img src="/img/master/7" alt="Sky Surfer"'), 'image alt has no leading space')
+    assert.equal(product(h).name, 'Sky Surfer')
+    assert.ok(!('brand' in product(h)), `no Brand for brand ${JSON.stringify(brand)}`)
+    assert.equal(h.desc, 'Sky Surfer, 1220mm electric trainer. Out of stock at the 1 Indian seller we check; last seen at ₹13,760 on 28 Sep 2026.')
+    assert.ok(!/\bUnbranded\b/.test(html.slice(html.indexOf('<main'))), 'Unbranded never shows as part of the name')
+  }
+  assert.equal(product(head(renderMaster(cat, model(), [sold()]))).brand.name, 'FMS', 'a real brand is kept')
+
+  // In stock at 2 sellers, the cheapest of them flagged: its amount is withheld
+  // everywhere, the snippet quotes the cheapest publishable price, the title
+  // counts the sellers and never shows a ₹ figure.
+  let h = head(renderMaster(cat, model(), [
+    sold({ flagged: 'price_jump', price_inr: 21733, source_name: 'robosynckits.in' }),
+    sold({ price_inr: 28999, source_name: 'robosynckits.in' }),
+    sold({ price_inr: 32000, source_name: 'flyingmachines.in' }),
+    sold({ price_inr: 25000, dead: 1, source_name: 'gone.example' }),
+  ]))
+  assert.equal(h.title, 'FMS Ranger 1220 price in India: 2 sellers compared | narenana')
+  assert.equal(h.desc, 'FMS Ranger 1220, 1220mm electric trainer. From ₹28,999 at robosynckits.in, in stock when last checked on 28 Sep 2026. In stock at 2 Indian sellers.')
+  assert.ok(!h.desc.includes('21,733') && !h.title.includes('₹'))
+  // In stock at 2 sellers, but one of them only at a withheld price: the title
+  // counts the sellers whose price the page compares (1), so it names none.
+  h = head(renderMaster(cat, model(), [
+    sold({ price_inr: 30899, source_name: 'robosynckits.in' }),
+    sold({ flagged: 'missing', price_inr: 29975, source_name: 'fpvguru.in' }),
+  ]))
+  assert.equal(h.title, 'FMS Ranger 1220 price in India | narenana')
+  assert.equal(h.desc, 'FMS Ranger 1220, 1220mm electric trainer. From ₹30,899 at robosynckits.in, in stock when last checked on 28 Sep 2026. In stock at 2 Indian sellers.')
+
+  // One seller: no count in the title.
+  h = head(renderMaster(cat, model(), [sold({ price_inr: 28999, source_name: 'robosynckits.in' })]))
+  assert.equal(h.title, 'FMS Ranger 1220 price in India | narenana')
+  // A pre-owned unit is the only one on offer: the snippet says so.
+  assert.match(head(renderMaster(cat, model(), [sold({ price_inr: 9000, title: 'FMS Ranger 1220 (pre-owned)', source_name: 'a.example' })])).desc, /From ₹9,000 \(pre-owned\) at a\.example, in stock/)
+
+  // Only live listing flagged: in stock, price under review, no amount.
+  h = head(renderMaster(cat, model(), [sold({ flagged: 'price_jump', price_inr: 2599, source_name: 'a.example' }), sold({ in_stock: 0, price_inr: 3010, source_name: 'b.example' })]))
+  assert.equal(h.desc, 'FMS Ranger 1220, 1220mm electric trainer. In stock at 1 Indian seller when last checked on 28 Sep 2026; price under review.')
+  assert.equal(h.title, 'FMS Ranger 1220 price in India | narenana')
+
+  // Every listing gone.
+  assert.equal(head(renderMaster(cat, model(), [sold({ dead: 1 })])).desc, 'FMS Ranger 1220, 1220mm electric trainer. No Indian seller we check lists it right now.')
+  // Span already in the name is not repeated; nitro models say so.
+  assert.match(head(renderMaster(cat, model({ name: 'Sky Surfer V4 1500mm', specs: '{"spanMM":1500}', power: 'gas' }), [sold()])).desc, /^FMS Sky Surfer V4 1500mm, nitro\/gas trainer\. From/)
+
+  // A long seller-title name still fits in 155 characters.
+  const long = 'Phoenix 2000 V2: Soar to New Heights with Precision and Performance Glider 2000mm EPO PNP Kit'
+  for (const offers of [[sold({ source_name: 'aeromodellingtutor.in' }), sold({ source_name: 'robosynckits.in', price_inr: 1200 })], [sold({ in_stock: 0 })], [sold({ flagged: 'x' })]]) {
+    const d = head(renderMaster(cat, model({ brand: 'Volantex RC', name: long }), offers)).desc
+    assert.ok(d.length <= 155, `${d.length}: ${d}`)
+    assert.ok(d.startsWith('Volantex RC Phoenix 2000 V2'), d)
+  }
+})
+
+// SEO rec 3 (2026-09): every product page links its role landing through a
+// 4-level breadcrumb and a Type row, choosing the role by the fixed priority
+// among the STORED tags and linking only valid (indexable) landings.
+test('product pages link their role and power landings, valid landings only', async () => {
+  const { productLandings, validLandings } = await import('../lib/grid-next.mjs')
+  const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings', spec_schema: '[]' }
+  const row = (power, tags) => ({ power, role_tags: JSON.stringify(tags), any_stock: 1 })
+  const rows = [...Array(3)].flatMap(() => [row('electric', ['Trainer']), row('gas', ['Trainer']), row('electric', ['Sport / Park Flyer']), row('electric', ['Jet / EDF'])])
+  rows.push(row('gas', ['Warbird']), row('electric', ['Airliner']))
+  const valid = new Set(validLandings(rows))
+  assert.ok(valid.has('trainers') && valid.has('electric-trainers') && valid.has('nitro-trainers') && valid.has('sport-planes') && valid.has('jets') && valid.has('nitro'))
+  assert.ok(!valid.has('airliners') && !valid.has('warbirds') && !valid.has('electric-jets'))
+
+  const page = (m) => renderMaster(cat, { id: 1, brand: 'FMS', name: 'Ranger', slug: 'r', specs: '{}', ...m }, [offer()], [], [], null, productLandings(cat, m, valid))
+  const crumbs = (html) => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'][0].itemListElement
+  const hrefs = (html) => [...html.slice(html.indexOf('<main'), html.indexOf('</main>')).matchAll(/href="(\/wings\/[a-z-]+\/)"/g)].map((x) => x[1])
+
+  // Stored order is Sport first; the fixed priority puts Trainer first.
+  let html = page({ power: 'electric', role_tags: '["Sport / Park Flyer","Trainer"]' })
+  assert.deepEqual(crumbs(html).map((c) => c.name), ['narenana', 'Fixed-wing RC planes in India', 'Trainer RC planes', 'FMS Ranger'])
+  assert.equal(crumbs(html)[2].item, 'https://www.narenana.com/wings/trainers/')
+  assert.ok(!('item' in crumbs(html)[3]), 'the current page has no item')
+  assert.match(html, /<nav class="crumb" aria-label="Breadcrumb"><a href="\/">narenana<\/a> <i>›<\/i> <a href="\/wings\/">Fixed-wing RC planes<\/a> <i>›<\/i> <a href="\/wings\/trainers\/">Trainer RC planes<\/a> <i>›<\/i> <span aria-current="page">FMS Ranger<\/span><\/nav>/)
+  assert.match(html, /<dt>Type<\/dt><dd><a href="\/wings\/trainers\/">Trainer<\/a>, <a href="\/wings\/sport-planes\/">Sport &amp; park flyer<\/a><\/dd>/)
+  assert.match(html, /<dt>Power<\/dt><dd><a href="\/wings\/electric-trainers\/">Electric<\/a><\/dd>/, 'electric-trainers is valid beside nitro-trainers')
+  assert.match(html, /<p class="similar-more"><a href="\/wings\/trainers\/">More trainer RC planes in India →<\/a><\/p>/)
+
+  // A jet with no valid electric-jets: Power stays plain text.
+  html = page({ power: 'electric', role_tags: '["Jet / EDF","Airliner"]' })
+  assert.equal(crumbs(html)[2].name, 'RC jets and EDF planes')
+  assert.match(html, /<dt>Type<\/dt><dd><a href="\/wings\/jets\/">Jet &amp; EDF<\/a>, Airliner<\/dd>/, 'a thin landing (airliners) is named, not linked')
+  assert.match(html, /<dt>Power<\/dt><dd>Electric<\/dd>/)
+  assert.match(html, /More RC jets and EDF planes in India →/)
+
+  // A nitro warbird: warbirds is thin, so no role level; Power links /nitro/.
+  html = page({ power: 'gas', role_tags: '["Warbird"]' })
+  assert.equal(crumbs(html).length, 3, 'no valid role landing: the breadcrumb stops at the category')
+  assert.match(html, /<dt>Type<\/dt><dd>Warbird<\/dd>/)
+  assert.match(html, /<dt>Power<\/dt><dd><a href="\/wings\/nitro\/">Nitro \/ gas<\/a><\/dd>/)
+  assert.ok(!html.includes('similar-more'))
+  // A nitro trainer links nitro-trainers.
+  assert.match(page({ power: 'gas', role_tags: '["Trainer"]' }), /<dt>Power<\/dt><dd><a href="\/wings\/nitro-trainers\/">Nitro \/ gas<\/a><\/dd>/)
+  // Unknown tags ('Other') give no Type row and no role level.
+  html = page({ power: 'electric', role_tags: '["Other"]' })
+  assert.ok(!html.includes('<dt>Type</dt>') && crumbs(html).length === 3)
+  for (const tags of [['Sport / Park Flyer', 'Trainer'], ['Jet / EDF', 'Airliner'], ['Warbird'], ['Other']])
+    for (const href of hrefs(page({ power: 'electric', role_tags: JSON.stringify(tags) })))
+      assert.ok(href === '/wings/' || valid.has(href.slice(7, -1)), `${href} is a valid landing`)
+})
+
+// The product route must not add a catalog-wide query per render: the landing
+// set is computed once per cache cycle (per deploy), and the routes that
+// compute it anyway (hub, landings, browse, sitemap) refresh it for free.
+test('product pages reuse one landing set per cache cycle', async () => {
+  const { handleCatalog } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const model = (id, power, role) => ({ id, slug: `model-${id}`, brand: 'Test', name: `Model ${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1, status: 'ready' })
+  const rows = [model(1, 'electric', 'Trainer'), model(2, 'electric', 'Trainer'), model(3, 'electric', 'Trainer'), model(4, 'electric', 'Glider / Sailplane')]
+  let landingQueries = 0
+  const env = (id) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind(...args) { this.args = args; return this },
+      first: async function () { return /FROM master_model WHERE category_id=\? AND slug=\?/.test(sql) ? rows.find((r) => r.slug === this.args[1]) ?? null : null },
+      all: async () => {
+        if (/SELECT COALESCE\(m\.power,'electric'\) AS power, m\.role_tags\s+FROM master_model/.test(sql)) { landingQueries++; return { results: rows } }
+        if (/FROM offer o JOIN sku k/.test(sql)) return { results: [offer({ source_name: 'seller.example' })] }
+        if (/GROUP BY m\.id/.test(sql)) return { results: rows }
+        return { results: /FROM category/.test(sql) ? [CAT] : [] }
+      } }) },
+  })
+  const go = async (path, id) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url), url, env(id), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/model-1/', 'landing-1')
+    assert.equal(r.status, 200)
+    const html = await r.text()
+    assert.ok(html.includes('<a href="/wings/trainers/">Trainer RC planes</a>'), 'breadcrumb links the valid role landing')
+    assert.equal(landingQueries, 1)
+    await go('/wings/model-2/', 'landing-1')
+    await go('/wings/model-4/', 'landing-1')
+    assert.equal(landingQueries, 1, 'later product renders in the same cycle reuse the set')
+    const glider = await (await go('/wings/model-4/', 'landing-9')).text()
+    assert.equal(landingQueries, 2, 'a new deploy works the set out again')
+    assert.ok(!glider.includes('/wings/gliders/'), 'a thin role landing (1 glider) is not linked')
+    await go('/wings/', 'landing-2')
+    await go('/wings/model-3/', 'landing-2')
+    assert.equal(landingQueries, 2, 'the hub render refreshed the set, so the product did not query')
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
+// SEO rec 6 (2026-09): a merged-away or renamed model's old slug 301s to the
+// model that owns it now (slug_alias), cached as a redirect like the landing
+// folds. A live slug always wins, and until migration 0018 is applied (no
+// table) or without a match an old slug is the shared 404, as before.
+test('old product slugs 301 through slug_alias; no table or no match stays the shared 404', async () => {
+  const { handleCatalog } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const live = { id: 3, slug: 'x-uav-sky-surfer-v3', brand: 'X-UAV', name: 'Sky Surfer V3', specs: '{}', power: 'electric', role_tags: '["FPV / Flying Wing"]', status: 'ready', category_id: 'wings' }
+  // old slug → survivor slug; 'x-uav-sky-surfer-v3' is also an old alias row, but it is live.
+  const aliases = { 'x-uav-sky-surfer-x8-sunny-sky': 'x-uav-sky-surfer-v3', 'x-uav-sky-surfer-v3': 'someone-else' }
+  let aliasQueries = 0, gridQueries = 0
+  const env = (id, table = true) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind(...args) { this.args = args; return this },
+      first: async function () {
+        if (/FROM master_model WHERE category_id=\? AND slug=\?/.test(sql)) return this.args[1] === live.slug ? live : null
+        if (/FROM slug_alias a JOIN master_model/.test(sql)) {
+          aliasQueries++
+          if (!table) throw new Error('D1_ERROR: no such table: slug_alias')
+          const to = aliases[this.args[1]]
+          return to ? { slug: to, category_id: 'wings' } : null
+        }
+        return null
+      },
+      all: async () => {
+        if (/GROUP BY m\.id/.test(sql)) { gridQueries++; return { results: [] } }
+        if (/FROM offer o JOIN sku k/.test(sql)) return { results: [offer({ source_name: 'seller.example' })] }
+        return { results: /FROM category/.test(sql) ? [CAT] : [] }
+      } }) },
+  })
+  const go = async (path, { method = 'GET', id = 'alias-1', table = true } = {}) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url, { method }), url, env(id, table), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/?utm_source=gsc')
+    assert.equal(r.status, 301)
+    assert.equal(r.headers.get('location'), '/wings/x-uav-sky-surfer-v3/', 'relative Location to the survivor, no query string')
+    assert.equal(aliasQueries, 1)
+    r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/')
+    assert.equal(r.status, 301, 'replayed from the cache as a redirect')
+    assert.equal(r.headers.get('x-cat-status'), null)
+    r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/', { method: 'HEAD' })
+    assert.equal(r.status, 301)
+    assert.equal(await r.text(), '')
+    assert.equal(aliasQueries, 1, 'repeat GET and HEAD cost no D1 read')
+
+    r = await go('/wings/x-uav-sky-surfer-v3/')
+    assert.equal(r.status, 200, 'a live slug always wins over an alias row')
+    assert.equal(aliasQueries, 1, 'the alias table is read only after the live lookup misses')
+
+    r = await go('/wings/never-existed/')
+    assert.equal(r.status, 404)
+    assert.match(await r.text(), /<html/, 'no alias: the real 404 grid')
+    assert.equal(aliasQueries, 2)
+
+    // Code shipped before the migration: the lookup fails, the page is the 404.
+    r = await go('/wings/x-uav-sky-surfer-x8-sunny-sky/', { id: 'alias-2', table: false })
+    assert.equal(r.status, 404, 'no slug_alias table yet: a 404, not a 500')
+    assert.match(await r.text(), /<html/)
+    const grids = gridQueries
+    r = await go('/wings/another-old-slug/', { id: 'alias-2', table: false })
+    assert.equal(r.status, 404)
+    assert.equal(gridQueries, grids, 'every unknown slug still shares one 404 entry')
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
+// mergeMasters writes the absorbed slug (and re-points older aliases) in the
+// SAME batch as the DELETE, before it; without the table it merges as before.
+test('mergeMasters writes the absorbed slug as an alias in the same batch', async () => {
+  const { mergeMasters } = await import('../lib/jobs.mjs')
+  const masters = { 1: { id: 1, category_id: 'wings', slug: 'x-uav-sky-surfer-v3', specs: '{}' }, 2: { id: 2, category_id: 'wings', slug: 'x-uav-sky-surfer-x8-sunny-sky', specs: '{"spanMM":1400}', hero_image: null } }
+  const run = async (table) => {
+    let batched = null
+    const env = { CATALOG_DB: {
+      prepare: (sql) => ({ sql, args: [], bind(...args) { return { ...this, args } },
+        first: async function () {
+          if (/^SELECT \* FROM master_model WHERE id=\?$/.test(sql)) return masters[this.args[0]] ?? null
+          if (/FROM slug_alias LIMIT 1/.test(sql)) { if (!table) throw new Error('no such table: slug_alias'); return null }
+          return { t: '' }
+        },
+        run: async () => ({}) }),
+      batch: async (stmts) => { batched = stmts; return [] },
+    } }
+    await mergeMasters(env, 1, 2, 'owner', 'test')
+    return batched
+  }
+  let stmts = await run(true)
+  const at = (re) => stmts.findIndex((s) => re.test(s.sql))
+  const del = at(/^DELETE FROM master_model WHERE id=\?$/)
+  const repoint = at(/^UPDATE slug_alias SET master_model_id=\? WHERE master_model_id=\?$/)
+  const insert = at(/^INSERT INTO slug_alias/)
+  assert.ok(del > 0 && repoint >= 0 && insert >= 0 && repoint < del && insert < del, 'alias writes run before the DELETE, in the same batch')
+  assert.deepEqual(stmts[repoint].args, [1, 2], 'aliases that pointed at B now point at A (no chains)')
+  assert.deepEqual(stmts[insert].args.slice(0, 3), ['wings', 'x-uav-sky-surfer-x8-sunny-sky', 1], "B's slug now leads to A")
+  assert.match(stmts.at(-1).args.at(-1), /"slug":"x-uav-sky-surfer-x8-sunny-sky"/, 'the audit row records the absorbed slug')
+  stmts = await run(false)
+  assert.equal(stmts.filter((s) => /slug_alias/.test(s.sql)).length, 0, 'before migration 0018: no alias statements')
+  assert.ok(stmts.some((s) => /^DELETE FROM master_model WHERE id=\?$/.test(s.sql)), 'and the merge still runs')
+})
+
+// Admin slug rename: the old address becomes an alias of the same model, in the
+// same batch; bad, reserved or taken slugs are refused, and so is any rename
+// before migration 0018 (the old URL would otherwise become a 404).
+test('admin slug rename writes an alias for the old address', async () => {
+  const { handleCatalog } = await import('../lib/worker.mjs')
+  const master = { id: 5, category_id: 'wings', slug: 'volantex-rc-phoenix-2000-v2-soar-to-new-heights-with-precisi', spec_schema: '[]' }
+  const post = async (body, { table = true, taken = false } = {}) => {
+    let batched = null
+    const env = { ADMIN_PASS: 'pw', CATALOG_DB: {
+      prepare: (sql) => ({ sql, args: [], bind(...args) { return { ...this, args } },
+        first: async function () {
+          if (/FROM master_model m JOIN category c/.test(sql)) return master
+          if (/SELECT id FROM master_model WHERE category_id=\? AND slug=\? AND id<>\?/.test(sql)) return taken ? { id: 9 } : null
+          if (/FROM slug_alias LIMIT 1/.test(sql)) { if (!table) throw new Error('no such table: slug_alias'); return null }
+          return null
+        },
+        all: async () => ({ results: [] }), run: async () => ({}) }),
+      batch: async (stmts) => { batched = stmts; return [] },
+    } }
+    const url = new URL('https://www.narenana.com/api/master')
+    const r = await handleCatalog(new Request(url, { method: 'POST', headers: { authorization: 'Basic ' + btoa('admin:pw'), 'content-type': 'application/json' }, body: JSON.stringify(body) }), url, env, { waitUntil() {} })
+    return { status: r.status, body: await r.json(), batched }
+  }
+  let r = await post({ id: 5, slug: 'volantex-phoenix-2000-v2' })
+  assert.equal(r.status, 200)
+  const sqls = r.batched.map((s) => s.sql.replace(/\s+/g, ' '))
+  const i = (re) => sqls.findIndex((s) => re.test(s))
+  assert.deepEqual(r.batched[i(/^UPDATE master_model SET slug=\?/)].args.slice(0, 1), ['volantex-phoenix-2000-v2'])
+  assert.deepEqual(r.batched[i(/^INSERT INTO slug_alias/)].args.slice(0, 3), ['wings', master.slug, 5], 'the old address leads to the same model')
+  assert.deepEqual(r.batched[i(/^DELETE FROM slug_alias/)].args, ['wings', 'volantex-phoenix-2000-v2'], 'the new, live address is nobody\'s alias')
+  assert.equal((await post({ id: 5, slug: 'Bad Slug!' })).status, 400)
+  assert.equal((await post({ id: 5, slug: 'trainers' })).status, 400, 'a landing slug is reserved')
+  assert.equal((await post({ id: 5, slug: 'taken-slug' }, { taken: true })).status, 409)
+  r = await post({ id: 5, slug: 'volantex-phoenix-2000-v2' }, { table: false })
+  assert.equal(r.status, 409, 'no rename before the alias table exists')
+  assert.equal(r.batched, null, 'and nothing was written')
+  r = await post({ id: 5, name: 'Phoenix 2000 V2' })
+  assert.equal(r.status, 200)
+  assert.ok(!r.batched.some((s) => /slug/.test(s.sql)), 'a name edit touches no slug')
+  r = await post({ id: 5, slug: master.slug, name: 'Phoenix 2000 V2' })
+  assert.ok(!r.batched.some((s) => /slug_alias/.test(s.sql)), 'the unchanged slug is not an alias of itself')
 })
 
 test('manufacturer physical overrides and explicit clears override harvested facts',()=>{

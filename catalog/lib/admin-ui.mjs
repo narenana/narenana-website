@@ -277,6 +277,7 @@ function renderCatalog(){
       +'<div class="ct-fields">'
         +'<div class="ct-f"><label>Brand</label><input class="inline" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'"/></div>'
         +'<div class="ct-f"><label>Model name</label><input class="inline" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'"/></div>'
+        +'<div class="ct-f"><label>Page address (slug)</label><input class="inline" data-m="'+m.id+'" data-f="slug" value="'+esc(m.slug)+'" title="Renaming keeps the old address working: it redirects here."/></div>'
         +'<div class="ct-f"><label>Wingspan mm</label><input class="inline" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'"/></div>'
         +'<div class="ct-f wide"><label>One-line blurb (shows on the product page)</label><input class="inline" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="e.g. Stable 1400mm high-wing trainer with flaps"/></div>'
       +'</div></div>'
@@ -302,7 +303,7 @@ function renderCatalog(){
     if(f.startsWith('spec:')){const row=data.masters.find((x)=>x.id===id);let sp={};try{sp=JSON.parse(row.specs||'{}')}catch(e){}sp[f.slice(5)]=i.value.trim();row.specs=JSON.stringify(sp);body.specs=row.specs}
     else body[f]=i.value;
     // Never lose an edit silently: flash saved/failed on the input itself.
-    try{await api('master',body);$('#save-status').textContent='Saved '+(i.getAttribute('aria-label')||i.labels?.[0]?.textContent||f)+'.';i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900)}
+    try{await api('master',body);$('#save-status').textContent='Saved '+(i.getAttribute('aria-label')||i.labels?.[0]?.textContent||f)+'.';i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900);if(f==='slug')load()}
     catch(e){$('#save-status').textContent='Not saved: '+e.message;i.style.outline='2px solid #f85149';alert('NOT saved: '+e.message)}
   });
 }

@@ -736,9 +736,15 @@ export async function dedupSlice(env, trigger, force = false) {
   return { job: 'dedup', trigger, merged, flagged, anomalies: anomalies.length, log }
 }
 
+// True once migration 0018 (slug_alias) is applied. Probed, not assumed, so the
+// code can ship before the owner runs the migration: merges and renames then
+// work as before, and old slugs stay 404s until the table exists.
+export const hasSlugAlias = (env) => one(env, `SELECT 1 AS ok FROM slug_alias LIMIT 1`).then(() => true, () => false)
+
 // Merge master B into A: move B's offers to A (dropping any that would collide
-// on a sku already offered on A), fill A's blank specs from B, drop B. Reused
-// by the owner's admin "Merge" action. Returns nothing; throws on hard error.
+// on a sku already offered on A), fill A's blank specs from B, drop B, and 301
+// B's slug to A (slug_alias). Reused by the owner's admin "Merge" action.
+// Returns nothing; throws on hard error.
 export async function mergeMasters(env, aId, bId, actor, reason) {
   if (aId === bId) return
   const a = await one(env, `SELECT * FROM master_model WHERE id=?`, aId)
@@ -916,8 +922,20 @@ export async function mergeMasters(env, aId, bId, actor, reason) {
     q(env, `DELETE FROM mfr_match WHERE master_model_id=?`, bId),
     ...profileStmts,
     q(env, `DELETE FROM mfr_profile WHERE master_model_id=?`, bId),
+    // B's public URL keeps working (SEO rec 6): its slug, and every older slug
+    // that already pointed at B, now 301 to A. Same batch as the DELETE, so a
+    // merged page is never a 404. Skipped only while migration 0018 is not
+    // applied yet, so a merge never fails for want of the table.
+    ...((await hasSlugAlias(env))
+      ? [
+          q(env, `UPDATE slug_alias SET master_model_id=? WHERE master_model_id=?`, aId, bId),
+          q(env, `INSERT INTO slug_alias (category_id, old_slug, master_model_id, created_at) VALUES (?,?,?,?)
+                  ON CONFLICT(category_id, old_slug) DO UPDATE SET master_model_id=excluded.master_model_id, created_at=excluded.created_at`,
+            b.category_id, b.slug, aId, mergedAt),
+        ]
+      : []),
     q(env, `DELETE FROM master_model WHERE id=?`, bId),
-    audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason }),
+    audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason, slug: b.slug }),
   ]
   await batch(env, stmts)
   // Survivor absorbed B's offers — re-derive its power class from all titles.
