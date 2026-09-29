@@ -580,10 +580,10 @@ test('product pages link their role and power landings, valid landings only', as
 
   // A jet with no valid electric-jets: Power stays plain text.
   html = page({ power: 'electric', role_tags: '["Jet / EDF","Airliner"]' })
-  assert.equal(crumbs(html)[2].name, 'Jet & EDF RC planes')
+  assert.equal(crumbs(html)[2].name, 'RC jets and EDF planes')
   assert.match(html, /<dt>Type<\/dt><dd><a href="\/wings\/jets\/">Jet &amp; EDF<\/a>, Airliner<\/dd>/, 'a thin landing (airliners) is named, not linked')
   assert.match(html, /<dt>Power<\/dt><dd>Electric<\/dd>/)
-  assert.match(html, /More jet &amp; EDF RC planes in India →/)
+  assert.match(html, /More RC jets and EDF planes in India →/)
 
   // A nitro warbird: warbirds is thin, so no role level; Power links /nitro/.
   html = page({ power: 'gas', role_tags: '["Warbird"]' })

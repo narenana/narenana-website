@@ -516,7 +516,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
     ? `${landings.types.length ? `<div><dt>Type</dt><dd>${landings.types.map(linked).join(', ')}</dd></div>` : ''}${landings.power ? `<div><dt>Power</dt><dd>${linked(landings.power)}</dd></div>` : ''}`
     : ''
   // 'More trainer RC planes in India →' ('FPV & flying-wing' keeps its capitals).
-  const moreRole = role ? `<p class="similar-more"><a href="${esc(role.href)}">More ${esc(lowerFirst(role.label))} RC planes in India →</a></p>` : ''
+  const moreRole = role ? `<p class="similar-more"><a href="${esc(role.href)}">More ${esc(lowerFirst(role.crumb))} in India →</a></p>` : ''
 
   const body = `
   <main class="wrap">
