@@ -448,7 +448,8 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   const crumbs = [
     { name: 'narenana', label: 'narenana', href: '/' },
     { name: `${cat.name} in India`, label: cat.name, href: `${cat.path_prefix}/` },
-    ...(role ? [{ name: `${role.label} RC planes`, label: `${role.label} RC planes`, href: role.href }] : []),
+    // Same noun as the landing's own H1 and breadcrumb (e.g. 'RC jets and EDF planes').
+    ...(role ? [{ name: role.crumb, label: role.crumb, href: role.href }] : []),
     { name, label: name },
   ]
   const jsonld = {

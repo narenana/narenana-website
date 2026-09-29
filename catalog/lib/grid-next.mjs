@@ -397,7 +397,7 @@ export function productLandings(cat, m, valid) {
   try { tags = JSON.parse(m.role_tags || '[]') } catch {}
   if (!Array.isArray(tags)) tags = []
   const href = (slug) => (slug && valid?.has(slug) ? `${cat.path_prefix}/${slug}/` : null)
-  const types = ROLE_PRIMARY.filter((r) => tags.includes(r)).map((role) => ({ role, label: ROLE_H1[role], href: href(SLUG_OF_ROLE[role]) }))
+  const types = ROLE_PRIMARY.filter((r) => tags.includes(r)).map((role) => ({ role, label: ROLE_H1[role], crumb: cap(ROLE_NOUN[role]?.base || `${ROLE_H1[role]} RC planes`), href: href(SLUG_OF_ROLE[role]) }))
   const primary = types.find((t) => t.href) || null
   const gas = (m.power || 'electric') === 'gas'
   const roleSlug = primary ? SLUG_OF_ROLE[primary.role] : null
