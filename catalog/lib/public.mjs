@@ -443,7 +443,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
       ${liveMin
         ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
         : priceUnderReview
-          ? `<div class="price price-lg is-muted"><span class="price-pre">in stock</span> price under review</div>`
+          ? `<div class="price price-lg is-muted" style="white-space:normal"><span class="price-pre">in stock</span> price under review</div>`
           : seenMin
             ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
             : ''}
@@ -453,8 +453,9 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
       </dl>
     </div>
     <h2 class="sec">Where to buy${configs.length > 1 ? ' <span class="count">by configuration</span>' : ''}</h2>
+    <div class="vars-scroll" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
     <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
-      <tbody>${offerOrder(offers).map(offerRow).join('')}</tbody></table>
+      <tbody>${offerOrder(offers).map(offerRow).join('')}</tbody></table></div>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
     ${manufacturer?.properties.length ? `<section class="manufacturer-reference"><h2 class="sec">Manufacturer reference</h2><p>Specifications from the accepted manufacturer listing. Seller packages can differ.</p><dl class="spec">${manufacturer.properties.map(p=>`<div><dt>${esc(p.name)}</dt><dd>${esc(String(p.value))}${p.unit?' '+esc(p.unit):''}</dd></div>`).join('')}</dl><p class="source"><a href="${esc(manufacturer.url)}" target="_blank" rel="noopener">View the manufacturer's listing ↗</a>${manufacturer.checked?' · Retrieved '+dateOf(manufacturer.checked):''}</p></section>` : ''}
     ${videoSection}

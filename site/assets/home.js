@@ -73,3 +73,33 @@ document.querySelectorAll('[data-inline-video]').forEach(poster => {
     player.focus();
   });
 });
+
+// The floating Share button (family/share.js) is fixed bottom-right. On common
+// laptop (1366x768, 1280x720) and phone viewports it sits on the hero's "open
+// the simulator" link; while the two would overlap, lift the button just above
+// the link. It drops back as soon as the hero scrolls away.
+(() => {
+  const link = document.querySelector('.visual-bottom a');
+  if (!link) return;
+  let queued = false;
+  const place = () => {
+    queued = false;
+    const button = document.getElementById('nn-share-launcher');
+    if (!button) return;
+    button.style.bottom = '';
+    const b = button.getBoundingClientRect(), l = link.getBoundingClientRect();
+    if (b.left < l.right && l.left < b.right && b.top < l.bottom && l.top < b.bottom) {
+      button.style.bottom = Math.ceil(innerHeight - l.top + 12) + 'px';
+    }
+  };
+  const queue = () => { if (!queued) { queued = true; requestAnimationFrame(place); } };
+  addEventListener('scroll', queue, { passive: true });
+  addEventListener('resize', queue);
+  // The hero settles after the image and fonts load, and share.js injects the
+  // button late: re-check on each of those, not just on scroll.
+  addEventListener('load', queue);
+  document.fonts?.ready.then(queue);
+  if ('ResizeObserver' in window) new ResizeObserver(queue).observe(link.closest('.hero-visual') || link);
+  new MutationObserver(queue).observe(document.body, { childList: true, subtree: true });
+  queue();
+})();
