@@ -4,6 +4,7 @@ Deferred from the 24 September 2026 pre-production review (see `release-readines
 
 ## Owner / data tasks
 
+- [ ] **Redraw the share card without the slogan.** The Brand Voice review (29 September 2026) flagged the headline on the umbrella card ("Fly RC free. Buy RC smart.") as a banned two-beat slogan. The card is in `assets-src/og-card.html`, and its og/twitter `image:alt` repeats the slogan. Suggested headline: "Free RC flight sims, and RC plane prices in India". Needs the owner's choice of wording, then `npm run assets`; WhatsApp keeps its cached preview for a while. The owner approved the current card before the voice guide existed.
 - [ ] **Higher-resolution homepage hero for high-DPI screens.** Needs a new image, generated later. The largest file today is 1536px (`site/assets/hero-flight-v2.webp`). Common 1x laptops now load it and look sharp, but a 1440px-wide 2x ("retina") screen needs about 2,800px. Add a ~2800px `hero-flight-v2-2800.webp` (plus avif if wanted) as a `2800w` srcset entry on both the preload and the `<img>` in `site/index.html`, then run `npm run assets:version`.
   - 2026-09-29: tried ChatGPT (Pro). It generates at most 1536×1024, the same as today's hero, and its "upscale" is a plain Python Lanczos resize, which adds pixels but no detail. So it cannot deliver a real ~2800px hero. Options: a true AI upscaler (e.g. Topaz, Upscayl, or a Real-ESRGAN service) run on the current master image, or an image model that renders natively at 2K/4K.
 - [ ] **Review the 12 flagged live listings** (flagged since 9 Aug) in admin → Review, with the flagged filter. Until each one is accepted or corrected, its model shows "in stock · price under review" with no published price.
@@ -18,7 +19,7 @@ Deferred from the 24 September 2026 pre-production review (see `release-readines
 
 ## Low-priority fixes from the review
 
-- [ ] **Sync the shared header copies** (`scripts/brand-shell.mjs`, `site/assets/family/shell.css`) into the Nanawing, Nanawing 2 and log-viewer repos. The only changes are the optional `cta` button and `avatar` URL (unused there, output unchanged), so this is housekeeping, not a release dependency.
+- [ ] **Sync the shared header copies** (`scripts/brand-shell.mjs`, `site/assets/family/shell.css`) into the Nanawing, Nanawing 2 and log-viewer repos. The changes are the optional `cta` button, `avatar` URL and `contactArrow` (unused there), plus new nav captions from the 29 September Brand Voice review: Wings is "Compare RC plane prices" and Log viewer is "Replay your flight logs". Until the sync, the apps still show the old "Compare RC aircraft" and "Explore your flights". Housekeeping, not a release dependency.
 
 - [x] Catalog link previews (grid, landings, browse, search) use the Nanawing simulator social card as their default `og:image`. Give `/wings/` pages a catalog card (`page()` in `catalog/lib/public.mjs`). **Done 2026-09-25: /wings/ pages use the umbrella narenana card (/og.jpg).**
 - [x] Electric/Nitro tabs on landing pages link to noindex filter URLs, not the sibling landing page (`grid-next.mjs` `powerHref`). Link to the sibling landing when it is valid. **Done 2026-09-29: tabs link to the sibling landing when it is a valid (sitemap) page.**

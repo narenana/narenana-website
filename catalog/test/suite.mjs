@@ -824,7 +824,7 @@ test('homepage and catalog use the same shared header (homepage adds only Fly FP
   const home = unversion(await readFile(new URL('../../site/index.html', import.meta.url), 'utf8'))
   const homeHeader = (home.match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0]
   const HOME_CTA = { label: 'Fly FPV', href: 'https://sim.narenana.com', newTab: true }
-  assert.equal(homeHeader, familyNav({ home: '', cta: HOME_CTA }), 'homepage header must be regenerated from familyNav()')
+  assert.equal(homeHeader, familyNav({ home: '', cta: HOME_CTA, contactArrow: '↓' }), 'homepage header must be regenerated from familyNav()')
   assert.equal((home.match(/<header\b/g) || []).length, 1, 'homepage has exactly one header')
   const grid = await (await get('/wings/')).text()
   const catalogHeader = unversion((grid.match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0] || '')

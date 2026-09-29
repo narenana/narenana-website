@@ -41,7 +41,7 @@ export const ASSET_VERSIONS = {
   "/assets/hero-wing.png": "bf58c12949",
   "/assets/hero-wing.webp": "1f131009ca",
   "/assets/home.css": "3e44052424",
-  "/assets/home.js": "0e408e2307",
+  "/assets/home.js": "91ef46b4fd",
   "/assets/icon-192.png": "be2cccc883",
   "/assets/icon-512.png": "a7ab9bcbbe",
   "/assets/icon-maskable-512.png": "c49a35f35c",
