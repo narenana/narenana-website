@@ -835,6 +835,25 @@ test('homepage and catalog use the same shared header (homepage adds only Fly FP
   assert.ok(!/menu-toggle|getElementById\('navigation'\)/.test(homeJs), 'home.js must not wire the removed header')
 })
 
+// The other static pages (404, methodology, videos) bake the shared header in
+// too. site/404.html is hand-kept, not generated, and once kept the old nav
+// captions after a familyNav() change. Every copy must be current.
+test('every static page header is the current familyNav() output', async () => {
+  const { familyNav } = await import('../../scripts/brand-shell.mjs')
+  const { readFile, readdir } = await import('node:fs/promises')
+  const root = new URL('../../site/', import.meta.url)
+  const pages = (await readdir(root, { recursive: true })).map((p) => p.replace(/\\/g, '/')).filter((p) => p.endsWith('.html') && p !== 'index.html')
+  let checked = 0
+  for (const p of pages) {
+    const header = ((await readFile(new URL(p, root), 'utf8')).match(/<header class="nn-header">[\s\S]*?<\/header>/) || [])[0]
+    if (!header) continue
+    const avatar = header.match(/<img src="([^"]+)"/)[1]
+    assert.ok([familyNav({ avatar }), familyNav({ home: '', avatar })].includes(header), `site/${p}: header must be regenerated from familyNav()`)
+    checked++
+  }
+  assert.ok(checked >= 4, `checked ${checked} static page headers`)
+})
+
 // Every reference to site/assets/* carries its current content hash, and the
 // manifest the Worker reads matches. Fails when someone edits an asset or page
 // and forgets `npm run assets:version`.
