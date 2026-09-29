@@ -1,7 +1,7 @@
 {
   "name": "narenana — Nanawing & RC flying tools",
   "short_name": "narenana",
-  "description": "Fly Nanawing FPV and Nanawing 2, compare RC aircraft in India and explore your flight logs.",
+  "description": "Fly Nanawing FPV and Nanawing 2, compare RC plane prices in India and replay your flight logs.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

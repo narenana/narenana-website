@@ -39,7 +39,7 @@
       if (!cards.length) throw new Error('No videos');
       latest.replaceChildren(...cards); status.textContent = ''; status.hidden = true;
     } catch {
-      status.textContent = 'The latest feed is unavailable. Explore the featured flights or visit the YouTube channel.';
+      status.textContent = 'The latest uploads didn’t load. Watch the featured flights, or go to the YouTube channel.';
       feedRequested = false;
     }
   }

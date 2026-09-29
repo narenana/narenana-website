@@ -67,7 +67,7 @@ The owner, in his own words:
 ## Style rules
 - Indian/British spelling: practise (verb), practice (noun), favourite, colour, manoeuvre.
 - Sentence case for headings. Uppercase only for small eyebrow labels.
-- Numbers: numerals for specs and counts (2 minutes, 12 sellers, 1700 mm); ₹ with Indian digit grouping (₹29,975).
+- Numbers: numerals for specs and counts (2 minutes, 12 sellers, 1700mm); ₹ with Indian digit grouping (₹29,975). Sizes take no space before "mm", the way RC manufacturers and the Wings catalog write them.
 - CTAs: verb-first and say what happens ("Fly Nanawing", "Compare prices", "Open the log viewer"). Never "Learn more" or "Click here".
 - Product names: Nanawing, Nanawing 2, Wings, Log viewer. Course and aircraft names exactly as in the sim.
 
@@ -78,5 +78,6 @@ The owner, in his own words:
 | flight simulator, sim | game |
 | practise (verb) | train, grind |
 | in your browser, no install | cloud, web app |
+| no install, no login | no download, no signup |
 | RC radio / transmitter | controller (except gamepad) |
 | prices last checked | live prices (unless truly real-time) |
