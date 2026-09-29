@@ -45,7 +45,7 @@
     rows.replaceChildren();
     podium.hidden = true;
     podium.replaceChildren();
-    challenge.textContent = 'Fly through the green start arch. Set a lap. Give the podium something to worry about.';
+    challenge.textContent = "Pick a course and an aircraft, then fly through the green start arch to begin your lap.";
     status.textContent = 'Loading current standings…';
     refresh.disabled = true;
     try {
@@ -62,7 +62,7 @@
       const leaders = entries.slice(0, 3);
       for (const entry of leaders) podium.append(podiumPilot(entry, entries[0]));
       podium.hidden = leaders.length === 0;
-      if (leaders.length) challenge.textContent = `The benchmark: ${(leaders[0].time_ms / 1000).toFixed(2)}s on ${course.selectedOptions[0].textContent} in the ${aircraft.selectedOptions[0].textContent}. How close can you get?`;
+      if (leaders.length) challenge.textContent = `Lap to beat: ${(leaders[0].time_ms / 1000).toFixed(2)}s on ${course.selectedOptions[0].textContent} in the ${aircraft.selectedOptions[0].textContent}. Pick the same course and plane.`;
       for (const entry of entries.slice(3)) {
         const row = document.createElement('tr');
         const values = [String(entry.rank).padStart(2, '0'), entry.name, (entry.time_ms / 1000).toFixed(2), entry.rank === 1 ? '—' : '+' + ((entry.time_ms - entries[0].time_ms) / 1000).toFixed(2)];

@@ -45,7 +45,7 @@ export const ASSET_VERSIONS = {
   "/assets/icon-192.png": "be2cccc883",
   "/assets/icon-512.png": "a7ab9bcbbe",
   "/assets/icon-maskable-512.png": "c49a35f35c",
-  "/assets/leaderboard.js": "9f35f3ac8f",
+  "/assets/leaderboard.js": "001827463a",
   "/assets/log-viewer-icon.svg": "a1506becd8",
   "/assets/motion.js": "88d54a9986",
   "/assets/nanawing-learn.webp": "21d30a834f",
