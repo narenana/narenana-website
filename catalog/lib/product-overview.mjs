@@ -1,4 +1,5 @@
 import { extractManufacturerFacts, PROFILE_FIELDS, mergeProfile } from './mfr-profile.mjs'
+import { detectConfig } from './adapters.mjs'
 
 // Only explicit, physical facts from an accepted manufacturer identity are
 // public. Handling/difficulty recommendations remain editorial review work.
@@ -38,6 +39,32 @@ export function nameLint(name) {
   return ''
 }
 
+// The configuration a listing states. 'kit' is what detectConfig() and the
+// approve form fall back to when nothing is named, so a stored 'kit' is only
+// believed when the seller's title (else its URL path) says kit, airframe,
+// frame only or ARF; one that names RTF, PNP or a combo there is read as that.
+// Anything else is '' (not stated). Other stored configs came from a positive
+// match. Product pages label listings with this, and the Wings price bands
+// count a listing only under the configuration it states.
+const KIT_WORDS = /\b(kit|airframe|frame[\s-]?only)\b/i
+const ARF_WORDS = /\b(arf|almost[\s-]?ready[\s-]?to[\s-]?fly)\b/i
+const configIn = (text) => {
+  const named = detectConfig(text)
+  if (named !== 'kit') return named
+  return ARF_WORDS.test(text) ? 'arf' : KIT_WORDS.test(text) ? 'kit' : ''
+}
+export function statedConfig(o) {
+  const c = String(o?.config ?? '').trim().toLowerCase()
+  if (c !== 'kit') return c
+  let path = ''
+  try { path = decodeURIComponent(new URL(o.url_canonical).pathname).replace(/[-_/.+]+/g, ' ') } catch {}
+  return configIn(o.title || '') || configIn(path)
+}
+const CONFIG_SHORT = { kit: 'Kit', arf: 'ARF', pnp: 'PNP', rtf: 'RTF', combo: 'Combo', bnf: 'BNF' }
+export const CONFIG_NOT_STATED = 'Configuration not stated'
+// 'Kit', 'PNP', … or notStated for a listing that does not say.
+export const configLabel = (o, notStated = CONFIG_NOT_STATED) => { const c = statedConfig(o); return c ? CONFIG_SHORT[c] || c : notStated }
+
 export function productOverview(model, offers) {
   if (model.blurb?.trim()) return model.blurb.trim()
   let specs={};try{specs=JSON.parse(model.specs||'{}')}catch{}
@@ -46,10 +73,10 @@ export function productOverview(model, offers) {
   const configs=[...new Set(offers.filter(o=>!o.dead).map(o=>o.config).filter(Boolean))]
   const sellers=new Set(offers.filter(o=>!o.dead).map(o=>o.source_name).filter(Boolean)).size
   const detail=Number.isFinite(span)&&span>0?` The catalog lists a ${span.toLocaleString('en-IN')} mm wingspan.`:''
-  // detectConfig() falls back to 'kit' when a title names no configuration, so
-  // only call it a kit (airframe) when a kit listing's title actually says so.
-  const saysKit=offers.some(o=>!o.dead&&String(o.config).toLowerCase()==='kit'&&/\b(kit|airframe|frame[\s-]?only)\b/i.test(o.title||''))
-  const labels=configs.filter(c=>c.toLowerCase()!=='kit'||saysKit).map(c=>({kit:'kit (airframe)',pnp:'plug-and-play (PNP)',rtf:'ready-to-fly (RTF)',arf:'almost-ready-to-fly (ARF)',bnf:'bind-and-fly (BNF)'}[c.toLowerCase()]||c))
+  // Only the configurations the listings state (statedConfig): a stored 'kit'
+  // is often detectConfig's fallback, not the seller's word.
+  const stated=[...new Set(offers.filter(o=>!o.dead).map(statedConfig).filter(Boolean))]
+  const labels=stated.map(c=>({kit:'kit (airframe)',pnp:'plug-and-play (PNP)',rtf:'ready-to-fly (RTF)',arf:'almost-ready-to-fly (ARF)',bnf:'bind-and-fly (BNF)'}[c]||c))
   const from=sellers?` from ${sellers} Indian seller${sellers===1?'':'s'}`:''
   const availability=labels.length?` Compare ${labels.join(', ')} listings${from}, with prices and stock checks below.`:configs.length?` Compare listings${from}, with prices and stock checks below.`:' Current and last-seen seller offers are listed below.'
   return `${name}.${detail}${availability} Check each package’s included equipment before choosing.`

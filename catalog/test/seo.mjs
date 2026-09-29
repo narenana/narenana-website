@@ -25,6 +25,23 @@ test('offer prices exclude suspicious listings and different configurations, pac
   assert.equal(schema.offerCount, 2)
   assert.equal(schema.offers.length, 2)
 })
+// SEO rec 5: 'kit' is detectConfig's fallback, so a stored kit shows as what
+// the listing says (RTF here) or 'Configuration not stated', never a false kit.
+test('product pages label a listing with the configuration it states', () => {
+  const cat = { name: 'RC planes', path_prefix: '/wings', spec_schema: '[]' }
+  const m = { id: 9, brand: 'Volantex', name: 'Ranger 600', slug: 'ranger-600', specs: '{}', power: 'electric', role_tags: '["Trainer"]' }
+  const ld = (html) => JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1])['@graph'].find((n) => n['@type'] === 'Product').offers
+  let html = renderMaster(cat, m, [offer({ config: 'kit', price_inr: 13500, title: 'Volantex RC Ranger 600 | Ready-to-Fly Glider Plane' })])
+  assert.match(html, /<p class="price-context">RTF · 1 unit\(s\) · New<\/p>/)
+  assert.equal(ld(html).name, 'RTF · 1 unit(s)')
+  assert.match(html, /<td>RTF<\/td>/)
+  html = renderMaster(cat, m, [offer({ config: 'kit', title: 'VT-Simple Trainer' })])
+  assert.match(html, /<p class="price-context">Configuration not stated · /)
+  assert.equal(ld(html).name, 'Configuration not stated · 1 unit(s)')
+  assert.match(html, /<td>Not stated<\/td>/)
+  assert.ok(!/Compare kit \(airframe\)/.test(html), 'the lede does not call it a kit either')
+  assert.match(renderMaster(cat, m, [offer({ config: 'kit', title: 'Ranger 600 airframe kit' })]), /<p class="price-context">Kit · /)
+})
 test('unavailable products never advertise an in-stock structured offer', () => {
   assert.equal(comparableOfferSchema([offer({ in_stock: 0 })]).availability, 'https://schema.org/OutOfStock')
   assert.equal(comparableOfferSchema([offer({ price_inr: null })]), null)
@@ -244,6 +261,73 @@ test('landing merge: electric-X 301s to X only while nitro-X is thin, cached as 
     assert.ok(!/name="robots" content="noindex/.test(await r.text()), 'electric-jets is indexable again')
     xml = await (await go('/sitemap.xml', { id: 'merge-2' })).text()
     assert.ok(xml.includes('/wings/electric-jets/</loc>') && xml.includes('/wings/nitro-jets/</loc>'))
+  } finally {
+    globalThis.caches = saved
+  }
+})
+
+// SEO rec 5 (2026-09): the hub is the electric grid, so /electric/ 301s to it
+// (cached as a redirect like the other landing folds) and leaves the sitemap
+// and IndexNow; the hub carries its editorial and names the seller count
+// worked out from the live, priced listings, never a stored number.
+test('hub: /electric/ folds into it, its editorial moves, its seller count is computed', async () => {
+  const { handleCatalog, catalogScheduled } = await import('../lib/worker.mjs')
+  const store = new Map()
+  const saved = globalThis.caches
+  globalThis.caches = { default: { match: async (k) => store.get(k.url)?.clone(), put: async (k, r) => { store.set(k.url, r) } } }
+  const listing = (s, p, t = 'Wing kit') => ({ s, p, q: 1, c: 'kit', t, u: `https://${s}.example/p`, at: Date.UTC(2026, 8, 28, 10) })
+  const model = (id, power, role, offers) => ({ id, slug: `model-${id}`, brand: 'Test', name: `Model ${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, min_price: 5000, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1, live_offers: JSON.stringify(offers) })
+  const rows = [
+    model(1, 'electric', 'Trainer', [listing('a', 1650), listing('b', 1900)]),
+    model(2, 'electric', 'Trainer', [listing('c', 7790, 'Cub RTF')]),
+    model(3, 'electric', 'Trainer', []),
+    model(4, 'gas', 'Trainer', [listing('a', 15500, 'Trainer ARF')]),
+  ]
+  let gridQueries = 0
+  const env = (id) => ({
+    CF_VERSION_METADATA: { id },
+    CATALOG_DB: { prepare: (sql) => ({ bind(...args) { this.args = args; return this },
+      first: async function () { return /FROM landing_page/.test(sql) && this.args?.[0] === 'electric' ? { body: '<p>Electric editorial.</p>' } : null },
+      all: async () => { if (/GROUP BY m\.id/.test(sql)) { gridQueries++; return { results: rows } } return { results: /FROM category/.test(sql) ? [CAT] : [] } } }) },
+  })
+  const go = async (path, { method = 'GET', id = 'hub-1' } = {}) => {
+    const url = new URL('https://www.narenana.com' + path)
+    const waits = []
+    const r = await handleCatalog(new Request(url, { method }), url, env(id), { waitUntil: (p) => waits.push(p) })
+    await Promise.all(waits)
+    return r
+  }
+  try {
+    let r = await go('/wings/electric/')
+    assert.equal(r.status, 301)
+    assert.equal(r.headers.get('location'), '/wings/')
+    const before = gridQueries
+    r = await go('/wings/electric/')
+    assert.equal(r.status, 301, 'replayed from the cache as a redirect')
+    assert.equal(r.headers.get('location'), '/wings/')
+    assert.equal(gridQueries, before)
+
+    const hub = await (await go('/wings/')).text()
+    assert.match(hub, /<title>RC plane prices in India: 3 sellers compared \| narenana<\/title>/, 'sellers a, b, c: counted from the live, priced listings')
+    assert.match(hub, /<h1 class="shop-h1">RC plane prices in India<\/h1>/)
+    assert.ok(hub.includes('<section class="fx-content"><p>Electric editorial.</p></section>'), 'the /electric/ editorial is on the hub')
+    assert.match(hub, /<meta name="description" content="4 RC planes in stock at 3 Indian sellers: electric from ₹1,650, nitro and gas from ₹15,500\. Prices as last checked 28 Sep 2026\."/)
+    assert.ok(!hub.includes('/wings/electric/'), 'nothing links the folded page')
+    const nitro = await (await go('/wings/nitro/')).text()
+    assert.ok(!nitro.includes('/wings/electric/') && /class="fx-seg-b " href="\/wings\/">Electric/.test(nitro), "/nitro/'s Electric tab links the hub")
+
+    const xml = await (await go('/sitemap.xml')).text()
+    assert.ok(xml.includes('/wings/</loc>') && !xml.includes('/wings/electric/</loc>'))
+    const original = globalThis.fetch
+    let submitted = []
+    globalThis.fetch = async (u, init) => { submitted = JSON.parse(init.body).urlList; return new Response('', { status: 200 }) }
+    try {
+      const waits = []
+      const db = env('hub-1').CATALOG_DB
+      catalogScheduled({ cron: '0 * * * *' }, { CATALOG_DB: { prepare: (sql) => ({ ...db.prepare(sql), run: async () => ({}) }) } }, { waitUntil: (p) => waits.push(p) })
+      await Promise.all(waits)
+    } finally { globalThis.fetch = original }
+    assert.ok(submitted.includes('https://www.narenana.com/wings/') && !submitted.includes('https://www.narenana.com/wings/electric/'), 'IndexNow never submits the folded page')
   } finally {
     globalThis.caches = saved
   }

@@ -10,8 +10,8 @@
 //     no-JS still gets a consistent, filtered in-stock grid for the chosen power)
 import { esc, inr } from './util.mjs'
 import { all } from './db.mjs'
-import { page, ROLE_PRIMARY } from './public.mjs'
-import { displayName } from './product-overview.mjs'
+import { page, ROLE_PRIMARY, conditionOf, dayOf, lowerFirst } from './public.mjs'
+import { displayName, statedConfig } from './product-overview.mjs'
 
 const ROLE_VOCAB = ['Trainer', 'Sport / Park Flyer', 'Aerobatic / 3D', 'Warbird', 'Jet / EDF', 'Glider / Sailplane', 'FPV / Flying Wing', 'Scale Civilian', 'Airliner']
 const SIZE_BUCKETS = [['small', 'Small · under 1 m'], ['medium', 'Medium · 1–1.5 m'], ['large', 'Large · over 1.5 m']]
@@ -82,17 +82,269 @@ export function resolveLanding(slug) {
   return null
 }
 
-// page metadata for a resolved landing (H1, title, desc, breadcrumbs, intro noun)
+// How the landings name their planes: sentence case, acronyms kept (FPV, EDF,
+// 3D, RC), led by the words buyers search with. base: the page noun; lead: the
+// all-power H1 noun when it says more ('… for beginners': Trainer is the strict
+// forgiving-beginner role); many/one: counts in copy ('30 trainers'); short: a
+// related-page link label.
+const ROLE_NOUN = {
+  Trainer: { base: 'trainer RC planes', lead: 'Trainer RC planes for beginners', many: 'trainers', one: 'trainer', short: 'trainers' },
+  'Sport / Park Flyer': { base: 'sport and park flyer RC planes', many: 'sport planes and park flyers', one: 'sport plane or park flyer', short: 'sport planes' },
+  'FPV / Flying Wing': { base: 'FPV and flying wing RC planes', many: 'FPV planes and flying wings', one: 'FPV plane or flying wing', short: 'FPV wings' },
+  'Glider / Sailplane': { base: 'RC gliders and sailplanes', many: 'gliders and sailplanes', one: 'glider or sailplane', short: 'gliders' },
+  Warbird: { base: 'warbird RC planes', many: 'warbirds', one: 'warbird', short: 'warbirds' },
+  'Jet / EDF': { base: 'RC jets and EDF planes', many: 'jets and EDF planes', one: 'jet or EDF plane', short: 'jets' },
+  'Aerobatic / 3D': { base: 'aerobatic and 3D RC planes', many: 'aerobatic and 3D planes', one: 'aerobatic or 3D plane', short: 'aerobatic planes' },
+  'Scale Civilian': { base: 'scale civilian RC planes', many: 'scale civilian planes', one: 'scale civilian plane', short: 'scale planes' },
+  Airliner: { base: 'airliner RC planes', many: 'airliners', one: 'airliner', short: 'airliners' },
+}
+const POWER_WORD = { electric: 'electric', gas: 'nitro and gas' }
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
+export const TITLE_MAX = 60
+
+// A landing's nouns: { lead, many, one, crumb }, naming the power on
+// electric-X / nitro-X pages ('Electric trainer RC planes', '22 electric trainers').
+export function landingNoun(L) {
+  const pw = L.power === 'all' ? '' : POWER_WORD[L.power] || ''
+  const r = L.roles.length ? ROLE_NOUN[L.roles[0]] : null
+  if (!r) return { lead: cap(`${pw} RC planes`), many: `${pw} planes`, one: `${pw} plane`, crumb: cap(`${pw} planes`) }
+  const many = pw ? `${pw} ${lowerFirst(r.many)}` : r.many
+  return {
+    lead: pw ? cap(`${pw} ${lowerFirst(r.base)}`) : r.lead || cap(r.base),
+    many,
+    one: pw ? `${pw} ${lowerFirst(r.one)}` : r.one,
+    crumb: cap(many),
+  }
+}
+
+// page metadata for a resolved landing (H1, title, breadcrumbs, nouns). The
+// meta description is written from the landing's price summary (landingDesc).
 function landingMeta(cat, L, slug) {
-  const pfx = L.power === 'all' ? '' : L.power === 'gas' ? 'Nitro / gas ' : 'Electric '
-  const rl = L.roles.length ? ROLE_H1[L.roles[0]] : ''
-  const core = L.roles.length ? pfx + rl : pfx.trim()
-  const h1 = (core + ' RC Planes in India').replace(/\s+/g, ' ').trim()
-  const noun = ((L.power === 'all' ? '' : (L.power === 'gas' ? 'nitro / gas ' : 'electric ')) + (rl ? rl.toLowerCase() + ' ' : '') + 'RC planes').replace(/\s+/g, ' ').trim()
+  const noun = landingNoun(L)
+  const h1 = `${noun.lead} in India`
+  // No ₹ in titles: Google keeps showing a title after the price moves.
+  const title = [`${noun.lead}: prices in India | narenana`, `${noun.lead} in India | narenana`].find((t) => t.length <= TITLE_MAX) || `${noun.lead} | narenana`
   const crumbs = [{ name: 'Home', url: '/' }, { name: cat.name, url: `${cat.path_prefix}/` }]
-  if (L.power !== 'all' && L.roles.length) crumbs.push({ name: L.power === 'gas' ? 'Nitro / gas' : 'Electric', url: `${cat.path_prefix}/${L.power === 'gas' ? 'nitro' : 'electric'}/` })
-  crumbs.push({ name: L.roles.length ? rl : (L.power === 'gas' ? 'Nitro / gas' : 'Electric'), url: `${cat.path_prefix}/${slug}/` })
-  return { h1, noun, title: `${h1} — Compare Prices | narenana`, desc: `Compare latest checked prices on ${noun} from Indian sellers — specs, stock and every offer in one place.`, path: `${cat.path_prefix}/${slug}/`, crumbs }
+  // nitro-X sits under /nitro/. electric-X sits straight under the hub, which
+  // is the electric grid (/electric/ 301s to it).
+  if (L.power === 'gas' && L.roles.length) crumbs.push({ name: 'Nitro and gas planes', url: `${cat.path_prefix}/nitro/` })
+  crumbs.push({ name: noun.crumb, url: `${cat.path_prefix}/${slug}/` })
+  return { h1, noun, title, path: `${cat.path_prefix}/${slug}/`, crumbs }
+}
+
+// ---- our own ₹ figures (SEO rec 5) ----------------------------------------
+// gridDataNext's live_offers: each model's listings that are in stock, still
+// listed, not held for review (flagged) and priced. Nothing else feeds a
+// figure, so a withheld price cannot leak into a summary.
+const liveOffers = (m) => {
+  if (Array.isArray(m.live_offers)) return m.live_offers.filter(Boolean)
+  try {
+    const a = JSON.parse(m.live_offers || '[]')
+    return Array.isArray(a) ? a.filter(Boolean) : []
+  } catch {
+    return []
+  }
+}
+
+// Price summary for a set of in-stock models (gridDataNext rows). A figure is
+// the lowest price of one new unit (the product pages' comparableOffers rules),
+// counted under the configuration the listing states (statedConfig: a stored
+// 'kit' the seller never called one is '', not stated).
+//   models   in-stock models (the grid's count)
+//   sellers  distinct sellers with a live, priced listing among them: the rule
+//            of the homepage's seller count (HOME_SELLER_COUNT_SQL)
+//   multi    models with live, priced listings at two or more sellers
+//   from     lowest price across every configuration, or null
+//   bands    { kit|arf|pnp|rtf|combo|'': { n, from } }: models, lowest price
+//   first/last  oldest and newest check among those listings (ms)
+export function priceSummary(rows) {
+  const sellers = new Set()
+  const bands = {}
+  let from = null, multi = 0, first = null, last = null
+  for (const m of rows) {
+    const offers = liveOffers(m)
+    const own = new Set(offers.map((o) => o.s).filter(Boolean))
+    for (const s of own) sellers.add(s)
+    if (own.size >= 2) multi++
+    const best = {}
+    for (const o of offers) {
+      const at = Number(o.at) || 0
+      if (at) {
+        first = first == null ? at : Math.min(first, at)
+        last = last == null ? at : Math.max(last, at)
+      }
+      if (o.q !== 1 || !(o.p > 0) || conditionOf(o.t) !== 'new') continue
+      const c = statedConfig({ config: o.c, title: o.t, url_canonical: o.u })
+      if (best[c] == null || o.p < best[c]) best[c] = o.p
+      if (from == null || o.p < from) from = o.p
+    }
+    for (const [c, p] of Object.entries(best)) {
+      const b = (bands[c] ||= { n: 0, from: p })
+      b.n++
+      b.from = Math.min(b.from, p)
+    }
+  }
+  return { models: rows.length, sellers: sellers.size, multi, from, bands, first, last }
+}
+
+// '29 Sep 2026', '27–29 Sep 2026', '30 Aug – 2 Sep 2026' ('' without dates).
+export function checkedRange(first, last) {
+  if (!first || !last) return ''
+  const a = new Date(first), b = new Date(last)
+  const da = dayOf(first), db = dayOf(last)
+  if (da === db) return db
+  if (a.getUTCFullYear() !== b.getUTCFullYear()) return `${da} – ${db}`
+  if (a.getUTCMonth() !== b.getUTCMonth()) return `${da.replace(/ \d{4}$/, '')} – ${db}`
+  return `${a.getUTCDate()}–${db}`
+}
+
+const nSellers = (n) => `${n} Indian seller${n === 1 ? '' : 's'}`
+const joinList = (xs) => (xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`)
+// Prose order and names of the stated configurations (combos, and listings
+// that state none, appear only in the table).
+const BAND_PROSE = [['kit', 'kits'], ['rtf', 'ready-to-fly'], ['pnp', 'plug-and-play'], ['arf', 'ARFs']]
+const bandsProse = (sum) => BAND_PROSE.filter(([c]) => sum.bands[c])
+
+// Landing intro, from the same numbers as its meta description and table:
+// '30 trainers in stock at 7 Indian sellers, from ₹1,650. Kits start at
+// ₹2,189, ready-to-fly at ₹7,790 … 8 are sold by two or more sellers. Prices
+// as last checked 27–29 Sep 2026.'
+function landingIntro(noun, sum) {
+  const what = `${sum.models} ${sum.models === 1 ? noun.one : noun.many}`
+  if (!sum.sellers) return `${what} in stock at Indian sellers; prices under review.`
+  const parts = [`${what} in stock at ${nSellers(sum.sellers)}${sum.from ? `, from ${inr(sum.from)}` : ''}.`]
+  const bands = bandsProse(sum).map(([c, w], i) => (i ? `${w} at ${inr(sum.bands[c].from)}` : `${cap(w)} start${/s$/.test(w) ? '' : 's'} at ${inr(sum.bands[c].from)}`))
+  if (bands.length) parts.push(`${joinList(bands)}.`)
+  if (sum.multi) parts.push(`${sum.multi} ${sum.multi === 1 ? 'is' : 'are'} sold by two or more sellers.`)
+  const when = checkedRange(sum.first, sum.last)
+  if (when) parts.push(`Prices as last checked ${when}.`)
+  return parts.join(' ')
+}
+
+// Landing meta description: the '₹ from' figure and the seller count first,
+// then as many configuration figures as fit beside the check date, the most
+// common configuration first (the date goes only if not even the head fits).
+export const DESC_MAX = 155
+export function landingDesc(noun, sum) {
+  const what = `${sum.models} ${sum.models === 1 ? noun.one : noun.many}`
+  if (!sum.sellers || !sum.from) return `${what} in stock at Indian sellers, with prices and stock as last checked and a link straight to each seller.`
+  const head = `${what} in stock at ${nSellers(sum.sellers)}, from ${inr(sum.from)}.`
+  const when = checkedRange(sum.first, sum.last)
+  const tail = when ? ` Prices as last checked ${when}.` : ' Prices as last checked.'
+  // The configurations most of these models come in first (ARFs on nitro pages).
+  const bands = bandsProse(sum).sort(([a], [b]) => sum.bands[b].n - sum.bands[a].n).map(([c, w]) => `${w} from ${inr(sum.bands[c].from)}`)
+  for (const end of [tail, ''])
+    for (let k = bands.length; k >= 0; k--) {
+      const d = `${head}${k ? ` ${cap(bands.slice(0, k).join(', '))}.` : ''}${end}`
+      if (d.length <= DESC_MAX) return d
+    }
+  return head.slice(0, DESC_MAX)
+}
+
+// Table labels for the configurations, in table order ('' = not stated).
+const BAND_ROWS = [['kit', 'Kit (airframe only)'], ['arf', 'ARF (almost ready to fly)'], ['pnp', 'PNP (plug and play)'], ['rtf', 'RTF (ready to fly)'], ['combo', 'Combo (with motor or electronics)'], ['', 'Configuration not stated']]
+const glanceNote = (sum, notStated) => {
+  const when = checkedRange(sum.first, sum.last)
+  return `<p class="fx-gnote">Lowest price for one new unit${when ? `, as last checked ${esc(when)}` : ', as last checked'}. Prices held for review are left out. Kit: the airframe only; you add the power system, servos and radio. PNP: the power system is fitted; you add a receiver and battery. RTF: comes with a radio.${notStated ? ' Some listings don’t say which they are, so check the seller’s page before you buy.' : ''}</p>`
+}
+const glanceTable = (head, body, note) =>
+  `<section class="fx-glance" aria-labelledby="fx-glance"><h2 id="fx-glance">Prices at a glance</h2><div class="fx-gscroll"><table class="fx-gt"><thead><tr>${head.map((h) => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>${note}</section>`
+
+// A landing's table: one row per configuration its listings state.
+function landingGlance(sum) {
+  const rows = BAND_ROWS.filter(([c]) => sum.bands[c])
+  if (!rows.length) return ''
+  const body = rows.map(([c, label]) => `<tr><th scope="row">${esc(label)}</th><td>${sum.bands[c].n}</td><td>${inr(sum.bands[c].from)}</td></tr>`).join('')
+  return glanceTable(['Configuration', 'Models', 'From'], body, glanceNote(sum, !!sum.bands['']))
+}
+
+// The hub's table: every type across both powers (as its landing shows it),
+// then the electric and nitro/gas totals, so a page titled 'RC plane prices
+// in India' covers nitro too. A type links its landing when that is indexable.
+// Each row's in-stock count sits under its label, so the table fits a phone.
+const HUB_TYPES = ['trainers', 'sport-planes', 'fpv', 'gliders', 'warbirds', 'jets', 'aerobatic', 'scale-planes', 'airliners']
+const HUB_LABEL = { trainers: 'Trainers', 'sport-planes': 'Sport planes', fpv: 'FPV wings', gliders: 'Gliders', warbirds: 'Warbirds', jets: 'Jets and EDF', aerobatic: 'Aerobatic and 3D', 'scale-planes': 'Scale planes', airliners: 'Airliners' }
+const tagged = (rows, role) => rows.filter((m) => { try { return JSON.parse(m.role_tags || '[]').includes(role) } catch { return false } })
+const isGas = (m) => m.power === 'gas'
+function hubGlance(cat, all, valid) {
+  const whole = priceSummary(all)
+  if (!whole.from) return ''
+  const link = (slug, label) => (valid?.has(slug) ? `<a href="${cat.path_prefix}/${slug}/">${esc(label)}</a>` : esc(label))
+  const lines = HUB_TYPES.map((slug) => ({ slug, rows: tagged(all, ROLE_SLUG[slug]) }))
+    .filter((x) => x.rows.length)
+    .map((x) => ({ label: link(x.slug, HUB_LABEL[x.slug]), sum: priceSummary(x.rows) }))
+  const electric = all.filter((m) => !isGas(m)), gas = all.filter(isGas)
+  if (electric.length) lines.push({ label: 'All electric', sum: priceSummary(electric), total: true, note: ', listed below' })
+  if (gas.length) lines.push({ label: link('nitro', 'All nitro and gas'), sum: priceSummary(gas), total: true })
+  const cell = (price) => (price ? `<td>${inr(price)}</td>` : '<td class="is-none">—</td>')
+  const body = lines.map(({ label, sum, total, note = '' }) => `<tr${total ? ' class="is-total"' : ''}><th scope="row">${label}<span class="fx-gn">${sum.models} in stock${note}</span></th>${cell(sum.from)}${cell(sum.bands.kit?.from)}${cell(sum.bands.pnp?.from)}${cell(sum.bands.rtf?.from)}</tr>`).join('')
+  return glanceTable(['Type', 'From', 'Kit', 'PNP', 'RTF'], body, glanceNote(whole, !!whole.bands['']))
+}
+
+// Hub title, description and intro from the same numbers. all: every in-stock
+// model of both powers (the grid below shows the electric ones).
+function hubCopy(cat, all) {
+  const whole = priceSummary(all)
+  const electric = priceSummary(all.filter((m) => !isGas(m)))
+  const gas = priceSummary(all.filter(isGas))
+  const when = checkedRange(whole.first, whole.last)
+  const title = whole.sellers >= 2 ? `RC plane prices in India: ${whole.sellers} sellers compared | narenana` : 'RC plane prices in India | narenana'
+  const pw = [electric.from && `electric from ${inr(electric.from)}`, gas.from && `nitro and gas from ${inr(gas.from)}`].filter(Boolean)
+  const head = whole.sellers ? `${whole.models} RC planes in stock at ${nSellers(whole.sellers)}${pw.length ? `: ${pw.join(', ')}` : ''}.` : `${whole.models} RC planes in stock at Indian sellers, with prices and stock as last checked.`
+  const desc = [head + (when ? ` Prices as last checked ${when}.` : ''), head].find((d) => d.length <= DESC_MAX) || head.slice(0, DESC_MAX)
+  const nitro = gas.models ? ` <a href="${cat.path_prefix}/nitro/">Nitro and gas planes</a> (${gas.models}${gas.from ? `, from ${inr(gas.from)}` : ''}) have their own page.` : ''
+  const intro = whole.sellers
+    ? `${whole.models} RC planes in stock at ${nSellers(whole.sellers)}${whole.from ? `, from ${inr(whole.from)}` : ''}. The grid below lists the ${electric.models} electric ones.${nitro}${when ? ` Prices as last checked ${esc(when)}.` : ''} We don’t sell anything: every offer links straight to the seller.`
+    : ''
+  return { title, desc, intro, when }
+}
+
+// Practise-first lines for the types a sim covers. Laptop or desktop only:
+// never a phone claim. Nanawing 2 is the line-of-sight sim, Nanawing the FPV
+// wing sim.
+const PRACTISE = {
+  Trainer: 'Practise circuits and landings line of sight in <a href="https://nanawing2.narenana.com/">Nanawing 2</a> before you risk the real plane. It runs free in your browser on a laptop or desktop.',
+  'FPV / Flying Wing': 'Practise hand launches and landings in <a href="https://sim.narenana.com/">Nanawing</a> before you risk the real wing. It runs free in your browser on a laptop or desktop. After a real flight, replay your iNAV or EdgeTX log on a 3D map in the <a href="/log-viewer/">log viewer</a>.',
+}
+// Types a buyer of each type often compares next.
+const RELATED = {
+  trainers: ['sport-planes', 'scale-planes', 'gliders'],
+  'sport-planes': ['trainers', 'aerobatic', 'warbirds'],
+  fpv: ['gliders', 'sport-planes', 'jets'],
+  gliders: ['fpv', 'trainers', 'sport-planes'],
+  warbirds: ['jets', 'scale-planes', 'aerobatic'],
+  jets: ['warbirds', 'fpv', 'aerobatic'],
+  aerobatic: ['sport-planes', 'warbirds', 'jets'],
+  'scale-planes': ['warbirds', 'trainers', 'sport-planes'],
+  airliners: ['jets', 'scale-planes'],
+}
+const browseLine = (pref) => `See <a href="${pref}/browse/">every model in stock</a> on one page, or read <a href="/catalog-methodology/">how we check prices and stock</a>.`
+// Plain internal links under a landing's editorial: related types (indexable
+// landings only), every model in stock, and how prices are checked.
+function landingMore(cat, landing, valid) {
+  const pref = cat.path_prefix
+  const { L } = landing
+  const ok = (s) => !!valid?.has(s)
+  const a = (s, label) => `<a href="${pref}/${s}/">${esc(label)}</a>`
+  let rel = []
+  if (L.roles.length && L.power !== 'all') {
+    // electric-X / nitro-X: the other power's page, then the all-power page.
+    const r = ROLE_NOUN[L.roles[0]]
+    const otherPw = L.power === 'gas' ? 'electric' : 'gas'
+    const other = `${otherPw === 'gas' ? 'nitro' : 'electric'}-${L.roleSlug}`
+    if (ok(other)) rel.push(a(other, `${POWER_WORD[otherPw]} ${lowerFirst(r.many)}`))
+    if (ok(L.roleSlug)) rel.push(a(L.roleSlug, `${lowerFirst(r.many)} of any power`))
+  } else if (L.roles.length) {
+    rel = (RELATED[L.roleSlug] || []).filter(ok).map((s) => a(s, ROLE_NOUN[ROLE_SLUG[s]].short))
+  }
+  // /nitro/: its per-type pages, under one 'nitro and gas'.
+  const byType = !L.roles.length && L.power === 'gas' ? HUB_TYPES.filter((s) => ok(`nitro-${s}`)).map((s) => a(`nitro-${s}`, ROLE_NOUN[ROLE_SLUG[s]].short)) : []
+  const lines = []
+  if (L.roles.length && PRACTISE[L.roles[0]]) lines.push(PRACTISE[L.roles[0]])
+  if (rel.length) lines.push(`Also compare prices on ${joinList(rel)}.`)
+  if (byType.length) lines.push(`Compare nitro and gas ${joinList(byType)}.`)
+  lines.push(browseLine(pref))
+  return `<section class="fx-more">${lines.map((l) => `<p>${l}</p>`).join('')}</section>`
 }
 
 // A landing is an indexable page only with at least this many in-stock models.
@@ -104,7 +356,8 @@ export const LANDING_MIN = 3
 // electric-X is listed only when nitro-X also qualifies. Without a nitro half,
 // electric-X shows (almost) the same models as the all-power X page, and the
 // two compete as near-duplicates; X carries the role alone (the landing route
-// 301s electric-X to it, see landingRedirect).
+// 301s electric-X to it, see landingRedirect). There is no /electric/ page:
+// the hub IS the electric grid, so /electric/ 301s to it (SEO rec 5).
 export function validLandings(masters, min = LANDING_MIN) {
   const parse = (rt) => { try { return JSON.parse(rt || '[]') } catch { return [] } }
   const live = masters.filter((m) => m.any_stock)
@@ -112,7 +365,7 @@ export function validLandings(masters, min = LANDING_MIN) {
   const out = []
   for (const [slug, role] of Object.entries(ROLE_SLUG)) if (n(null, role) >= min) out.push(slug)
   for (const [pslug, pw] of [['electric', 'electric'], ['nitro', 'gas']]) {
-    if (n(pw) >= min) out.push(pslug)
+    if (pw === 'gas' && n(pw) >= min) out.push(pslug)
     for (const [rslug, role] of Object.entries(ROLE_SLUG))
       if (n(pw, role) >= min && (pw === 'gas' || n('gas', role) >= min)) out.push(`${pslug}-${rslug}`)
   }
@@ -120,9 +373,11 @@ export function validLandings(masters, min = LANDING_MIN) {
 }
 
 // electric-X → X while nitro-X does not qualify (validLandings has dropped
-// electric-X). Returns the slug to 301 to, or null. Dynamic: once nitro-X has
-// the stock, electric-X serves again and returns to the sitemap.
+// electric-X), and /electric/ → the hub ('') always: the hub is the electric
+// grid. Returns the slug to 301 to ('' = the hub), or null. Dynamic: once
+// nitro-X has the stock, electric-X serves again and returns to the sitemap.
 export function landingRedirect(slug, valid) {
+  if (slug === 'electric') return ''
   if (!slug.startsWith('electric-')) return null
   const rslug = slug.slice('electric-'.length)
   return ROLE_SLUG[rslug] && !valid.has(`nitro-${rslug}`) ? rslug : null
@@ -204,17 +459,15 @@ const BZ_CSS = `<style>
 export function renderBrowse(cat, masters, landings) {
   const pfx = cat.path_prefix
   const parse = (rt) => { try { return JSON.parse(rt || '[]') } catch { return [] } }
+  // Each landing by its own H1 noun, in sentence case ('Electric trainer RC planes').
   const landingLabel = (slug) => {
     const L = resolveLanding(slug)
-    if (!L) return slug
-    const pw = L.power === 'gas' ? 'Nitro / gas ' : L.power === 'electric' ? 'Electric ' : ''
-    const rl = L.roles.length ? ROLE_H1[L.roles[0]] : L.power === 'gas' ? 'Nitro / gas' : 'Electric'
-    return (L.roles.length ? pw + rl : rl || pw).trim()
+    return L ? landingNoun(L).lead : slug
   }
   const landingLinks = landings
     .map((s) => ({ s, label: landingLabel(s) }))
     .sort((a, b) => a.label.localeCompare(b.label))
-    .map(({ s, label }) => `<li><a href="${pfx}/${esc(s)}/">${esc(label)} RC planes</a></li>`)
+    .map(({ s, label }) => `<li><a href="${pfx}/${esc(s)}/">${esc(label)}</a></li>`)
     .join('')
 
   const groups = new Map()
@@ -238,7 +491,7 @@ export function renderBrowse(cat, masters, landings) {
   const body = `<main class="bz">
 <nav class="bz-crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="${pfx}/">${esc(cat.name)}</a> › All models</nav>
 <h1 class="bz-h1">All RC plane models</h1>
-<p class="bz-lede">Every RC plane currently in stock — ${total} models — with live prices from Indian sellers. Browse by curated category, or by type below.</p>
+<p class="bz-lede">Every RC plane in stock right now: ${total} models, with prices as last checked at Indian sellers. Browse by category, or by type below.</p>
 <form class="bz-qform" role="search" action="${pfx}/" method="get"><input class="bz-q" type="search" name="q" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="bz-qbtn" type="submit">Search</button></form>
 <section class="bz-sec"><h2>Browse by category</h2><ul class="bz-land">${landingLinks}</ul></section>
 ${sections}
@@ -246,7 +499,7 @@ ${sections}
 
   return page({
     title: `All RC plane models in India (${total}) | narenana`,
-    desc: `Index of every RC plane currently in stock in the narenana catalog — ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with latest checked prices.`,
+    desc: `Index of every RC plane in stock in the narenana catalog: ${total} models across warbirds, FPV wings, trainers, jets, gliders and more, with prices as last checked.`,
     path: `${pfx}/browse/`,
     body,
     jsonld: { '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'All RC plane models', url: `${SITE}${pfx}/browse/` },
@@ -263,6 +516,9 @@ const specLine = (m) => {
 // All in-stock ready masters for one power (no pagination — the client filters).
 // Condition is derived per-offer and split into two in-stock signals so a master
 // with BOTH a new and a used listing is correctly filterable as either.
+// live_offers (JSON; nulls for the other listings) feeds priceSummary: only
+// listings in stock, still listed, not flagged and priced. It is never embedded
+// in the page.
 export async function gridDataNext(env, cat, power) {
   const USED = `(LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%'
                  OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%')`
@@ -274,7 +530,9 @@ export async function gridDataNext(env, cat, power) {
             COALESCE(MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 AND o.pack_qty=1 AND NOT (LOWER(k.title) LIKE '%pre-owned%' OR LOWER(k.title) LIKE '%pre owned%' OR LOWER(k.title) LIKE '%preowned%' OR LOWER(k.title) LIKE '%sparingly used%' OR LOWER(k.title) LIKE '%(used)%' OR LOWER(k.title) LIKE '%refurbished%') THEN k.price_inr END), MIN(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0 THEN k.price_inr END)) AS min_price,
             CAST(json_extract(m.specs,'$.spanMM') AS INTEGER) AS span_mm,
             MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND ${USED} THEN 1 ELSE 0 END) AS preowned_stock,
-            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND NOT ${USED} THEN 1 ELSE 0 END) AS new_stock
+            MAX(CASE WHEN k.in_stock=1 AND k.dead=0 AND NOT ${USED} THEN 1 ELSE 0 END) AS new_stock,
+            json_group_array(CASE WHEN k.in_stock=1 AND k.dead=0 AND COALESCE(k.flagged,'')='' AND k.price_inr>0
+              THEN json_object('s',k.source_id,'p',k.price_inr,'q',o.pack_qty,'c',o.config,'t',k.title,'u',k.url_canonical,'at',COALESCE(k.last_checked,k.last_seen)) END) AS live_offers
      FROM master_model m
      CROSS JOIN offer o ON o.master_model_id=m.id
      CROSS JOIN sku k ON k.id = o.sku_id AND k.review_status='approved'
@@ -405,13 +663,31 @@ export function renderGridNext(cat, rows, opts = {}) {
   const fxData = items.map((it) => ({ i: it.m.id, t: it.tags, s: it.size, cn: it.cn, cp: it.cp, sp: it.span, p: it.price, o: it.pop,
     n: it.m.name, b: it.m.brand, u: it.m.slug, h: !!(it.m.hero_any ?? it.m.hero_image), ns: it.m.sellers, sl: specLine(it.m) }))
 
-  // header: landing pages get their own H1 + breadcrumbs + intro; the main grid keeps the default.
-  const h1 = Lmeta ? Lmeta.h1 : `${cat.name} in India`
+  // Our own ₹ figures (SEO rec 5), from the listings a product page would
+  // quote: a landing's in-stock models, or on the hub every in-stock model of
+  // both powers (opts.all), so its nitro rows and totals are real.
+  const hub = !landing && !q && power === 'electric' && Array.isArray(opts.all)
+  const lsum = Lmeta ? priceSummary(ordered.filter(visible).map((it) => it.m)) : null
+  const hc = hub ? hubCopy(cat, opts.all) : null
+  const gsum = !Lmeta && !hub ? priceSummary(rows) : null
+  const when = hc ? hc.when : checkedRange((lsum || gsum).first, (lsum || gsum).last)
+  const checked = when ? `prices last checked ${when}` : 'prices as last checked at Indian sellers'
+
+  // header: landing pages get their own H1 + breadcrumbs + intro; the hub is
+  // the 'RC plane prices in India' page (its grid shows the electric models).
+  // ?power=gas canonicalises to /nitro/, so it is named like that page.
+  const gasMeta = !Lmeta && !q && power === 'gas' ? landingMeta(cat, resolveLanding('nitro'), 'nitro') : null
+  const h1 = Lmeta ? Lmeta.h1 : gasMeta ? gasMeta.h1 : 'RC plane prices in India'
   const subTxt = q
-    ? `${resultN} result${resultN === 1 ? '' : 's'} for “${esc(q)}” · electric & nitro, in stock`
-    : Lmeta ? `${resultN} ${Lmeta.noun} in stock · latest checked prices from Indian sellers` : `${power === 'gas' ? 'Nitro / gas' : 'Electric'} aircraft · latest checked prices from Indian sellers`
+    ? `${resultN} result${resultN === 1 ? '' : 's'} for “${q}” · electric & nitro, in stock`
+    : Lmeta ? `${resultN} ${resultN === 1 ? Lmeta.noun.one : Lmeta.noun.many} in stock · ${checked}` : `${items.length} ${power === 'gas' ? 'nitro and gas' : 'electric'} RC planes in stock · ${checked}`
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
-  const introHtml = Lmeta ? `<p class="fx-intro">Compare latest checked prices on ${resultN} ${esc(Lmeta.noun)} available in India right now. Every card opens a full spec sheet and every offer links straight to the seller — kits, PNP and ready-to-fly.</p>` : ''
+  const introHtml = Lmeta ? `<p class="fx-intro">${esc(landingIntro(Lmeta.noun, lsum))}</p>` : hc?.intro ? `<p class="fx-intro">${hc.intro}</p>` : ''
+  const glanceHtml = Lmeta ? landingGlance(lsum) : hub ? hubGlance(cat, opts.all, valid) : ''
+  // Editorial: the landing's own row; the hub shows the editorial of the
+  // /electric/ page it replaced (opts.content).
+  const content = landing ? landing.content : hub ? opts.content : ''
+  const moreHtml = landing ? landingMore(cat, landing, valid) : hub ? `<section class="fx-more"><p>${browseLine(pref)}</p></section>` : ''
   // Structured data on EVERY grid state, not just landings: BreadcrumbList
   // (default Home › category when no landing) + an ItemList of the first
   // visible results (capped — the full list would bloat the page).
@@ -426,8 +702,9 @@ export function renderGridNext(cat, rows, opts = {}) {
   // Crawlable internal links — ONLY to indexable landings, the same valid set
   // as the sitemap (a thin landing such as 2 airliners serves noindex and is
   // not linked). Unit renders without the set fall back to what this page has.
-  const linkable = (s) => (valid ? valid.has(s) : s === 'electric' ? counts.electric > 0 : s === 'nitro' ? counts.gas > 0 : rolesPresent.includes(ROLE_SLUG[s]))
-  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.filter(linkable).map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}${linkable('electric') ? `<a href="${pref}/electric/">Electric</a>` : ''}${linkable('nitro') ? `<a href="${pref}/nitro/">Nitro / gas</a>` : ''}</nav>`
+  // No Electric link: the hub is the electric grid (/electric/ 301s to it).
+  const linkable = (s) => (valid ? valid.has(s) : s === 'nitro' ? counts.gas > 0 : rolesPresent.includes(ROLE_SLUG[s]))
+  const browseHtml = `<nav class="fx-browse" aria-label="Browse by type"><span>Browse by type</span>${LANDING_ROLE_SLUGS.filter(linkable).map((s) => `<a href="${pref}/${s}/">${esc(ROLE_H1[ROLE_SLUG[s]])}</a>`).join('')}${linkable('nitro') ? `<a href="${pref}/nitro/">Nitro / gas</a>` : ''}</nav>`
 
   const body = `
   <div class="shop-head"><div class="shop-head-in">
@@ -438,6 +715,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     <div class="fx-bar">${q ? `<a class="fx-qclear" href="${pref}/">← all models</a>` : powerSeg('fx-powmain')}<form class="fx-qform" role="search" action="${pref}/" method="get"><input class="fx-q" type="search" name="q" value="${esc(q)}" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="fx-qbtn" type="submit" aria-label="Search">Search</button></form><button class="fx-fbtn" id="fx-open" aria-haspopup="dialog" aria-expanded="false">Filter &amp; Sort<span class="fx-badge" id="fx-badge"${nActive ? '' : ' hidden'}>${nActive}</span></button></div>
   </div></div>
   <main class="shop">
+    ${glanceHtml}
     <div class="fx-summary">
       <span class="fx-rescount"><b id="fx-nres">${resultN}</b> models</span>
       <div class="fx-active" id="fx-active">${activeTags}</div>
@@ -445,7 +723,8 @@ export function renderGridNext(cat, rows, opts = {}) {
     </div>
     <ul class="prods" id="fx-grid">${ordered.filter(visible).map((it,i) => cardNext(it, pref, false,i<2)).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
-    ${landing && landing.content ? `<section class="fx-content">${landing.content}</section>` : ''}
+    ${content ? `<section class="fx-content">${content}</section>` : ''}
+    ${moreHtml}
     ${browseHtml}
 
     <div class="fx-backdrop" id="fx-backdrop" hidden>
@@ -475,8 +754,8 @@ export function renderGridNext(cat, rows, opts = {}) {
   // is noindex,follow: it is not in the sitemap or the nav either.
   const thin = !!(landing && valid && !valid.has(landing.slug))
   return page({
-    title: Lmeta ? Lmeta.title : `${cat.name} in India — compare latest checked prices | narenana`,
-    desc: Lmeta ? Lmeta.desc : `Compare latest checked prices on ${power === 'gas' ? 'nitro/gas' : 'electric'} ${cat.name.toLowerCase()} from Indian sellers.`,
+    title: Lmeta ? Lmeta.title : hc ? hc.title : gasMeta ? gasMeta.title : 'RC plane prices in India | narenana',
+    desc: Lmeta ? landingDesc(Lmeta.noun, lsum) : hc ? hc.desc : gasMeta ? landingDesc(gasMeta.noun, gsum) : 'RC planes in stock at Indian sellers, with prices and stock as last checked and a link straight to each seller.',
     path: Lmeta ? Lmeta.path : power === 'gas' ? `${pref}/nitro/` : `${pref}/`,
     body,
     jsonld: gridLd,
@@ -492,6 +771,26 @@ const FX_CSS = `
 .fx-crumbs i{font-style:normal;opacity:.5}
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
 .fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
+.fx-intro a{color:var(--orange-deep);font-weight:700;text-decoration:none}
+.fx-intro a:hover{text-decoration:underline}
+.fx-glance{margin:0 0 28px;max-width:760px}
+.fx-glance h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.25rem;font-weight:800;margin:0 0 8px;color:var(--ink)}
+.fx-gscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.fx-gt{border-collapse:collapse;width:100%;font-size:.88rem}
+.fx-gt th,.fx-gt td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--faint);white-space:nowrap;font-variant-numeric:tabular-nums;color:var(--ink)}
+.fx-gt th[scope="row"],.fx-gt thead th:first-child{text-align:left;white-space:normal;font-weight:600}
+.fx-gt thead th{font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;border-bottom-width:1.5px}
+.fx-gt td.is-none{color:var(--muted)}
+.fx-gn{display:block;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;color:var(--muted);margin-top:1px}
+.fx-gt tr.is-total th,.fx-gt tr.is-total td{font-weight:700}
+.fx-gt a{color:#0669a6;font-weight:700;text-decoration:none}
+.fx-gt a:hover{text-decoration:underline}
+.fx-gnote{color:var(--muted);font-size:.8rem;line-height:1.5;margin:8px 0 0;max-width:72ch}
+.fx-more{margin:28px 0 0;max-width:72ch}
+.fx-more p{color:var(--muted);line-height:1.65;margin:0 0 .8em}
+.fx-more a{color:var(--orange-deep);text-decoration:none;font-weight:700}
+.fx-more a:hover{text-decoration:underline}
+@media(max-width:640px){.fx-gt th,.fx-gt td{padding:6px 5px}.fx-gt{font-size:.82rem}}
 .fx-content{margin:40px 0 0;max-width:72ch}
 .fx-content h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.3rem;font-weight:800;margin:1.4em 0 .4em;color:var(--ink)}
 .fx-content h3{font-weight:800;font-size:1.05rem;margin:1.2em 0 .3em;color:var(--ink)}

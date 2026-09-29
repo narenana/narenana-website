@@ -9,7 +9,7 @@
 import { esc, inr } from './util.mjs'
 import { familyNav, familyFooter } from '../../scripts/brand-shell.mjs'
 import { CSS_VER } from './styles.mjs'
-import { productOverview, displayName, realBrand } from './product-overview.mjs'
+import { productOverview, displayName, realBrand, configLabel } from './product-overview.mjs'
 
 // Site IDENTITY (domain, analytics id) is code config; all product/market
 // content — masters, offers, recipes, components — arrives as arguments,
@@ -142,6 +142,10 @@ function masterCard(m, prefix) {
     </li>`
 }
 
+// Lower-case a leading word for mid-sentence use, but never an acronym:
+// 'Fixed-wing RC planes' → 'fixed-wing RC planes', 'FPV wings' stays.
+export const lowerFirst = (s) => String(s ?? '').replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase())
+
 const specLine = (m) => {
   try {
     const s = JSON.parse(m.specs || '{}')
@@ -189,8 +193,8 @@ export function renderGrid(cat, masters, opts = {}) {
   <div class="shop-head"><div class="shop-head-in">
     <p class="shop-kicker">narenana catalog</p>
     <h1 class="shop-h1">${esc(cat.name)} in India</h1>
-    <p class="shop-sub">${total} ${label} in stock · live prices from Indian sellers${totalPages > 1 ? ` · page ${pageNo} of ${totalPages}` : ''}</p>
-    <p class="shop-intro">Kits, PNP and ready-to-fly aircraft from Indian hobby shops, in one place. Prices and stock come from each seller's live listing and are re-checked through the day — every card opens a spec sheet, and every offer links straight to the seller.</p>
+    <p class="shop-sub">${total} ${label} in stock · prices last checked at Indian sellers${totalPages > 1 ? ` · page ${pageNo} of ${totalPages}` : ''}</p>
+    <p class="shop-intro">Kits, PNP and ready-to-fly aircraft from Indian hobby shops, in one place. Prices and stock are as last checked on each seller's own listing. Every card opens a spec sheet, and every offer links straight to the seller.</p>
     <div class="filt-row" style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center">${filt}${sortCtl}</div>
   </div></div>
   <main class="shop">
@@ -258,8 +262,8 @@ export function renderGrid(cat, masters, opts = {}) {
   // Page 2+ and non-default filters are noindex (canonical stays the base grid).
   const canonicalDefault = power === 'electric' && pageNo === 1
   return page({
-    title: `${cat.name} in India — compare live prices | narenana`,
-    desc: `Every ${cat.name.toLowerCase()} you can buy in India — kits, PNP and RTF, with live prices and stock compared across Indian hobby shops.`,
+    title: `${cat.name} in India: prices last checked | narenana`,
+    desc: `Kits, PNP and RTF ${lowerFirst(cat.name)} you can buy in India, with prices and stock as last checked at Indian hobby shops.`,
     path: `${pref}/`,
     body,
     jsonld,
@@ -310,7 +314,7 @@ export function comparableOfferSchema(offers) {
   const individual = o => ({'@type':'Offer', url:o.url_canonical, price:o.price_inr, priceCurrency:'INR',
     availability:o.in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     itemCondition:conditionOf(o.title) === 'used' ? 'https://schema.org/UsedCondition' : 'https://schema.org/NewCondition',
-    name:`${o.config || 'Configuration not specified'} · ${o.pack_qty > 0 ? o.pack_qty+' unit(s)' : 'Quantity not specified'}`, seller:{'@type':'Organization',name:o.source_name}})
+    name:`${configLabel(o)} · ${o.pack_qty > 0 ? o.pack_qty+' unit(s)' : 'Quantity not specified'}`, seller:{'@type':'Organization',name:o.source_name}})
   if (group.length === 1) return individual(seed)
   return {'@type':'AggregateOffer', priceCurrency:'INR', lowPrice:Math.min(...group.map(o=>o.price_inr)),
     highPrice:Math.max(...group.map(o=>o.price_inr)), offerCount:group.length, offers:group.map(individual)}
@@ -321,7 +325,7 @@ const ROLE_NOUN = { 'Jet / EDF': 'jet', Warbird: 'warbird', Airliner: 'airliner'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 // '28 Sep 2026', in UTC like the offers table's dates. Built by hand: en-GB
 // formats September as 'Sept' in current ICU.
-const dayOf = (ms) => { const d = new Date(ms); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
+export const dayOf = (ms) => { const d = new Date(ms); return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
 export const PRODUCT_DESC_MAX = 155
 
 // Product <title> and meta description, from our own data only (SEO rec 4):
@@ -412,7 +416,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
-      <td>${esc(o.config)}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
+      <td>${esc(configLabel(o, 'Not stated'))}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
       <td>${o.flagged ? '<span style="color:var(--muted);font-weight:600">Price under review</span>' : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
       <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
       <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>
@@ -508,7 +512,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
     ? `${landings.types.length ? `<div><dt>Type</dt><dd>${landings.types.map(linked).join(', ')}</dd></div>` : ''}${landings.power ? `<div><dt>Power</dt><dd>${linked(landings.power)}</dd></div>` : ''}`
     : ''
   // 'More trainer RC planes in India →' ('FPV & flying-wing' keeps its capitals).
-  const moreRole = role ? `<p class="similar-more"><a href="${esc(role.href)}">More ${esc(role.label.replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase()))} RC planes in India →</a></p>` : ''
+  const moreRole = role ? `<p class="similar-more"><a href="${esc(role.href)}">More ${esc(lowerFirst(role.label))} RC planes in India →</a></p>` : ''
 
   const body = `
   <main class="wrap">
@@ -524,7 +528,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
           : seenMin
             ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
             : ''}
-      ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(headlineOffer.config || 'Configuration not specified')} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
+      ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(configLabel(headlineOffer))} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
       <dl class="spec">
         ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}${landingRows}
       </dl>

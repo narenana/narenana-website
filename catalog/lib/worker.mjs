@@ -234,7 +234,12 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       const allRows = await gridDataNext(env, cat, 'all')
       const rows = q ? allRows : allRows.filter((r) => (r.power || 'electric') === p)
       const valid = rememberLandings(env, cat, validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
-      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts: powerCounts(allRows), valid }))
+      // The hub is the 'RC plane prices in India' page: its price table covers
+      // both powers (all), and it carries the editorial of the /electric/ page
+      // it replaced (that URL 301s here).
+      const hub = !q && p === 'electric'
+      const lp = hub ? await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, HUB_EDITORIAL_SLUG) : null
+      return html(renderGridNext(cat, rows, { power: p, q, roles, sizes, cond: url.searchParams.get('cond'), sort: url.searchParams.get('sort'), counts: powerCounts(allRows), valid, all: allRows, content: lp?.body || '' }))
     }
     const power = ['electric', 'gas', 'all'].includes(url.searchParams.get('power')) ? url.searchParams.get('power') : 'electric'
     const sort = ['price-desc', 'price-asc', 'span-desc', 'span-asc'].includes(url.searchParams.get('sort')) ? url.searchParams.get('sort') : 'price-desc'
@@ -266,9 +271,10 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
       const inRole = (r) => { if (!L.roles.length) return true; try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }
       // No match at all (e.g. nitro-gliders) stays a 404: nothing links there.
       if (rows.some(inRole)) {
-        // electric-X folds into X while there is no nitro-X to split from.
+        // electric-X folds into X while there is no nitro-X to split from, and
+        // /electric/ into the hub ('').
         const to = landingRedirect(slug, valid)
-        if (to) return redirect(`${cat.path_prefix}/${to}/`)
+        if (to !== null) return redirect(`${cat.path_prefix}/${to ? `${to}/` : ''}`)
         const lp = await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, slug)
         return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '' }, valid, counts: powerCounts(allRows.filter(inRole)) }))
       }
@@ -315,6 +321,9 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
 }
 
 const GRID_PAGE = 24
+// The hub shows this landing_page row's editorial: the /electric/ page's copy
+// (the hub is the electric grid, and /electric/ now 301s to it).
+const HUB_EDITORIAL_SLUG = 'electric'
 
 // One page of in-stock masters, filtered by power, cheapest-last (price
 // high→low). Power is a stored column (0006) so this filters + paginates in

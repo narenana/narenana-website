@@ -10,7 +10,7 @@ import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct,
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
-import { renderGridNext, searchRows, resolveLanding, validLandings, landingRedirect, powerCounts, LANDING_ROLE_SLUGS } from '../lib/grid-next.mjs'
+import { renderGridNext, searchRows, resolveLanding, validLandings, landingRedirect, powerCounts, LANDING_ROLE_SLUGS, priceSummary, checkedRange } from '../lib/grid-next.mjs'
 import { HOME_SELLER_COUNT_SQL, HOME_CARDS_SQL } from '../lib/home-queries.mjs'
 import { planAssetVersions } from '../../scripts/version-assets.mjs'
 import { ASSET_VERSIONS } from '../../src/asset-versions.mjs'
@@ -20,7 +20,7 @@ import { fetchStrategyPage, STRATEGIES } from '../lib/mfr-strategies.mjs'
 import { enqueueManufacturerHarvests, MFR_WEEKLY_CRON } from '../lib/mfr-jobs.mjs'
 import { extractManufacturerFacts, mergeProfile, normalizeProfilePatch, PROFILE_FIELDS, validateProfileValues } from '../lib/mfr-profile.mjs'
 import { fetchWithAllowedRedirects, imageCacheHeaders } from '../lib/util.mjs'
-import { nameLint } from '../lib/product-overview.mjs'
+import { nameLint, statedConfig, configLabel } from '../lib/product-overview.mjs'
 
 const BASE = process.env.CATALOG_BASE ?? 'http://127.0.0.1:8787'
 const PASS = process.env.CATALOG_PASS ?? 'devpass'
@@ -769,6 +769,121 @@ test('landing merge: electric-X only beside nitro-X; nav and power tabs link ind
   assert.ok(land('airliners').includes('name="robots" content="noindex,follow"'), 'a thin landing serves noindex,follow')
 })
 
+// SEO rec 5 (2026-09): the hub and the landings quote our own ₹ figures, from
+// the listings a product page would quote (in stock, still listed, not held
+// for review, priced, one new unit), each under the configuration the listing
+// states. A stored 'kit' is often only detectConfig's fallback.
+test('price figures: stated configurations, comparable listings only, sellers and check dates', () => {
+  const kit = (title, url = 'https://seller.example/p/x') => statedConfig({ config: 'kit', title, url_canonical: url })
+  assert.equal(kit('VT-Simple Trainer'), '', 'nothing named: not stated')
+  assert.equal(kit('Boomerang 40 balsa build up kit'), 'kit')
+  assert.equal(kit('Clouds Survey 1880mm KITNE', 'https://seller.example/product/clouds-survey-rc-airplane-kit'), 'kit', 'the URL path counts when the title is silent')
+  assert.equal(kit('Volantex RC Ranger 600 | Ready-to-Fly Glider Plane'), 'rtf', 'a stored kit whose title names RTF is RTF')
+  assert.equal(kit('HEEWING  T1 Ranger – PNP PRO GRY'), 'pnp')
+  assert.equal(kit('Seagull Arising Star 46Size High Wing Trainer ARF KIT'), 'arf')
+  assert.equal(kit('Phoenix Model P-40 Kitty Hawk ARF Nitro', 'https://seller.example/products/p-40-kitty-hawk-nitro-rtf'), 'arf', 'the title wins over the URL')
+  assert.equal(kit('Phoenix Model P-40 Kitty Hawk'), '', "'Kitty' is not 'kit'")
+  assert.equal(statedConfig({ config: 'pnp', title: 'Wing' }), 'pnp', 'a stored config other than kit came from a positive match')
+  assert.equal(configLabel({ config: 'kit', title: 'VT-Simple Trainer' }), 'Configuration not stated')
+  assert.equal(configLabel({ config: 'kit', title: 'VT-Simple Trainer' }, 'Not stated'), 'Not stated')
+  assert.equal(configLabel({ config: 'rtf', title: 'Cub' }), 'RTF')
+
+  const day = (d) => Date.UTC(2026, 8, d, 10)
+  const lo = (s, p, c, t, more = {}) => ({ s, p, q: 1, c, t, u: `https://${s}.example/p`, at: day(28), ...more })
+  const rows = [
+    { live_offers: JSON.stringify([lo('a', 1650, 'kit', 'VT-Simple Trainer'), lo('b', 2189, 'kit', 'Trainer balsa kit'), null]) },
+    { live_offers: [lo('a', 7790, 'kit', 'Sport Cub Ready-to-Fly', { at: day(27) }), lo('c', 7000, 'rtf', 'Sport Cub RTF (pre-owned)'), lo('c', 5000, 'rtf', 'Sport Cub RTF', { q: 2 })] },
+    { live_offers: '[]' }, // in stock, but every live listing is held for review
+  ]
+  const sum = priceSummary(rows)
+  assert.equal(sum.models, 3, 'every in-stock model counts')
+  assert.equal(sum.sellers, 3, 'distinct sellers with a live, priced listing')
+  assert.equal(sum.multi, 2)
+  assert.equal(sum.from, 1650)
+  assert.deepEqual(sum.bands, { '': { n: 1, from: 1650 }, kit: { n: 1, from: 2189 }, rtf: { n: 1, from: 7790 } }, 'a pre-owned unit and a 2-pack never set a figure')
+  assert.equal(checkedRange(sum.first, sum.last), '27–28 Sep 2026')
+  assert.equal(checkedRange(day(28), day(28) + 3600e3), '28 Sep 2026')
+  assert.equal(checkedRange(Date.UTC(2026, 7, 30), Date.UTC(2026, 8, 2)), '30 Aug – 2 Sep 2026')
+  assert.equal(checkedRange(null, null), '')
+})
+
+test('hub and landings: sentence-case titles, ₹ figures from comparable listings, practise lines, plain links', () => {
+  const cat = { name: 'Fixed-wing RC planes', path_prefix: '/wings' }
+  const at = Date.UTC(2026, 8, 28, 10)
+  const lo = (s, p, c, t) => ({ s, p, q: 1, c, t, u: `https://${s}.example/p`, at })
+  // min_price is the card's figure; the copy and tables read only live_offers.
+  const m = (id, power, role, offers) => ({ id, slug: `m${id}`, brand: 'B', name: `M${id}`, power, role_tags: JSON.stringify([role]), specs: '{}', sellers: 1, hero_any: null, min_price: 999, span_mm: 900, new_stock: 1, preowned_stock: 0, any_stock: 1, live_offers: offers })
+  const rows = [
+    m(1, 'electric', 'Trainer', [lo('a', 1650, 'kit', 'Simple Trainer'), lo('b', 2000, 'kit', 'Simple Trainer kit')]),
+    m(2, 'electric', 'Trainer', [lo('a', 7790, 'rtf', 'Cub RTF')]),
+    m(3, 'gas', 'Trainer', [lo('c', 15500, 'kit', 'Boomerang ARF')]),
+    ...[4, 5, 6].map((i) => m(i, 'electric', 'FPV / Flying Wing', [lo('d', 2300 + i, 'pnp', 'Wing PNP')])),
+    ...[7, 8, 9].map((i) => m(i, 'electric', 'Jet / EDF', [lo('a', 9000 + i, 'pnp', 'EDF PNP')])),
+    m(10, 'electric', 'Sport / Park Flyer', []), // every live listing held for review
+  ]
+  const valid = new Set(validLandings(rows))
+  assert.ok(!valid.has('electric'), 'no /electric/ page: the hub is the electric grid')
+  assert.equal(landingRedirect('electric', valid), '', '/electric/ folds into the hub')
+  const land = (slug) => {
+    const L = resolveLanding(slug)
+    return renderGridNext(cat, L.power === 'all' ? rows : rows.filter((r) => r.power === L.power), { power: L.power, roles: L.roles, landing: { L, slug, content: '<p>Editorial.</p>' }, valid, counts: powerCounts(rows) })
+  }
+  const unesc = (s) => s.replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+  const head = (html) => ({
+    title: unesc(html.match(/<title>([^<]*)<\/title>/)[1]),
+    desc: unesc(html.match(/<meta name="description" content="([^"]*)"/)[1]),
+    h1: unesc(html.match(/<h1 class="shop-h1">([^<]*)<\/h1>/)[1]),
+    intro: html.match(/<p class="fx-intro">([\s\S]*?)<\/p>/)?.[1] || '',
+    glance: html.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || '',
+    more: html.match(/<section class="fx-more">[\s\S]*?<\/section>/)?.[0] || '',
+  })
+  // Sentence case: past the first letter, capitals only in acronyms and India.
+  const sentence = (s) => !/[A-Z]/.test(s.replace(/ \| narenana$/, '').replace(/\b(RC|FPV|EDF|3D|ARF|India)\b/g, '').slice(1))
+
+  const t = head(land('trainers'))
+  assert.equal(t.title, 'Trainer RC planes for beginners: prices in India | narenana')
+  assert.equal(t.h1, 'Trainer RC planes for beginners in India')
+  assert.equal(t.desc, '3 trainers in stock at 3 Indian sellers, from ₹1,650. Kits from ₹2,000, ready-to-fly from ₹7,790, ARFs from ₹15,500. Prices as last checked 28 Sep 2026.')
+  assert.equal(t.intro, '3 trainers in stock at 3 Indian sellers, from ₹1,650. Kits start at ₹2,000, ready-to-fly at ₹7,790 and ARFs at ₹15,500. 1 is sold by two or more sellers. Prices as last checked 28 Sep 2026.')
+  assert.match(t.glance, /<th scope="row">Configuration not stated<\/th><td>1<\/td><td>₹1,650<\/td>/, 'a kit the listing never calls one sits under not stated')
+  assert.match(t.glance, /<th scope="row">Kit \(airframe only\)<\/th><td>1<\/td><td>₹2,000<\/td>/)
+  assert.match(t.glance, /as last checked 28 Sep 2026/)
+  assert.ok(!(t.desc + t.intro + t.glance).includes('₹999'), 'a figure never comes from outside the live, priced listings')
+  assert.ok(t.more.includes('href="https://nanawing2.narenana.com/">Nanawing 2</a>') && t.more.includes('laptop or desktop'), 'trainers: the line-of-sight sim')
+  assert.ok(t.more.includes('href="/wings/browse/"') && t.more.includes('href="/catalog-methodology/"'))
+  for (const [, s] of t.more.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(s === 'browse' || valid.has(s), `related link /wings/${s}/ is an indexable landing`)
+  const fpv = head(land('fpv'))
+  assert.equal(fpv.title, 'FPV and flying wing RC planes: prices in India | narenana')
+  assert.match(fpv.desc, /^3 FPV planes and flying wings in stock at 1 Indian seller, from ₹2,304\. Plug-and-play from ₹2,304\./)
+  assert.ok(fpv.more.includes('href="https://sim.narenana.com/">Nanawing</a>'), 'FPV: the FPV wing sim')
+  assert.equal(head(land('jets')).title, 'RC jets and EDF planes: prices in India | narenana')
+  for (const h of [t, fpv]) assert.ok(!/\b(phone|mobile|android|iphone)\b/i.test(h.more), 'no phone claim for the sims')
+
+  // Every landing slug: a title of at most 60 characters, sentence case,
+  // acronyms kept, never a ₹ figure.
+  for (const slug of [...LANDING_ROLE_SLUGS, ...LANDING_ROLE_SLUGS.flatMap((s) => [`electric-${s}`, `nitro-${s}`]), 'nitro']) {
+    const L = resolveLanding(slug)
+    const h = head(renderGridNext(cat, [], { power: L.power, roles: L.roles, landing: { L, slug, content: '' }, valid, counts: { electric: 0, gas: 0 } }))
+    assert.ok(h.title.length <= 60, `${slug}: title ${h.title.length} > 60: ${h.title}`)
+    assert.ok(!h.title.includes('₹'), `${slug}: no ₹ in the title`)
+    assert.ok(sentence(h.title) && sentence(h.h1), `${slug}: sentence case: ${h.title} / ${h.h1}`)
+    assert.ok(!/\b(fpv|edf|3d|rc)\b/.test(h.title + h.h1 + h.desc), `${slug}: acronyms keep their capitals`)
+  }
+
+  // The hub: 'RC plane prices in India', a computed seller count, and a table
+  // that covers nitro too, though its grid shows the electric models.
+  const hubHtml = renderGridNext(cat, rows.filter((r) => r.power === 'electric'), { power: 'electric', counts: powerCounts(rows), valid, all: rows, content: '<p>Electric editorial.</p>' })
+  const hub = head(hubHtml)
+  assert.equal(hub.title, 'RC plane prices in India: 4 sellers compared | narenana')
+  assert.equal(hub.h1, 'RC plane prices in India')
+  assert.equal(hub.desc, '10 RC planes in stock at 4 Indian sellers: electric from ₹1,650, nitro and gas from ₹15,500. Prices as last checked 28 Sep 2026.')
+  assert.match(hub.glance, /<th scope="row"><a href="\/wings\/trainers\/">Trainers<\/a><span class="fx-gn">3 in stock<\/span><\/th><td>₹1,650<\/td><td>₹2,000<\/td><td class="is-none">—<\/td><td>₹7,790<\/td>/, 'types span both powers, as their landings do')
+  assert.match(hub.glance, /All nitro and gas<span class="fx-gn">1 in stock<\/span><\/th><td>₹15,500<\/td>/, 'the nitro row (not linked: /nitro/ is thin here)')
+  assert.ok(hubHtml.includes('<section class="fx-content"><p>Electric editorial.</p></section>'), 'the hub carries the folded /electric/ editorial')
+  assert.ok(!hubHtml.includes('/wings/electric/'), 'nothing links the folded /electric/ page')
+  assert.ok(!/live price/i.test(hubHtml + land('trainers')), 'prices are as last checked, never live')
+})
+
 // The admin SPA is a huge inline <script> inside a backtick template. A stray
 // escaping bug there (e.g. \' vs \\' inside a single-quoted string) is a syntax
 // error the browser hits at parse time — the whole panel dies, silently, and
@@ -927,6 +1042,91 @@ test('product pages: clean names, own-data snippets, links to listed landings on
   }))
   assert.deepEqual(problems, [])
   assert.ok(fourLevel > products.length * 0.9, `most product pages link a role landing (${fourLevel} of ${products.length})`)
+})
+
+// Live data, SEO rec 5: the hub is 'RC plane prices in India' with the seller
+// count the homepage shows, /electric/ folds into it, every listed landing
+// quotes our own ₹ figures in sentence-case metadata, and a landing's table
+// matches what its models' product pages show, listing by listing.
+test('hub and landings: own ₹ figures that match the product pages, computed seller count, prices last checked', async () => {
+  const unesc = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+  const meta = (html) => ({
+    title: unesc(html.match(/<title>([^<]*)<\/title>/)?.[1] ?? ''),
+    desc: unesc(html.match(/<meta name="description" content="([^"]*)"/)?.[1] ?? ''),
+  })
+  const hubHtml = await (await get('/wings/')).text()
+  const hub = meta(hubHtml)
+  assert.match(hub.title, /^RC plane prices in India(: \d+ sellers compared)? \| narenana$/)
+  assert.ok(hub.title.length <= 60, `hub title ${hub.title.length} characters`)
+  const sellers = Number(hub.title.match(/: (\d+) sellers compared/)?.[1])
+  const home = await (await get('/')).text()
+  const homeSellers = Number(home.match(/id="catalog-seller-count">Listings from (\d+) Indian sellers</)?.[1])
+  assert.ok(sellers > 1, 'the hub title names a computed seller count')
+  assert.equal(sellers, homeSellers, 'the hub and the homepage count sellers by the same rule')
+  assert.match(hub.desc, new RegExp(`^\\d+ RC planes in stock at ${sellers} Indian sellers: electric from ₹[\\d,]+, nitro and gas from ₹[\\d,]+\\.`))
+  const glance = hubHtml.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || ''
+  assert.match(glance, /All nitro and gas<\/a><span class="fx-gn">\d+ in stock<\/span><\/th><td>₹[\d,]+<\/td>/, 'the hub table has a nitro row linking /wings/nitro/')
+  assert.match(glance, /as last checked \d/)
+
+  const moved = await get('/wings/electric/')
+  assert.equal(moved.status, 301)
+  assert.equal(new URL(moved.headers.get('location'), BASE).pathname, '/wings/', '/electric/ folds into the hub')
+  const xml = await (await get('/sitemap.xml')).text()
+  assert.ok(!xml.includes('/wings/electric/</loc>'), 'the folded /electric/ page is not in the sitemap')
+
+  const listed = [...xml.matchAll(/<loc>https:\/\/www\.narenana\.com\/wings\/([a-z0-9-]+)\/<\/loc>/g)].map((m) => m[1]).filter((s) => resolveLanding(s))
+  for (const s of listed) {
+    const html = await (await get(`/wings/${s}/`)).text()
+    const { title, desc } = meta(html)
+    assert.ok(title.length <= 60 && !title.includes('₹'), `${s}: title ${JSON.stringify(title)}`)
+    assert.ok(!/ RC Planes|Compare Prices| — /.test(title), `${s}: sentence-case title ${JSON.stringify(title)}`)
+    assert.match(desc, /in stock at \d+ Indian sellers?, from ₹[\d,]+\./, `${s}: the description quotes a ₹ from figure and the seller count`)
+    assert.ok(desc.length <= 160, `${s}: description ${desc.length} characters`)
+    assert.ok(!/\b(fpv|edf|3d)\b/.test(title + desc), `${s}: acronyms keep their capitals`)
+    assert.ok(html.includes('<h2 id="fx-glance">Prices at a glance</h2>'), `${s}: has the price table`)
+    assert.ok(!/live price/i.test(html), `${s}: no 'live prices'`)
+  }
+  for (const p of ['/wings/', '/wings/browse/', '/wings/?ui=classic', '/wings/no-such-model/']) assert.ok(!/live price/i.test(await (await get(p)).text()), `${p}: no 'live prices'`)
+
+  // Practise lines: Nanawing 2 (line of sight) for trainers, Nanawing for FPV.
+  const more = async (s) => (await (await get(`/wings/${s}/`)).text()).match(/<section class="fx-more">[\s\S]*?<\/section>/)?.[0] || ''
+  const trainersMore = await more('trainers'), fpvMore = await more('fpv')
+  assert.ok(trainersMore.includes('href="https://nanawing2.narenana.com/"'))
+  assert.ok(fpvMore.includes('href="https://sim.narenana.com/"'))
+  for (const x of [trainersMore, fpvMore]) {
+    assert.match(x, /laptop or desktop/)
+    assert.ok(!/\b(phone|mobile)\b/i.test(x), 'never a phone claim for the sims')
+    for (const [, s] of x.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(s === 'browse' || listed.includes(s), `links /wings/${s}/, not a listed landing`)
+  }
+
+  // The trainers table, row by row, against its models' product pages: each
+  // figure is the lowest in-stock, new, single-unit price the product pages
+  // show under that configuration (a withheld price shows no amount there).
+  const landing = await (await get('/wings/trainers/')).text()
+  const table = {}
+  for (const [, label, n, from] of (landing.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || '').matchAll(/<th scope="row">([^<]+)<\/th><td>(\d+)<\/td><td>₹([\d,]+)<\/td>/g)) table[label] = { n: Number(n), from: Number(from.replace(/,/g, '')) }
+  assert.ok(Object.keys(table).length, 'the trainers table has rows')
+  const CELL = { 'Kit (airframe only)': 'Kit', 'ARF (almost ready to fly)': 'ARF', 'PNP (plug and play)': 'PNP', 'RTF (ready to fly)': 'RTF', 'Combo (with motor or electronics)': 'Combo', 'Configuration not stated': 'Not stated' }
+  const slugs = [...landing.matchAll(/<li class="prod" data-id="\d+"[^>]*>\s*<a class="prod-link" href="\/wings\/([a-z0-9-]+)\/"/g)].map((m) => m[1])
+  const seen = {}
+  let from = null
+  for (const slug of slugs) {
+    const html = await (await get(`/wings/${slug}/`)).text()
+    const best = {}
+    for (const [, row] of html.matchAll(/<tr class="[^"]*">([\s\S]*?)<\/tr>/g)) {
+      const td = [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((x) => x[1])
+      const price = Number(td[2]?.match(/^₹([\d,]+)/)?.[1].replace(/,/g, '')) || 0
+      if (!price || !td[3]?.includes('In stock') || td[0].includes('pre-owned') || td[1].includes('×')) continue
+      best[td[1].trim()] = Math.min(best[td[1].trim()] ?? Infinity, price)
+    }
+    for (const [cfg, p] of Object.entries(best)) {
+      seen[cfg] = { n: (seen[cfg]?.n || 0) + 1, from: Math.min(seen[cfg]?.from ?? Infinity, p) }
+      from = Math.min(from ?? Infinity, p)
+    }
+  }
+  const expected = Object.fromEntries(Object.entries(CELL).filter(([, c]) => seen[c]).map(([label, c]) => [label, seen[c]]))
+  assert.deepEqual(table, expected, 'the trainers table matches the product pages')
+  assert.match(landing, new RegExp(`<p class="fx-intro">\\d+ trainers in stock at \\d+ Indian sellers?, from ₹${from.toLocaleString('en-IN')}\\.`), 'the intro quotes the lowest product-page price')
 })
 
 // Live data: every in-stock flagged listing (admin "flagged" queue) must show
