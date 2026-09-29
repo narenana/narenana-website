@@ -307,6 +307,13 @@ export function renderGridNext(cat, rows, opts = {}) {
   const ordered = [...items].sort(cmp)
 
   const powerHref = (p) => {
+    // On a landing page, link to the sibling landing (electric-warbirds <->
+    // nitro-warbirds, electric <-> nitro) when it is a valid, indexable page.
+    if (landing?.valid) {
+      const ps = p === 'gas' ? 'nitro' : 'electric'
+      const sibling = landing.L.roleSlug ? `${ps}-${landing.L.roleSlug}` : ps
+      if (landing.valid.has(sibling)) return `${pref}/${sibling}/`
+    }
     const qs = new URLSearchParams()
     if (p !== 'electric') qs.set('power', p)
     if (landing?.L.roles.length) qs.set('role',landing.L.roles.join(','))

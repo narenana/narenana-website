@@ -82,5 +82,13 @@
   course.addEventListener('change', load);
   aircraft.addEventListener('change', load);
   refresh.addEventListener('click', load);
-  load();
+  // Fetch the standings only when the section is about to scroll into view, not
+  // on every homepage view (most visitors never reach it).
+  const section = document.getElementById('leaderboard');
+  if (section && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver((seen) => { if (seen.some((e) => e.isIntersecting)) { io.disconnect(); load(); } }, { rootMargin: '600px 0px' });
+    io.observe(section);
+  } else {
+    load();
+  }
 })();

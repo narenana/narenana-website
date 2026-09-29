@@ -206,13 +206,18 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
   if (slug && !slug.includes('/')) {
     const L = resolveLanding(slug)
     if (L) {
-      const [rows, counts] = await Promise.all([gridDataNext(env, cat, L.power), gridCounts(env, cat)])
+      // All in-stock rows once: this landing renders its power's subset, and the
+      // full set tells the Electric/Nitro tabs which sibling landings exist, so
+      // they link to those indexable pages instead of noindex filter URLs.
+      const [allRows, counts] = await Promise.all([gridDataNext(env, cat, 'all'), gridCounts(env, cat)])
+      const rows = L.power === 'all' ? allRows : allRows.filter((r) => (r.power || 'electric') === L.power)
+      const valid = new Set(validLandings(allRows.map((r) => ({ ...r, any_stock: 1 }))))
       const matched = L.roles.length
         ? rows.filter((r) => { try { return JSON.parse(r.role_tags || '[]').some((t) => L.roles.includes(t)) } catch { return false } }).length
         : rows.length
       if (matched >= 1) {
         const lp = await one(env, `SELECT body FROM landing_page WHERE slug=? AND published=1`, slug)
-        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '' }, counts }))
+        return html(renderGridNext(cat, rows, { power: L.power, roles: L.roles, landing: { L, slug, content: lp?.body || '', valid }, counts }))
       }
     }
   }

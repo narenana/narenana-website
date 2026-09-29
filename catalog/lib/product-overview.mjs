@@ -27,6 +27,11 @@ export function productOverview(model, offers) {
   const configs=[...new Set(offers.filter(o=>!o.dead).map(o=>o.config).filter(Boolean))]
   const sellers=new Set(offers.filter(o=>!o.dead).map(o=>o.source_name).filter(Boolean)).size
   const detail=Number.isFinite(span)&&span>0?` The catalog lists a ${span.toLocaleString('en-IN')} mm wingspan.`:''
-  const availability=configs.length?` Compare ${configs.map(c=>({kit:'kit (airframe)',pnp:'plug-and-play (PNP)',rtf:'ready-to-fly (RTF)',arf:'almost-ready-to-fly (ARF)',bnf:'bind-and-fly (BNF)'}[c.toLowerCase()]||c)).join(', ')} listings${sellers?` from ${sellers} Indian seller${sellers===1?'':'s'}`:''}, with prices and stock checks below.`:' Current and last-seen seller offers are listed below.'
+  // detectConfig() falls back to 'kit' when a title names no configuration, so
+  // only call it a kit (airframe) when a kit listing's title actually says so.
+  const saysKit=offers.some(o=>!o.dead&&String(o.config).toLowerCase()==='kit'&&/\b(kit|airframe|frame[\s-]?only)\b/i.test(o.title||''))
+  const labels=configs.filter(c=>c.toLowerCase()!=='kit'||saysKit).map(c=>({kit:'kit (airframe)',pnp:'plug-and-play (PNP)',rtf:'ready-to-fly (RTF)',arf:'almost-ready-to-fly (ARF)',bnf:'bind-and-fly (BNF)'}[c.toLowerCase()]||c))
+  const from=sellers?` from ${sellers} Indian seller${sellers===1?'':'s'}`:''
+  const availability=labels.length?` Compare ${labels.join(', ')} listings${from}, with prices and stock checks below.`:configs.length?` Compare listings${from}, with prices and stock checks below.`:' Current and last-seen seller offers are listed below.'
   return `${name}.${detail}${availability} Check each package’s included equipment before choosing.`
 }

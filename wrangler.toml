@@ -35,6 +35,9 @@ binding = "CF_VERSION_METADATA"
 [assets]
 directory = "./site"
 binding = "ASSETS"
+# Missing static paths get the designed site/404.html with a real 404 status
+# (the Worker passes through whatever ASSETS returns).
+not_found_handling = "404-page"
 # Run the Worker BEFORE the static-asset matcher. Without this, requests
 # whose path maps to a file under site/ are served from Cloudflare's edge
 # cache and the Worker is never invoked — meaning the apex→www redirect
