@@ -7,7 +7,7 @@
  * hottest cache keys). The eval rubric in the viewer repo
  * (docs/eval/) re-runs on every bump.
  */
-export const PROMPT_VERSION = 'p3'
+export const PROMPT_VERSION = 'p4'
 
 const FINDING_MEANINGS = `
 E1 unterminated log (recording stopped without its footer — power died mid-write)
@@ -26,6 +26,8 @@ B3 battery sags more than its model expects
 B4 battery/endurance summary (informational)
 M1 elevated vibration (experimental detector)
 M2 uncommanded oscillation (experimental detector)
+L0 link health profile (informational — worst link quality per distance band; edge_min_lq = worst reading near the flight's farthest range)
+B0 power profile (informational — max current per throttle band)
 X1 clean flight (no warnings)
 X2 note about which checks could run on this log type`
 

@@ -7,7 +7,7 @@
  * endpoint is public and curl doesn't run our client. Hostile-but-valid
  * fixtures in scripts/debrief-api-check.mjs exercise every rule.
  */
-export const FINDING_IDS = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'R1', 'R2', 'R3', 'R4', 'B1', 'B2', 'B3', 'B4', 'M1', 'M2', 'X1', 'X2']
+export const FINDING_IDS = ['L0', 'B0', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'R1', 'R2', 'R3', 'R4', 'B1', 'B2', 'B3', 'B4', 'M1', 'M2', 'X1', 'X2']
 export const CLASSES = ['electrical', 'link', 'battery', 'mechanical', 'meta']
 export const SEVERITIES = ['info', 'notice', 'warning', 'critical']
 
@@ -29,6 +29,8 @@ export const EVIDENCE_KEYS = {
   M1: ['high_vib_total_s', 'longest_s', 'vib_median'],
   M2: ['window_count', 'longest_s'],
   X1: [], X2: ['skipped_count'],
+  L0: ['max_slant_m', 'edge_min_lq'],
+  B0: ['max_current_a', 'at_throttle_pct', 'full_throttle_current_a'],
 }
 const EVIDENCE_ENUMS = {
   metric: ['lq', 'rssi'],
