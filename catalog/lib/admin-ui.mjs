@@ -864,13 +864,16 @@ function renderCurator(){
     const rows=needs.filter((a)=>issues?issues.includes((a.evidence||{}).issue):!CU_GROUPS.some((g)=>g[1]&&g[1].includes((a.evidence||{}).issue)));
     if(!rows.length)return '';
     return '<p class="cu-h">'+esc(title)+' ('+rows.length+')'+(link?' · <a href="/admin?tab='+link+'" data-cugo="'+link+'">open '+(link==='dupes'?'Duplicates':'Review')+'</a>':'')+'</p>'
-      +rows.slice(0,60).map((a)=>{const ev=a.evidence||{};
+      +rows.slice(0,60).map(cuRow).join('')
+      +(rows.length>60?'<p class="meta">…and '+(rows.length-60)+' more</p>':'');
+  }).join('');
+  function cuRow(a){const ev=a.evidence||{};
         const f=(a.after||{}).field;
         const one=a.entity==='master'&&['slug-suggestion','name-suggestion','brand-suggestion'].includes(ev.issue)&&typeof (a.after||{}).value==='string'?'<button class="ok" data-cuapply="'+a.id+'" data-id="'+a.entity_id+'" data-f="'+esc(f)+'" data-v="'+esc(a.after.value)+'" title="Make this change now; it is locked as yours">Apply</button>':'';
         const acts=ev.issue==='merge-review'?'<button class="ok" data-cumerge="'+a.id+'" data-keep="'+(ev.keep_id||a.entity_id)+'" data-drop="'+((ev.keep_id||a.entity_id)===a.entity_id?a.other_id:a.entity_id)+'">Same: merge</button><button class="no" data-cureject="'+a.id+'" data-a="'+a.entity_id+'" data-b="'+a.other_id+'">Different</button>':one;
-        return '<div class="cu-row"><div>'+cuAsk(a)+'</div><span class="cu-acts">'+acts+'<button data-cudismiss="'+a.id+'" title="Close this without acting; it is not raised again for the same input">Dismiss</button></span></div>'}).join('')
-      +(rows.length>60?'<p class="meta">…and '+(rows.length-60)+' more</p>':'');
-  }).join('');
+        return '<div class="cu-row"><div>'+cuAsk(a)+'</div><span class="cu-acts">'+acts+'<button data-cudismiss="'+a.id+'" title="Close this without acting; it is not raised again for the same input">Dismiss</button></span></div>'}
+  const tidy=data.tidyUps||[];
+  const tidyHtml=tidy.length?'<details class="cu"><summary>Optional tidy-ups ('+tidy.length+')</summary><p class="meta">Brand spellings and shorter page addresses. None of these is needed: apply the ones you like and leave the rest.</p>'+tidy.slice(0,120).map(cuRow).join('')+(tidy.length>120?'<p class="meta">…and '+(tidy.length-120)+' more</p>':'')+'</details>':'';
   const drafts2=(data.drafts||[]);
   const draftsHtml=drafts2.length?'<p class="cu-h">Drafts to publish ('+drafts2.length+') · <a href="/admin?tab=catalog" data-cugo="catalog">open Catalog</a></p>'+drafts2.map((d)=>'<div class="cu-row"><div>#'+d.id+' '+esc((d.brand||'')+' '+d.name)+'<div class="meta">made by the curator from a new listing; publish it from the Catalog tab</div></div></div>').join(''):'';
   const needsHtml='<details class="cu" open><summary>Needs you ('+needs.length+')</summary>'+(grouped+draftsHtml||'<p class="meta">Nothing waiting for you.</p>')+'</details>';
@@ -899,7 +902,7 @@ function renderCurator(){
   const hist=(data.history||[]);
   const histHtml='<details class="cu"><summary>Run history ('+hist.length+')</summary><table class="t"><thead><tr><th>Run</th><th>Mode</th><th>Status</th><th>Ticks</th><th>AI calls</th><th>Neurons</th><th>Errors</th></tr></thead><tbody>'
     +hist.map((h)=>'<tr><td><a href="#" data-curun="'+esc(h.id)+'">'+esc(h.id)+'</a></td><td>'+esc(h.mode)+'</td><td>'+esc(h.status)+(h.status==='running'?' · '+esc(h.phase):'')+'</td><td>'+h.ticks+'</td><td>'+h.ai_calls+' ('+h.cache_hits+' cached)</td><td>'+Math.round(h.neurons)+'</td><td>'+h.errors+'</td></tr>').join('')+'</tbody></table></details>';
-  $('#view').innerHTML=CU_CSS+top+needsHtml+planHtml+doneHtml+errHtml+otherHtml+dirHtml+mergesHtml+histHtml;
+  $('#view').innerHTML=CU_CSS+top+needsHtml+tidyHtml+planHtml+doneHtml+errHtml+otherHtml+dirHtml+mergesHtml+histHtml;
   // wiring
   const say=(d)=>{$('#log').hidden=false;$('#log').textContent=JSON.stringify(d,null,1)};
   $('#cu-run').onclick=async()=>{$('#cu-run').disabled=true;try{say(await api('curator-run',{}))}catch(e){alert(e.message)}load()};

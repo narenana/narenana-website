@@ -75,6 +75,9 @@ export function makeD1({ migrations = true, upTo = null, path = ':memory:' } = {
       if (upTo && f > upTo) break
       db.exec(readFileSync(MIGRATIONS + f, 'utf8'))
     }
+    // The curator tests are written against migration 0019's Free-plan
+    // defaults; 0020 tunes production for Workers Paid (scale 10, cap 20000).
+    db.exec(`UPDATE setting SET v='1' WHERE k='curator_scale'; UPDATE setting SET v='8000' WHERE k='curator_neuron_cap'`)
   }
   return d1
 }

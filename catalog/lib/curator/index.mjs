@@ -147,9 +147,16 @@ async function probePhase(ctx) {
   return 'done'
 }
 
+// Optional tidy-ups (brand spellings, shorter page addresses): shown in their
+// own list and never counted as questions, so "Needs you" holds only the
+// unclear cases (owner, 2026-09-30).
+export const TIDY_ISSUES = ['slug-suggestion', 'brand-suggestion']
+const isTidy = (a) => a.kind === 'escalate' && TIDY_ISSUES.includes((typeof a.evidence === 'string' ? parse(a.evidence, {}) : a.evidence)?.issue)
+
 // Open questions for the owner whose subject still exists (a page merged
 // away or a listing decided in Review closes its question).
 export const OPEN_QUESTIONS = `SELECT COUNT(*) AS n FROM curator_action a WHERE a.kind='escalate' AND a.status='planned'
+  AND NOT (json_valid(a.evidence) AND json_extract(a.evidence, '$.issue') IN (${TIDY_ISSUES.map((i) => `'${i}'`).join(', ')}))
   AND (a.entity<>'master' OR EXISTS (SELECT 1 FROM master_model m WHERE m.id=a.entity_id))
   AND (a.entity<>'master' OR a.other_id IS NULL OR EXISTS (SELECT 1 FROM master_model m WHERE m.id=a.other_id))
   AND (a.entity<>'sku' OR EXISTS (SELECT 1 FROM sku k WHERE k.id=a.entity_id AND k.review_status='new'))`
@@ -163,7 +170,7 @@ async function reportPhase(ctx) {
   for (const r of rows) add(r.kind, r.entity, r.status, r.pair, r.n)
   for (const a of ctx.actions) add(a.kind, a.entity, a.status, a.otherId != null, 1)
   const open = (await ctx.env.CATALOG_DB.prepare(OPEN_QUESTIONS).first())?.n ?? 0
-  const openNow = open + ctx.actions.filter((a) => a.kind === 'escalate').length
+  const openNow = open + ctx.actions.filter((a) => a.kind === 'escalate' && !isTidy(a)).length
   const dry = ctx.run.mode === 'dry'
   const sum = (kinds, entity, pairOnly = false) => Object.entries(tally).reduce((s, [k, n]) => {
     const [kind, ent, status, pair] = k.split(':')
@@ -533,7 +540,9 @@ export async function curatorReport(env, runId = null) {
   const sids = [...new Set(all.filter((a) => a.entity === 'sku').map((a) => a.entity_id).filter(Number.isInteger))]
   const masters = new Map(((await db.prepare(`SELECT id, brand, name, slug, status, category_id FROM master_model WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(mids)).all()).results ?? []).map((m) => [m.id, m]))
   const skus = new Map(((await db.prepare(`SELECT id, title, source_id, review_status, url_canonical FROM sku WHERE id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(sids)).all()).results ?? []).map((k) => [k.id, k]))
-  const needsYou = open.filter((a) => (a.entity !== 'master' || (masters.has(a.entity_id) && (a.other_id == null || masters.has(a.other_id)))) && (a.entity !== 'sku' || skus.get(a.entity_id)?.review_status === 'new'))
+  const openLive = open.filter((a) => (a.entity !== 'master' || (masters.has(a.entity_id) && (a.other_id == null || masters.has(a.other_id)))) && (a.entity !== 'sku' || skus.get(a.entity_id)?.review_status === 'new'))
+  const needsYou = openLive.filter((a) => !isTidy(a))
+  const tidyUps = openLive.filter(isTidy)
   if (run) {
     const c = parse(run.cursor, {}) ?? {}
     run.cursor = { phase: c.phase, idx: c.idx, health: c.health ?? null, counts: c.counts ?? {}, tally: c.tally ?? null, scope: c.scope ?? null }
@@ -544,6 +553,7 @@ export async function curatorReport(env, runId = null) {
     settings,
     actions: actions.map(decode),
     needsYou: needsYou.map(decode),
+    tidyUps: tidyUps.map(decode),
     history,
     directives: directives.map((d) => ({ ...d, payload: parse(d.payload, null), result: parse(d.result, null) })),
     merges,

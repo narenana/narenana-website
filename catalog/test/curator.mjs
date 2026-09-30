@@ -12,7 +12,7 @@ import { AiClient, parseOut, AiError, buildInput, classifyError, estimateNeurons
 import { check } from '../lib/schema.mjs'
 import { listingTask, MASTER_TASK, PAIR_TASK, PROBE_TASK } from '../lib/curator/prompts.mjs'
 import { checkListing, checkMaster, coerceListing, coerceMaster, rolePolicy, brandKey, isBlankBrand, nameSmell, checkName, checkSpan, checkBrand, normConfig, quoteIn, tokenSubset, spanFromQuote } from '../lib/curator/validate.mjs'
-import { curatorSlice, makeMeter, budgetedEnv, BudgetExhausted, curatorReport } from '../lib/curator/index.mjs'
+import { curatorSlice, makeMeter, budgetedEnv, BudgetExhausted, curatorReport, curatorNeeds } from '../lib/curator/index.mjs'
 import { mergeGuess } from '../lib/curator/triage.mjs'
 import { brandSpellings, needsOf } from '../lib/curator/fill.mjs'
 import { revertAction } from '../lib/curator/store.mjs'
@@ -732,4 +732,38 @@ test('brand spellings: the owner\'s spelling wins, else the majority', () => {
   const ms = [{ id: 1, brand: 'Mapbird' }, { id: 2, brand: 'MapBird' }, { id: 3, brand: 'MapBird' }, { id: 4, brand: 'Havoc' }, { id: 5, brand: 'Havoc Hobby' }, { id: 6, brand: 'FMS' }]
   assert.deepEqual(brandSpellings(ms, new Map()), { mapbird: 'MapBird', havoc: 'Havoc' })
   assert.deepEqual(brandSpellings(ms, new Map([[5, new Map([['brand', 'owner']])]])), { mapbird: 'MapBird', havoc: 'Havoc Hobby' })
+})
+
+// Owner, 2026-09-30: "Needs you" holds only unclear cases; brand spellings and
+// shorter page addresses are optional tidy-ups in their own list.
+test('optional tidy-ups (brand spellings, page addresses) are not questions for the owner', async () => {
+  const d1 = makeD1()
+  seedBasics(d1)
+  addMaster(d1, { id: 1, brand: 'Havoc Hobby', name: 'Biplane' })
+  addMaster(d1, { id: 2, brand: 'Havoc', name: 'Bi-plane' })
+  const t = 1790000000000
+  d1.run(`INSERT INTO curator_run (id, mode, trig, status, started_at, neuron_cap) VALUES ('2026-09-30','dry','cron','done',?,8000)`, t)
+  const esc = (entityId, otherId, issue) => d1.run(`INSERT INTO curator_action (run_id, kind, entity, entity_id, other_id, status, after, evidence, created_at) VALUES ('2026-09-30','escalate','master',?,?,'planned',?,?,?)`,
+    entityId, otherId, JSON.stringify({ field: issue === 'slug-suggestion' ? 'slug' : 'brand', value: 'x' }), JSON.stringify({ issue }), t)
+  esc(1, 2, 'merge-review')
+  esc(1, null, 'slug-suggestion')
+  esc(2, null, 'brand-suggestion')
+  const r = await curatorReport({ CATALOG_DB: d1 })
+  assert.deepEqual(r.needsYou.map((a) => a.evidence.issue), ['merge-review'])
+  assert.deepEqual(r.tidyUps.map((a) => a.evidence.issue).sort(), ['brand-suggestion', 'slug-suggestion'])
+  assert.equal(await curatorNeeds({ CATALOG_DB: d1 }), 1, 'the tab count holds only the question')
+})
+
+test('migration 0020 queues the Chupito merge, keeps #425/#514 apart and sets the Paid limits; replay-safe', () => {
+  const d1 = makeD1({ upTo: '0019_curator.sql' })
+  seedBasics(d1)
+  for (const [id, name, slug] of [[43, 'Chupito', 'tbs-chupito'], [344, 'Chupito Set', 'tbs-chupito-set'], [67, 'Sky Surfer V3', 'x-uav-sky-surfer-v3'], [68, 'SkySurfer', 'mapbird-skysurfer'], [425, 'Sky Surfer', 'sky-surfer'], [514, 'Sky Surfer V4 1500mm', 'unbranded-sky-surfer-v4-1500']]) addMaster(d1, { id, name, slug })
+  const sql = readFileSync(fileURLToPath(new URL('../migrations/0020_curator_owner_decisions.sql', import.meta.url)), 'utf8')
+  d1.db.exec(sql)
+  d1.db.exec(sql)
+  const dirs = d1.sql(`SELECT kind, json_extract(payload,'$.keep') keep, json_extract(payload,'$.absorb') absorb, status FROM curator_directive WHERE source LIKE 'owner 2026-09-30%'`)
+  assert.deepEqual(dirs.map((d) => ({ ...d })), [{ kind: 'merge', keep: 43, absorb: 344, status: 'approved' }])
+  assert.deepEqual(d1.sql(`SELECT a_id, b_id FROM merge_candidate WHERE status='rejected' ORDER BY a_id, b_id`).map((r) => [r.a_id, r.b_id]), [[67, 425], [67, 514], [68, 425], [68, 514]])
+  assert.equal(d1.one(`SELECT v FROM setting WHERE k='curator_scale'`).v, '10')
+  assert.equal(d1.one(`SELECT v FROM setting WHERE k='curator_neuron_cap'`).v, '20000')
 })
