@@ -213,6 +213,9 @@ function makeCtx({ env, raw, t, day, run, cursor, state, settings, meter, ai }) 
     actions: [],
     fieldSrc: [],
     stmts: [],
+    groups: [], // [{action, stmts, fieldSrc}] per applied change, in order
+    loose: { stmts: [] }, // writes not tied to a change
+    lastGroup: null,
     errorsLogged: [],
     stateChanged: false,
     summary: null,
@@ -227,19 +230,35 @@ function makeCtx({ env, raw, t, day, run, cursor, state, settings, meter, ai }) 
     // status (e.g. 'skipped') is kept as given.
     change(a) {
       const status = a.status ?? (ctx.live ? 'applied' : 'planned')
-      ctx.actions.push({ ...a, status, runId: run.id, t })
+      const action = { ...a, status, runId: run.id, t }
+      ctx.actions.push(action)
+      ctx.lastGroup = null
       if (status === 'applied') {
-        if (a.fieldSrc) ctx.fieldSrc.push({ entity: a.entity, entityId: a.entityId, field: a.fieldSrc.field, src: a.fieldSrc.src, confidence: a.fieldSrc.confidence, runId: run.id, t })
+        // Each change keeps its own statements (plus any ctx.write() that
+        // follows it), so a failed batch can be retried change by change.
+        const group = { action, stmts: [], fieldSrc: [] }
+        ctx.groups.push(group)
+        ctx.lastGroup = group
+        if (a.fieldSrc) {
+          const fs = { entity: a.entity, entityId: a.entityId, field: a.fieldSrc.field, src: a.fieldSrc.src, confidence: a.fieldSrc.confidence, runId: run.id, t }
+          ctx.fieldSrc.push(fs)
+          group.fieldSrc.push(fs)
+        }
         if (a.stmt) {
           const s = a.stmt()
-          if (Array.isArray(s)) ctx.stmts.push(...s)
-          else if (s) ctx.stmts.push(s)
+          const list = Array.isArray(s) ? s : s ? [s] : []
+          ctx.stmts.push(...list)
+          group.stmts.push(...list)
         }
       }
     },
     // Something for the owner: never applied by automation.
     escalate(a) { ctx.actions.push({ ...a, kind: 'escalate', status: 'planned', runId: run.id, t }) },
-    write(stmt) { if (ctx.live && stmt) ctx.stmts.push(stmt) },
+    write(stmt) {
+      if (!ctx.live || !stmt) return
+      ctx.stmts.push(stmt)
+      ;(ctx.lastGroup ?? ctx.loose).stmts.push(stmt)
+    },
     error(e) {
       ctx.errorsLogged.push(e)
       const [entity, id] = String(e.item ?? '').split(':')
@@ -475,13 +494,26 @@ async function flush(ctx, { finished }) {
     await db.batch(stmts)
   } catch (e) {
     // A catalog write failed (say, a constraint an owner edit made true in the
-    // meantime). D1 rolled the whole batch back: keep the run's progress and
-    // its records, and mark this tick's changes failed.
+    // meantime). D1 rolled the whole batch back. Retry change by change, in
+    // order, so one bad change cannot sink the others (2026-09-30: one name
+    // clash failed all 43 renames of a tick). Only the changes that fail
+    // again are marked failed.
     const msg = String(e?.message ?? e).slice(0, 300)
-    console.error(JSON.stringify({ at: 'curator', run: run.id, phase: cursor.phase, item: null, code: 'batch', msg }))
-    const actions = ctx.actions.map((a) => (a.status === 'applied' ? { ...a, status: 'failed', evidence: { ...(a.evidence ?? {}), error: msg } } : a))
-    actions.push({ kind: 'error', status: 'failed', runId: run.id, t, entity: 'run', evidence: { phase: cursor.phase, kind: 'batch', msg } })
-    errors += 1
+    console.error(JSON.stringify({ at: 'curator', run: run.id, phase: cursor.phase, item: null, code: 'batch', msg: `${msg} (retrying change by change)` }))
+    const failed = new Map()
+    for (const g of ctx.groups) {
+      const s = [...g.stmts.map(unwrap), ...upsertFieldSrc(raw, g.fieldSrc)]
+      if (!s.length) continue
+      meter.stmts += s.length
+      try { await db.batch(s) } catch (e2) { failed.set(g.action, String(e2?.message ?? e2).slice(0, 300)) }
+    }
+    if (ctx.loose.stmts.length) {
+      meter.stmts += ctx.loose.stmts.length
+      try { await db.batch(ctx.loose.stmts.map(unwrap)) } catch (e2) { ctx.error({ phase: cursor.phase, item: null, kind: 'batch', msg: String(e2?.message ?? e2).slice(0, 300) }) }
+    }
+    const actions = ctx.actions.map((a) => (failed.has(a) ? { ...a, status: 'failed', evidence: { ...(a.evidence ?? {}), error: failed.get(a) } } : a))
+    for (const [a, m] of failed) actions.push({ kind: 'error', status: 'failed', runId: run.id, t, entity: a.entity, entityId: a.entityId ?? null, evidence: { phase: cursor.phase, kind: 'batch', msg: m } })
+    errors = ctx.errorCount() + failed.size
     stmts = [...insertActions(raw, actions), ...tail(errors)]
     meter.stmts += stmts.length
     await db.batch(stmts)
