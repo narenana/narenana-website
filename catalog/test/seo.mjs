@@ -724,28 +724,23 @@ test('old product slugs 301 through slug_alias; no table or no match stays the s
   }
 })
 
-// mergeMasters writes the absorbed slug (and re-points older aliases) in the
-// SAME batch as the DELETE, before it; without the table it merges as before.
+// mergeMasters (v2, curator/merge.mjs) writes the absorbed slug (and
+// re-points older aliases) in the SAME batch as the DELETE, before it
+// (slug_alias cascades on delete), keeps an undo snapshot, and refuses
+// before migration 0019 instead of merging without one.
 test('mergeMasters writes the absorbed slug as an alias in the same batch', async () => {
   const { mergeMasters } = await import('../lib/jobs.mjs')
-  const masters = { 1: { id: 1, category_id: 'wings', slug: 'x-uav-sky-surfer-v3', specs: '{}' }, 2: { id: 2, category_id: 'wings', slug: 'x-uav-sky-surfer-x8-sunny-sky', specs: '{"spanMM":1400}', hero_image: null } }
-  const run = async (table) => {
-    let batched = null
-    const env = { CATALOG_DB: {
-      prepare: (sql) => ({ sql, args: [], bind(...args) { return { ...this, args } },
-        first: async function () {
-          if (/^SELECT \* FROM master_model WHERE id=\?$/.test(sql)) return masters[this.args[0]] ?? null
-          if (/FROM slug_alias LIMIT 1/.test(sql)) { if (!table) throw new Error('no such table: slug_alias'); return null }
-          return { t: '' }
-        },
-        run: async () => ({}) }),
-      batch: async (stmts) => { batched = stmts; return [] },
-    } }
-    await mergeMasters(env, 1, 2, 'owner', 'test')
-    return batched
-  }
-  let stmts = await run(true)
-  const at = (re) => stmts.findIndex((s) => re.test(s.sql))
+  const { makeD1, seedBasics, addMaster } = await import('./d1-sqlite.mjs')
+  const d1 = makeD1()
+  seedBasics(d1)
+  addMaster(d1, { id: 1, brand: 'X-UAV', name: 'Sky Surfer V3', slug: 'x-uav-sky-surfer-v3' })
+  addMaster(d1, { id: 2, brand: 'X-UAV', name: 'Sky Surfer X8 Sunny Sky', slug: 'x-uav-sky-surfer-x8-sunny-sky', specs: { spanMM: 1400 } })
+  d1.run(`INSERT INTO slug_alias (category_id, old_slug, master_model_id, created_at) VALUES ('wings','x-uav-older',2,1)`)
+  let stmts = null
+  const realBatch = d1.batch
+  d1.batch = async (s) => { stmts = s; return realBatch(s) }
+  const r = await mergeMasters({ CATALOG_DB: d1 }, 1, 2, 'owner', 'test')
+  const at = (re) => stmts.findIndex((s) => re.test(s.sql.replace(/\s+/g, ' ').trim()))
   const del = at(/^DELETE FROM master_model WHERE id=\?$/)
   const repoint = at(/^UPDATE slug_alias SET master_model_id=\? WHERE master_model_id=\?$/)
   const insert = at(/^INSERT INTO slug_alias/)
@@ -753,9 +748,17 @@ test('mergeMasters writes the absorbed slug as an alias in the same batch', asyn
   assert.deepEqual(stmts[repoint].args, [1, 2], 'aliases that pointed at B now point at A (no chains)')
   assert.deepEqual(stmts[insert].args.slice(0, 3), ['wings', 'x-uav-sky-surfer-x8-sunny-sky', 1], "B's slug now leads to A")
   assert.match(stmts.at(-1).args.at(-1), /"slug":"x-uav-sky-surfer-x8-sunny-sky"/, 'the audit row records the absorbed slug')
-  stmts = await run(false)
-  assert.equal(stmts.filter((s) => /slug_alias/.test(s.sql)).length, 0, 'before migration 0018: no alias statements')
-  assert.ok(stmts.some((s) => /^DELETE FROM master_model WHERE id=\?$/.test(s.sql)), 'and the merge still runs')
+  assert.ok(at(/^INSERT INTO merge_undo/) === 0, 'the undo snapshot is written first')
+  assert.deepEqual(d1.sql(`SELECT old_slug, master_model_id FROM slug_alias ORDER BY old_slug`).map((x) => `${x.old_slug}>${x.master_model_id}`), ['x-uav-older>1', 'x-uav-sky-surfer-x8-sunny-sky>1'])
+  assert.ok(r.undoId > 0)
+  assert.equal(JSON.parse(d1.one(`SELECT specs FROM master_model WHERE id=1`).specs).spanMM, 1400, "B's wingspan fills A's blank")
+  // before migration 0019 there is no undo snapshot, so no merge
+  const old = makeD1({ upTo: '0018_slug_alias.sql' })
+  seedBasics(old)
+  addMaster(old, { id: 1, brand: 'X', name: 'A', slug: 'x-a' })
+  addMaster(old, { id: 2, brand: 'X', name: 'B', slug: 'x-b' })
+  await assert.rejects(mergeMasters({ CATALOG_DB: old }, 1, 2, 'owner', 'test'), /migration 0019/)
+  assert.equal(old.sql(`SELECT id FROM master_model`).length, 2, 'and nothing was written')
 })
 
 // Admin slug rename: the old address becomes an alias of the same model, in the

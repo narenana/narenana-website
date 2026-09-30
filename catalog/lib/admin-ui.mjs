@@ -1,4 +1,4 @@
-// Admin panel v2 — Review · Sources · Catalog · System. Served at /admin
+// Admin panel v2 — Review · Sources · Catalog · AI curator · System. Served at /admin
 // behind HTTP Basic auth (the browser manages the credential; same-origin
 // fetches attach it automatically, so there is no token in page storage).
 export const ADMIN_HTML = `<!doctype html>
@@ -51,6 +51,7 @@ a{color:var(--accent-bright);overflow-wrap:anywhere}.row>*{min-width:0}.fields{g
   <button data-tab="dupes">Duplicates</button>
   <button data-tab="mfr">Manufacturer</button>
   <button data-tab="mfrdata">Aircraft data</button>
+  <button data-tab="curator">AI curator <span id="cu-needs"></span></button>
   <span class="tsep"></span>
   <button data-tab="sources">Sources</button>
   <button data-tab="system">System</button>
@@ -128,7 +129,8 @@ async function load(){
     else if(tab==='sources')d=await api('sources');
     else if(tab==='catalog')d=await api('catalog?page='+F.page+(F.anomaly?'&anomaly=1':'')+(F.cq?'&q='+encodeURIComponent(F.cq):'')+(F.cstatus?'&mstatus='+F.cstatus:'')+(F.cstock?'&stock='+F.cstock:''));
     else if(tab==='popularity')d=await api('catalog?sort=pop&page='+F.page);
-    else if(tab==='dupes')d=await api('duplicates');
+    else if(tab==='dupes')d=await api('duplicates'+(F.ddView==='dismissed'?'?view=dismissed':''));
+    else if(tab==='curator')d=await api('curator');
     else if(tab==='mfr')d=await api('mfr-matches?status='+(F.mfrStatus||'pending'));
     else if(tab==='mfrdata')d=await api('mfr-profiles');
     else if(tab==='system')d=await api('system');
@@ -139,6 +141,7 @@ async function load(){
     else if(tab==='catalog')renderCatalog();
     else if(tab==='popularity')renderPopularity();
     else if(tab==='dupes')renderDupes();
+    else if(tab==='curator')renderCurator();
     else if(tab==='mfr')renderMfr();
     else if(tab==='mfrdata')renderMfrProfiles();
     else if(tab==='system')renderSystem();
@@ -164,7 +167,8 @@ function renderFilters(){
 function skuRow(k){
   let flg=null;try{flg=k.flagged?JSON.parse(k.flagged):null}catch(e){}
   const stock=flg?(flg.kind==='missing'?'<span class="oos">⚑ missing from seller'+(flg.detail?' ('+esc(flg.detail)+')':'')+'</span>':'<span class="unk">⚑ '+esc(flg.kind)+(flg.detail?': '+esc(flg.detail):'')+'</span>'):(k.quote_only&&k.price_inr==null)?'<span class="unk">quote only</span>':k.in_stock===1?'':k.in_stock===0?'<span class="oos">out of stock</span>':'<span class="unk">stock unverified</span>';
-  const sugg=(k.suggestions||[]).map((m)=>'<button class="chip" data-a="attach" data-sku="'+k.id+'" data-master="'+m.id+'">→ '+esc(m.brand+' '+m.name)+'</button>').join('');
+  const sugg=(k.suggestions||[]).map((m)=>'<button class="chip" data-a="attach" data-sku="'+k.id+'" data-master="'+m.id+'">→ '+esc(m.brand+' '+m.name)+(m.cos!=null?' <span>'+Math.round(m.cos*100)+'%</span>':'')+'</button>').join('');
+  const aiLine=k.ai?'<p class="meta" style="margin:-4px 0 8px"><span class="tag w">AI curator</span> '+esc(k.ai.kind||'')+(k.ai.confidence!=null?' '+Math.round(k.ai.confidence*100)+'%':'')+(k.ai.why?' · '+esc(k.ai.why):'')+'</p>':'';
   const mapUI=F.status==='new'?'<div class="map"><div class="sugg">'+(sugg||'<span class="tag">no master match — create one:</span>')+'</div>'
     +'<div class="fields"><input data-f="brand" value="'+esc(k.guess.brand)+'" placeholder="Brand"/><input data-f="name" value="'+esc(k.guess.name)+'" placeholder="Model name"/><input data-f="slug" value="'+esc(k.guess.slug)+'" placeholder="slug"/><select data-f="config">'+(((data.cat||{}).configs)||[]).map((c)=>'<option'+(c===(k.guess.config||'kit')?' selected':'')+'>'+esc(c)+'</option>').join('')+'</select>'
     +(data.specFields||[]).map((f)=>'<input data-f="spec:'+f.key+'" value="'+esc(k.guess.specs[f.key]??'')+'" placeholder="'+esc(f.label)+(f.required?' *':'')+'"/>').join('')
@@ -181,7 +185,7 @@ function skuRow(k){
     +'<div><p class="title">'+esc(k.title||'(untitled)')+' '+(k.guess.kind==='accessory'||k.guess.kind==='other'?'<span class="tag" style="color:var(--warn)">AI: not aircraft</span>':k.score>0||k.guess.kind==='aircraft'?'<span class="tag w">likely</span>':'<span class="tag">unsure</span>')+'</p>'
     +'<p class="meta"><span class="tag">'+esc(k.source_id)+'</span> '+(k.price_inr?'<span class="price">'+inr(k.price_inr)+'</span>':'no price')+' '+stock
     +(k.master?' · mapped to <b>'+esc(k.master)+'</b>':'')+' · <a href="'+esc(k.url_canonical)+'" target="_blank" rel="noopener">seller page ↗</a></p>'
-    +mapUI+'</div><div class="acts">'+acts+'</div></div>';
+    +aiLine+mapUI+'</div><div class="acts">'+acts+'</div></div>';
 }
 function renderReview(){
   const rows=data.skus;
@@ -263,6 +267,10 @@ function renderCatalog(){
     +chip('cstock','none','No live stock',c.readyNoStock)
     +'<button class="chip'+(F.anomaly?' on':'')+'" id="anomToggle">⚑ Flagged <span>'+(data.anomalyCount||0)+'</span></button>'
     +'<span class="meta" style="margin-left:auto">'+(data.total||0)+' shown · newest edits first</span></div>';
+  // Who set each field: "you" (locked), "directive", "approved", "curator 94%", "rules".
+  const src=(m,f)=>{const x=(m.field_src||{})[f];if(!x)return '';
+    const lbl=x.src==='owner'?'you':x.src==='owner-approved'?'approved':x.src==='curator'?'curator'+(x.confidence!=null?' '+Math.round(x.confidence*100)+'%':''):x.src;
+    return ' <span class="tag'+(x.src==='curator'||x.src==='rules'?' w':'')+'" title="who set this field">'+esc(lbl)+'</span>'+(x.action?' <button class="chip" data-revert="'+x.action+'" title="Undo the curator\u2019s change and lock the field as yours">Revert</button>':'')};
   const row=(m)=>{
     let sp={};try{sp=JSON.parse(m.specs||'{}')}catch(e){}
     let anom='';if(m.anomaly){var a={};try{a=JSON.parse(m.anomaly)}catch(e){}anom='<span class="bad" title="detected by the dedup finder"> · ⚑ '+esc(a.detail||a.kind||'flagged')+'</span>'}
@@ -275,11 +283,12 @@ function renderCatalog(){
         +'<a href="'+esc(m.path)+'" target="_blank" rel="noopener">open page ↗</a></div>'
       +'<div class="ct-meta">'+m.offers+' seller offer'+(m.offers===1?'':'s')+' · <b>'+m.live_offers+' in stock</b> · '+price+pop+anom+'</div>'
       +'<div class="ct-fields">'
-        +'<div class="ct-f"><label>Brand</label><input class="inline" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'"/></div>'
-        +'<div class="ct-f"><label>Model name</label><input class="inline" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'"/></div>'
-        +'<div class="ct-f"><label>Page address (slug)</label><input class="inline" data-m="'+m.id+'" data-f="slug" value="'+esc(m.slug)+'" title="Renaming keeps the old address working: it redirects here."/></div>'
-        +'<div class="ct-f"><label>Wingspan mm</label><input class="inline" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'"/></div>'
-        +'<div class="ct-f wide"><label>One-line blurb (shows on the product page)</label><input class="inline" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="e.g. Stable 1400mm high-wing trainer with flaps"/></div>'
+        +'<div class="ct-f"><label>Brand'+src(m,'brand')+'</label><input class="inline" data-m="'+m.id+'" data-f="brand" value="'+esc(m.brand)+'"/></div>'
+        +'<div class="ct-f"><label>Model name'+src(m,'name')+'</label><input class="inline" data-m="'+m.id+'" data-f="name" value="'+esc(m.name)+'"/></div>'
+        +'<div class="ct-f"><label>Page address (slug)'+src(m,'slug')+'</label><input class="inline" data-m="'+m.id+'" data-f="slug" value="'+esc(m.slug)+'" title="Renaming keeps the old address working: it redirects here."/></div>'
+        +'<div class="ct-f"><label>Wingspan mm'+src(m,'specs.spanMM')+'</label><input class="inline" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'"/></div>'
+        +'<div class="ct-f wide"><label>One-line blurb (shows on the product page)'+src(m,'blurb')+'</label><input class="inline" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="e.g. Stable 1400mm high-wing trainer with flaps"/></div>'
+        +'<div class="ct-f wide"><label>Role tags, most defining first (comma separated; yours are never changed by automation)'+src(m,'role_tags')+(m.role_source?' <span class="tag">'+esc(m.role_source)+'</span>':'')+'</label><input class="inline" data-m="'+m.id+'" data-f="role_tags" value="'+esc((()=>{try{return JSON.parse(m.role_tags||'[]').join(', ')}catch(e){return ''}})())+'" placeholder="Trainer, Sport / Park Flyer, Aerobatic / 3D, Warbird, Jet / EDF, Glider / Sailplane, FPV / Flying Wing, Scale Civilian, Airliner"/></div>'
       +'</div></div>'
       +'<div class="ct-acts">'
         +(m.status==='ready'
@@ -298,9 +307,11 @@ function renderCatalog(){
     if(F.cq){q.focus();try{q.setSelectionRange(q.value.length,q.value.length)}catch(e){}}})();
   (function(){var at=$('#anomToggle');if(at)at.onclick=()=>{F.anomaly=!F.anomaly;F.page=1;load()}})();
   document.querySelectorAll('button[data-mm]').forEach((b)=>b.onclick=async()=>{try{await api('master',{id:+b.dataset.mm,status:b.dataset.st});load()}catch(e){alert(e.message)}});
+  document.querySelectorAll('button[data-revert]').forEach((b)=>b.onclick=async()=>{if(!confirm('Put the old value back? The field is then locked as yours, so the curator never fills it again.'))return;b.disabled=true;try{await api('curator-revert',{actionId:+b.dataset.revert});load()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{
     const id=+i.dataset.m,f=i.dataset.f,body={id};
     if(f.startsWith('spec:')){const row=data.masters.find((x)=>x.id===id);let sp={};try{sp=JSON.parse(row.specs||'{}')}catch(e){}sp[f.slice(5)]=i.value.trim();row.specs=JSON.stringify(sp);body.specs=row.specs}
+    else if(f==='role_tags')body.role_tags=i.value.split(',').map((x)=>x.trim()).filter(Boolean);
     else body[f]=i.value;
     // Never lose an edit silently: flash saved/failed on the input itself.
     try{await api('master',body);$('#save-status').textContent='Saved '+(i.getAttribute('aria-label')||i.labels?.[0]?.textContent||f)+'.';i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900);if(f==='slug')load()}
@@ -373,22 +384,29 @@ function renderDupes(){
     +'<div class="meta">'+esc(r[pre+'status'])+' · '+esc(span(r[pre+'specs'])||'no span')+' · '+esc(r[pre+'power']||'?')+' · '+((r[pre+'offers']||[]).length)+' offer(s) · <a href="'+esc(r.prefix)+'/'+esc(r[pre+'slug'])+'/" target="_blank" rel="noopener">page ↗</a></div>'
     +'<div class="dd-offers">'+(r[pre+'offers']||[]).map(offerLine).join('')+'</div></div>';
   const card=(r)=>{const keepA=r.keepId===r.a_id;const K=keepA?'a_':'b_',M=keepA?'b_':'a_';const dropId=keepA?r.b_id:r.a_id;
+    const ai=r.ai?'<div class="meta" style="margin-top:8px"><span class="tag w">AI curator</span> '+cuVerdict(r.ai)+(r.ai.gates&&r.ai.gates.length?' · '+esc(r.ai.gates.join('; ')):'')+(r.ai.primary&&r.ai.primary.evidence&&r.ai.primary.evidence.length?' · “'+esc(r.ai.primary.evidence.join('”, “'))+'”':'')+'</div>':'';
     return '<div class="dd-pair"><div class="dd-cols">'+side(r,K,'✔ KEEP',true)+'<div class="dd-arrow">◀ merge<br>into keep</div>'+side(r,M,'MERGE IN',false)
-      +'</div><div class="dd-foot"><span class="meta">'+(r.both_in_stock?'<span class="dd-prio">★ both in stock</span>':'<span class="dd-cosmetic">one side out · cosmetic</span>')+esc(r.reason)+' · '+Math.round(r.score*100)+'%</span>'
+      +'</div>'+ai+'<div class="dd-foot"><span class="meta">'+(r.both_in_stock?'<span class="dd-prio">★ both in stock</span>':'<span class="dd-cosmetic">one side out · cosmetic</span>')+esc(r.reason)+' · '+Math.round(r.score*100)+'%</span>'
       +'<span class="acts"><button class="ok" data-dd="merge" data-keep="'+r.keepId+'" data-drop="'+dropId+'">✓ Same — merge</button>'
       +'<button class="no" data-dd="reject" data-keep="'+r.a_id+'" data-drop="'+r.b_id+'">✕ Different</button></span></div></div>';};
   const prio=rows.filter((r)=>r.both_in_stock).length;
   let divShown=false;
   const listHtml=rows.map((r)=>{let pre='';if(!r.both_in_stock&&!divShown){divShown=true;pre='<div class="dd-divider">↓ below: one side is already out of stock — merging is cosmetic (does not change what shoppers see), safe to skip</div>';}return pre+card(r);}).join('');
-  $('#view').innerHTML=DD_CSS+'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><button id="ddrun" class="go">Scan for duplicates now</button>'
-    +'<span class="meta">'+rows.length+' pair(s) · <b>'+prio+' with both sides in stock</b> (shown first — these are the ones that change what shoppers see). Confirm only if the two are the SAME product from different sellers.</span></div>'
-    +(rows.length?listHtml:'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>');
-  $('#ddrun').onclick=async()=>{$('#ddrun').disabled=true;$('#ddrun').textContent='scanning…';try{const d=await api('dedup-run',{});alert('Auto-merged '+(d.merged||0)+', flagged '+(d.flagged||0)+' for review, '+(d.anomalies||0)+' anomalies')}catch(e){alert(e.message)}load()};
+  const view=data.view||'pending';
+  const merges=(data.merges||[]).map((u)=>'<div class="cu-row"><div>#'+u.absorbed_id+' '+esc((u.absorbed_brand?u.absorbed_brand+' ':'')+(u.absorbed_name||''))+' → #'+u.survivor_id+' '+esc((u.survivor_brand?u.survivor_brand+' ':'')+(u.survivor_name||''))+'<div class="meta">'+esc(u.actor)+' · '+ago(u.created_at)+(u.undone_at?' · undone':'')+'</div></div>'+(u.undone_at?'':'<span class="cu-acts"><button data-unmerge="'+u.id+'">Undo</button></span>')+'</div>').join('');
+  $('#view').innerHTML=CU_CSS+DD_CSS+'<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap"><button id="ddrun" class="go">Scan for duplicates now</button>'
+    +'<button class="chip'+(view==='pending'?' on':'')+'" data-ddv="pending">To review</button><button class="chip'+(view==='dismissed'?' on':'')+'" data-ddv="dismissed" title="The AI said these are different planes. Hidden by default; not your rejection.">AI says different <span>'+(data.dismissed||0)+'</span></button>'
+    +'<span class="meta">'+rows.length+' pair(s) · <b>'+prio+' with both sides in stock</b> (shown first — these are the ones that change what shoppers see). Confirm only if the two are the SAME product from different sellers. The daily AI curator merges only the obvious ones; the rest are here with its verdict.</span></div>'
+    +(rows.length?listHtml:'<p class="empty">No duplicate pairs awaiting review. The cron re-checks every few hours.</p>')
+    +(merges?'<details class="cu"><summary>Recent merges ('+(data.merges||[]).length+') · each can be undone</summary>'+merges+'</details>':'');
+  $('#ddrun').onclick=async()=>{$('#ddrun').disabled=true;$('#ddrun').textContent='scanning…';try{const d=await api('dedup-run',{});alert('Recorded '+(d.flagged||0)+' new pair(s) for review and '+(d.anomalies||0)+' anomalies. Nothing is merged here: the daily AI curator merges only the obvious ones.')}catch(e){alert(e.message)}load()};
+  document.querySelectorAll('button[data-ddv]').forEach((b)=>b.onclick=()=>{F.ddView=b.dataset.ddv;load()});
+  document.querySelectorAll('button[data-unmerge]').forEach((b)=>b.onclick=async()=>{if(!confirm('Undo this merge? The absorbed page comes back with its listings and address, and the pair is marked as not duplicates.'))return;b.disabled=true;try{const d=await api('unmerge',{undoId:+b.dataset.unmerge});alert('Restored #'+d.restored+(d.kept&&d.kept.length?' (kept your later edits: '+d.kept.join(', ')+')':''));load()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('button[data-dd]').forEach((b)=>b.onclick=async()=>{
     const keep=+b.dataset.keep,drop=+b.dataset.drop;
     if(b.dataset.dd==='merge'&&!confirm('Merge these into ONE product page? The "MERGE IN" master is absorbed into the "KEEP" one; its offers move over. Recorded in audit.'))return;
     b.disabled=true;
-    try{await api(b.dataset.dd==='merge'?'merge':'reject-merge',{aId:keep,bId:drop});load()}catch(e){alert(e.message);b.disabled=false}
+    try{const d=await api(b.dataset.dd==='merge'?'merge':'reject-merge',{aId:keep,bId:drop});if(d.undoId)$('#save-status').textContent='Merged. Undo it from Recent merges below if it was wrong.';load()}catch(e){alert(e.message);b.disabled=false}
   });
 }
 
@@ -764,6 +782,150 @@ function renderMfrProfiles(){
   document.querySelectorAll('[data-mp-filter]').forEach(function(b){b.onclick=function(){if(hasProfileSaves())return;F.mfrDataFilter=b.dataset.mpFilter;syncURL();renderMfrProfiles()}});
 }
 
+// ------- AI curator (curator/index.mjs) -------
+const CU_CSS='<style>'
+  +'.cu-top{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}'
+  +'.cu-line{font-size:1rem;font-weight:650;margin:0 0 4px}'
+  +'.cu-ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px}'
+  +'.cu-ctl input{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.78rem;width:96px}'
+  +'.cu-chip{display:inline-block;font-size:.68rem;padding:2px 8px;border-radius:99px;border:1px solid var(--border);margin:6px 6px 0 0}'
+  +'.cu-chip.ok{color:var(--ok);border-color:rgba(63,185,80,.5)}.cu-chip.bad{color:var(--bad);border-color:rgba(248,81,73,.6)}'
+  +'details.cu{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:10px}'
+  +'details.cu>summary{cursor:pointer;font-weight:700;font-size:.9rem}'
+  +'.cu-h{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:12px 0 2px}'
+  +'.cu-row{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;border-top:1px dashed var(--border);padding:8px 0;font-size:.82rem}'
+  +'.cu-row>div{min-width:0;overflow-wrap:anywhere}.cu-row .meta{margin:2px 0 0}.cu-acts{display:flex;gap:6px;flex-shrink:0;align-items:flex-start}.cu-acts button{white-space:nowrap}'
+  +'.cu-form{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}'
+  +'.cu-form input,.cu-form select{background:var(--bg);border:1px solid var(--border);color:var(--fg);border-radius:6px;padding:6px 8px;font-family:inherit;font-size:.78rem;width:auto;max-width:220px}'
+  +'.cu-v{font-size:.66rem;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid var(--border);margin-right:4px;white-space:nowrap}'
+  +'.cu-v.same{color:var(--ok);border-color:rgba(63,185,80,.5)}.cu-v.different{color:var(--bad);border-color:rgba(248,81,73,.5)}.cu-v.unsure{color:var(--warn);border-color:rgba(210,153,34,.5)}'
+  +'@media(max-width:640px){.cu-row{flex-direction:column}.cu-acts{flex-wrap:wrap}.cu-acts button{min-height:40px}}'
+  +'</style>';
+function cuName(id,fb){const m=(data&&data.masters||{})[id];return m?'#'+id+' '+esc((m.brand?m.brand+' ':'')+m.name):'#'+id+(fb?' '+esc(fb):'')}
+function cuSku(id){const k=(data&&data.skus||{})[id];return 'listing #'+id+(k?' '+esc(String(k.title||'').slice(0,80)):'')}
+function cuVal(v){if(v==null||v==='')return '—';if(typeof v==='object')return esc(JSON.stringify(v).slice(0,100));return esc(String(v))}
+function cuVerdict(ev){
+  if(!ev)return '';
+  const p=ev.primary,s2=ev.second;let out='';
+  if(p)out+='<span class="cu-v '+esc(p.verdict)+'">'+esc(p.verdict)+' '+Math.round((p.confidence||0)*100)+'%</span>';
+  if(s2)out+='<span class="cu-v '+esc(s2.verdict)+'">2nd opinion: '+esc(s2.verdict)+' '+Math.round((s2.confidence||0)*100)+'%</span>';
+  if(ev.verdict==='rules-only')out+='<span class="cu-v">rules only (AI unavailable)</span>';
+  const d=(p&&p.differences)||[];if(d.length)out+=' '+esc(d.join(', '));
+  if(ev.outcome==='waiting')out+=' <span class="meta">second opinion unavailable; asked again tomorrow</span>';
+  return out}
+function cuDescribe(a){
+  const ev=a.evidence||{},af=a.after||{},bf=a.before||{};
+  if(a.kind==='merge'){const ab=(bf.value&&bf.value.absorb)||{};const took=(af.value&&af.value.took)||[];return 'Merged #'+a.other_id+' '+esc((ab.brand?ab.brand+' ':'')+(ab.name||''))+' into '+cuName(a.entity_id)+'<div class="meta">'+cuVerdict(ev)+(took.length?' · took '+esc(took.join(', ')):'')+(ab.slug?' · /'+esc(ab.slug)+'/ now redirects':'')+'</div>'}
+  if(a.kind==='directive'){const p=ev.payload||{};return 'Your directive #'+esc(ev.directive)+': '+(ev.kind==='merge'?'#'+esc(p.absorb)+' into '+cuName(p.keep):ev.kind==='rename'?cuName(p.id)+' → '+esc(p.name||'')+(p.slug?' at /'+esc(p.slug)+'/':''):cuName(p.id)+' brand '+esc(p.brand||''))+(ev.error?'<div class="meta" style="color:var(--bad)">'+esc(ev.error)+'</div>':'')}
+  if(a.kind==='reject')return 'Rejected '+cuSku(a.entity_id)+' as '+esc(af.reason||'')+'<div class="meta">AI: '+esc(ev.kind||'')+' '+Math.round((a.confidence||0)*100)+'% · '+esc(ev.rule||'')+'</div>';
+  if(a.kind==='attach')return 'Attached '+cuSku(a.entity_id)+' to '+cuName(af.master)+' ('+esc(af.config||'kit')+')<div class="meta">'+cuVerdict(ev)+'</div>';
+  if(a.kind==='draft'){const d=af.draft||{};return 'New draft page from '+cuSku(a.entity_id)+': '+esc((d.brand||'')+' '+(d.name||''))+' · '+esc(d.spanMM)+' mm · /'+esc(d.slug)+'/'}
+  if(a.kind==='dismiss')return 'AI says different: '+cuName(a.entity_id)+' / '+cuName(a.other_id)+'<div class="meta">'+cuVerdict(ev)+'</div>';
+  if(a.kind==='error')return '<span style="color:var(--bad)">'+esc(ev.phase||'')+' · '+esc(ev.item||'')+' · '+esc(ev.kind||'')+(ev.code?' '+esc(ev.code):'')+'</span><div class="meta">'+esc(String(ev.msg||'').slice(0,220))+'</div>';
+  if(a.entity==='sku'&&af.field==='guess'){const g=af.value||{};return 'Review prefill for '+cuSku(a.entity_id)+'<div class="meta">'+esc(g.brand||'')+' '+esc(g.name||'')+(g.spanMM?' · '+esc(g.spanMM)+' mm':'')+' · '+esc(g.kind||'')+'</div>'}
+  const subj=a.entity==='master'?cuName(a.entity_id):a.entity==='sku'?cuSku(a.entity_id):'';
+  return subj+' · '+esc(af.field||'')+': '+cuVal(bf.value)+' → '+cuVal(af.value)+(a.confidence!=null?' <span class="meta">('+Math.round(a.confidence*100)+'%)</span>':'')+(ev.quote?'<div class="meta">“'+esc(ev.quote)+'”</div>':ev.why?'<div class="meta">'+esc(ev.why)+'</div>':'')}
+function cuAsk(a){
+  const ev=a.evidence||{},af=a.after||{},bf=a.before||{};
+  const i=ev.issue;
+  if(i==='merge-review')return 'Same plane? '+cuName(a.entity_id)+' / '+cuName(a.other_id)+'<div class="meta">'+cuVerdict(ev)+(ev.gates&&ev.gates.length?' · '+esc(ev.gates.join('; ')):'')+'</div>';
+  if(i==='listing-review')return cuSku(a.entity_id)+'<div class="meta">'+esc(ev.why||'')+(ev.matches&&ev.matches.length?' · closest: '+ev.matches.map((x)=>cuName(x.id)+' '+Math.round(x.cos*100)+'%').join(', '):'')+'</div>';
+  if(i==='source-all-rejected')return 'Source <b>'+esc(ev.source_id)+'</b><div class="meta">'+esc(ev.why||'')+'</div>';
+  return cuName(a.entity_id)+' · '+esc((i||'').replace(/-/g,' '))+': '+esc(af.field||'')+' '+cuVal(bf.value)+' → '+cuVal(af.value)+'<div class="meta">'+esc(ev.why||'')+(ev.quote?' “'+esc(ev.quote)+'”':'')+(ev.quotes&&ev.quotes.length?' “'+esc(ev.quotes.join('”, “'))+'”':'')+'</div>'}
+const CU_GROUPS=[
+  ['Merges to decide',['merge-review'],'dupes'],
+  ['Listings to decide',['listing-review'],'review'],
+  ['Conflicts',['ai-brand-conflict','ai-span-conflict','power-mismatch','not-fixed-wing'],null],
+  ['Suggestions',null,null],
+];
+function renderCurator(){
+  const s=data.settings||{},run=data.run,st=data.state||{};
+  const needs=data.needsYou||[];
+  $('#cu-needs').textContent=needs.length?String(needs.length):'';
+  const mode=s.curator_mode==='live'?'live':'dry';
+  const on=s.curator_enabled!=='0',ai=s.curator_ai!=='0',drafts=s.curator_drafts!=='0';
+  const line=run&&run.summary?esc(run.summary):run?'Run '+esc(run.id)+' ('+esc(run.mode)+'): '+esc(run.status)+(run.status==='running'?', at '+esc(run.phase):''):'No run yet. The first daily run starts after the scan, no earlier than 06:00 IST.';
+  const health=run&&run.cursor&&run.cursor.health;
+  const chips=health&&!health.off?Object.entries(health).map(([id,h])=>'<span class="cu-chip '+(h.ok?'ok':'bad')+'" title="'+esc(h.msg||'')+'">'+esc(h.role)+': '+esc(id.split('/').pop())+(h.ok?' ✓':' ✕ '+esc(h.code||h.kind||''))+'</span>').join(''):health&&health.off?'<span class="cu-chip">AI off</span>':'';
+  const neurons=Number(s['ai_neurons:'+new Date().toISOString().slice(0,10)]||0);
+  const top='<div class="cu-top"><p class="cu-line">'+line+'</p>'
+    +'<p class="meta">Mode <b>'+mode+'</b>'+(mode==='dry'?' (plans only: nothing changes until you apply the plan or switch to live)':' (applies changes as it goes; every change can be undone)')+(on?'':' · <b style="color:var(--bad)">paused</b>')+(st.active?' · a run is in progress':'')+(st.apply?' · applying a plan':'')+' · today '+Math.round(neurons).toLocaleString('en-US')+' of '+Number(s.curator_neuron_cap||8000).toLocaleString('en-US')+' Neurons</p>'
+    +(chips?'<div>'+chips+'</div>':'')
+    +'<div class="cu-ctl"><button class="go" id="cu-run">Run now</button><button id="cu-dry" title="Start another run today in dry-run mode: a plan and a report, no changes">Dry run</button>'
+    +'<span class="tsep"></span>'
+    +'<button data-cus="curator_mode" data-v="'+(mode==='live'?'dry':'live')+'" class="'+(mode==='live'?'ok':'')+'">Mode: '+mode+'</button>'
+    +'<button data-cus="curator_enabled" data-v="'+(on?'0':'1')+'" class="'+(on?'':'no')+'">'+(on?'Pause curator':'Resume curator')+'</button>'
+    +'<button data-cus="curator_ai" data-v="'+(ai?'0':'1')+'">AI: '+(ai?'on':'off')+'</button>'
+    +'<button data-cus="curator_drafts" data-v="'+(drafts?'0':'1')+'" title="New draft pages for obvious new planes (never public until you publish)">New drafts: '+(drafts?'on':'off')+'</button>'
+    +'<label class="meta">Neuron cap <input id="cu-cap" type="number" min="0" max="100000" step="500" value="'+esc(s.curator_neuron_cap||'8000')+'"/></label><button id="cu-cap-save">Save</button>'
+    +'</div></div>';
+  // needs you
+  const grouped=CU_GROUPS.map(([title,issues,link])=>{
+    const rows=needs.filter((a)=>issues?issues.includes((a.evidence||{}).issue):!CU_GROUPS.some((g)=>g[1]&&g[1].includes((a.evidence||{}).issue)));
+    if(!rows.length)return '';
+    return '<p class="cu-h">'+esc(title)+' ('+rows.length+')'+(link?' · <a href="/admin?tab='+link+'" data-cugo="'+link+'">open '+(link==='dupes'?'Duplicates':'Review')+'</a>':'')+'</p>'
+      +rows.slice(0,60).map(cuRow).join('')
+      +(rows.length>60?'<p class="meta">…and '+(rows.length-60)+' more</p>':'');
+  }).join('');
+  function cuRow(a){const ev=a.evidence||{};
+        const f=(a.after||{}).field;
+        const one=a.entity==='master'&&['slug-suggestion','name-suggestion','brand-suggestion'].includes(ev.issue)&&typeof (a.after||{}).value==='string'?'<button class="ok" data-cuapply="'+a.id+'" data-id="'+a.entity_id+'" data-f="'+esc(f)+'" data-v="'+esc(a.after.value)+'" title="Make this change now; it is locked as yours">Apply</button>':'';
+        const acts=ev.issue==='merge-review'?'<button class="ok" data-cumerge="'+a.id+'" data-keep="'+(ev.keep_id||a.entity_id)+'" data-drop="'+((ev.keep_id||a.entity_id)===a.entity_id?a.other_id:a.entity_id)+'">Same: merge</button><button class="no" data-cureject="'+a.id+'" data-a="'+a.entity_id+'" data-b="'+a.other_id+'">Different</button>':one;
+        return '<div class="cu-row"><div>'+cuAsk(a)+'</div><span class="cu-acts">'+acts+'<button data-cudismiss="'+a.id+'" title="Close this without acting; it is not raised again for the same input">Dismiss</button></span></div>'}
+  const tidy=data.tidyUps||[];
+  const tidyHtml=tidy.length?'<details class="cu"><summary>Optional tidy-ups ('+tidy.length+')</summary><p class="meta">Brand spellings and shorter page addresses. None of these is needed: apply the ones you like and leave the rest.</p>'+tidy.slice(0,120).map(cuRow).join('')+(tidy.length>120?'<p class="meta">…and '+(tidy.length-120)+' more</p>':'')+'</details>':'';
+  const drafts2=(data.drafts||[]);
+  const draftsHtml=drafts2.length?'<p class="cu-h">Drafts to publish ('+drafts2.length+') · <a href="/admin?tab=catalog" data-cugo="catalog">open Catalog</a></p>'+drafts2.map((d)=>'<div class="cu-row"><div>#'+d.id+' '+esc((d.brand||'')+' '+d.name)+'<div class="meta">made by the curator from a new listing; publish it from the Catalog tab</div></div></div>').join(''):'';
+  const needsHtml='<details class="cu" open><summary>Needs you ('+needs.length+')</summary>'+(grouped+draftsHtml||'<p class="meta">Nothing waiting for you.</p>')+'</details>';
+  // this run's changes
+  const acts=(data.actions||[]);
+  const done=acts.filter((a)=>a.status==='applied'&&a.kind!=='escalate'&&a.kind!=='error');
+  const planned=acts.filter((a)=>a.status==='planned'&&a.kind!=='escalate');
+  const errs=acts.filter((a)=>a.kind==='error');
+  const other=acts.filter((a)=>['skipped','failed','undone'].includes(a.status)&&a.kind!=='error');
+  const undoable=(a)=>['merge','attach','reject','draft','fill','rename','roles'].includes(a.kind)||(a.kind==='directive');
+  const list=(rows,btn)=>rows.slice(0,200).map((a)=>'<div class="cu-row"><div>'+cuDescribe(a)+'</div><span class="cu-acts">'+(btn&&undoable(a)?'<button data-curevert="'+a.id+'">Undo</button>':'')+'</span></div>').join('')+(rows.length>200?'<p class="meta">…and '+(rows.length-200)+' more</p>':'');
+  const doneHtml='<details class="cu"'+(done.length?' open':'')+'><summary>Done automatically ('+done.length+')</summary>'+(done.length?list(done,true):'<p class="meta">Nothing changed in this run.</p>')+'</details>';
+  const planHtml=planned.length?'<details class="cu" open><summary>Planned by this dry run ('+planned.length+')</summary><p class="meta">Nothing here has changed yet. Apply this plan and the next ticks make exactly these changes; any whose page changed since are skipped as stale.</p><p><button class="go" id="cu-apply" data-run="'+esc(run?run.id:'')+'">Apply this plan</button></p>'+list(planned,false)+'</details>':'';
+  const otherHtml=other.length?'<details class="cu"><summary>Skipped, failed or undone ('+other.length+')</summary>'+other.slice(0,120).map((a)=>'<div class="cu-row"><div>'+cuDescribe(a)+'<div class="meta">'+esc(a.status)+((a.evidence||{}).skipped?': '+esc(a.evidence.skipped):'')+((a.evidence||{}).error?': '+esc(a.evidence.error):'')+'</div></div></div>').join('')+'</details>':'';
+  const errHtml='<details class="cu"'+(errs.length?' open':'')+'><summary>Errors ('+errs.length+')</summary>'+(errs.length?list(errs,false):'<p class="meta">No errors.</p>')+'</details>';
+  // directives
+  const dirs=(data.directives||[]);
+  const dirHtml='<details class="cu"><summary>Your decisions queue ('+dirs.filter((d)=>d.status==='approved').length+' waiting)</summary>'
+    +'<p class="meta">Decisions you have made, applied first in the next run (dry runs plan them). Each checks that the pages still have the addresses they had when you queued it.</p>'
+    +'<div class="cu-form"><select id="cu-dk"><option value="merge">Merge: keep #A, absorb #B</option><option value="rename">Rename #A</option><option value="brand">Set brand of #A</option></select>'
+    +'<input id="cu-d1" type="number" placeholder="#A (keep / page)"/><input id="cu-d2" placeholder="#B to absorb, or new name / brand"/><input id="cu-d3" placeholder="new address (rename, optional)"/><button id="cu-dadd" class="go">Queue</button></div>'
+    +dirs.map((d)=>{const p=d.payload||{};return '<div class="cu-row"><div>#'+d.id+' '+esc(d.kind)+': '+(d.kind==='merge'?'#'+esc(p.absorb)+' into #'+esc(p.keep):'#'+esc(p.id)+' '+esc(p.name||p.brand||'')+(p.slug?' at /'+esc(p.slug)+'/':''))+'<div class="meta">'+esc(d.status)+' · '+esc(d.approved_by)+(d.result&&d.result.error?' · <span style="color:var(--bad)">'+esc(d.result.error)+'</span>':'')+'</div></div></div>'}).join('')+'</details>';
+  // recent merges + history
+  const merges=(data.merges||[]).map((u)=>'<div class="cu-row"><div>#'+u.absorbed_id+' '+esc((u.absorbed_brand?u.absorbed_brand+' ':'')+(u.absorbed_name||''))+' → #'+u.survivor_id+' '+esc((u.survivor_brand?u.survivor_brand+' ':'')+(u.survivor_name||''))+'<div class="meta">'+esc(u.actor)+' · '+ago(u.created_at)+(u.undone_at?' · undone':'')+'</div></div>'+(u.undone_at?'':'<span class="cu-acts"><button data-unmerge="'+u.id+'">Undo</button></span>')+'</div>').join('');
+  const mergesHtml='<details class="cu"><summary>Recent merges ('+(data.merges||[]).length+')</summary>'+(merges||'<p class="meta">No merges yet.</p>')+'</details>';
+  const hist=(data.history||[]);
+  const histHtml='<details class="cu"><summary>Run history ('+hist.length+')</summary><table class="t"><thead><tr><th>Run</th><th>Mode</th><th>Status</th><th>Ticks</th><th>AI calls</th><th>Neurons</th><th>Errors</th></tr></thead><tbody>'
+    +hist.map((h)=>'<tr><td><a href="#" data-curun="'+esc(h.id)+'">'+esc(h.id)+'</a></td><td>'+esc(h.mode)+'</td><td>'+esc(h.status)+(h.status==='running'?' · '+esc(h.phase):'')+'</td><td>'+h.ticks+'</td><td>'+h.ai_calls+' ('+h.cache_hits+' cached)</td><td>'+Math.round(h.neurons)+'</td><td>'+h.errors+'</td></tr>').join('')+'</tbody></table></details>';
+  $('#view').innerHTML=CU_CSS+top+needsHtml+tidyHtml+planHtml+doneHtml+errHtml+otherHtml+dirHtml+mergesHtml+histHtml;
+  // wiring
+  const say=(d)=>{$('#log').hidden=false;$('#log').textContent=JSON.stringify(d,null,1)};
+  $('#cu-run').onclick=async()=>{$('#cu-run').disabled=true;try{say(await api('curator-run',{}))}catch(e){alert(e.message)}load()};
+  $('#cu-dry').onclick=async()=>{$('#cu-dry').disabled=true;try{say(await api('curator-run',{mode:'dry',force:true}))}catch(e){alert(e.message)}load()};
+  document.querySelectorAll('button[data-cus]').forEach((b)=>b.onclick=async()=>{
+    if(b.dataset.cus==='curator_mode'&&b.dataset.v==='live'&&!confirm('Switch to live? The next runs apply changes as they go (each can be undone).'))return;
+    try{await api('system',{k:b.dataset.cus,v:b.dataset.v});load()}catch(e){alert(e.message)}});
+  $('#cu-cap-save').onclick=async()=>{try{await api('system',{k:'curator_neuron_cap',v:String(Math.round(+$('#cu-cap').value))});load()}catch(e){alert(e.message)}};
+  const ap=$('#cu-apply');if(ap)ap.onclick=async()=>{if(!confirm('Apply this plan? The next curator ticks make these changes (Run now speeds it up).'))return;ap.disabled=true;try{say(await api('curator-apply',{run:ap.dataset.run}))}catch(e){alert(e.message)}load()};
+  document.querySelectorAll('button[data-curevert]').forEach((b)=>b.onclick=async()=>{if(!confirm('Undo this change?'))return;b.disabled=true;try{say(await api('curator-revert',{actionId:+b.dataset.curevert}));load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('button[data-cudismiss]').forEach((b)=>b.onclick=async()=>{b.disabled=true;try{await api('curator-dismiss',{actionId:+b.dataset.cudismiss});b.closest('.cu-row').remove()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('button[data-cumerge]').forEach((b)=>b.onclick=async()=>{if(!confirm('Merge these into one page? The absorbed page 301s to the one kept; you can undo it.'))return;b.disabled=true;try{await api('merge',{aId:+b.dataset.keep,bId:+b.dataset.drop});load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('button[data-cuapply]').forEach((b)=>b.onclick=async()=>{const body={id:+b.dataset.id};body[b.dataset.f]=b.dataset.v;b.disabled=true;try{await api('master',body);await api('curator-dismiss',{actionId:+b.dataset.cuapply});b.closest('.cu-row').remove()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('button[data-cureject]').forEach((b)=>b.onclick=async()=>{b.disabled=true;try{await api('reject-merge',{aId:+b.dataset.a,bId:+b.dataset.b});load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('button[data-unmerge]').forEach((b)=>b.onclick=async()=>{if(!confirm('Undo this merge? The absorbed page comes back with its listings and address, and the pair is marked as not duplicates.'))return;b.disabled=true;try{say(await api('unmerge',{undoId:+b.dataset.unmerge}));load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('a[data-cugo]').forEach((x)=>x.onclick=(e)=>{e.preventDefault();tab=x.dataset.cugo;F.page=1;markTab();load()});
+  document.querySelectorAll('a[data-curun]').forEach((x)=>x.onclick=async(e)=>{e.preventDefault();try{data=await api('curator?run='+encodeURIComponent(x.dataset.curun));renderCurator()}catch(err){alert(err.message)}});
+  $('#cu-dadd').onclick=async()=>{
+    const k=$('#cu-dk').value,a=+$('#cu-d1').value,b=$('#cu-d2').value.trim(),c=$('#cu-d3').value.trim();
+    const body=k==='merge'?{kind:k,keep:a,absorb:+b}:k==='rename'?{kind:k,id:a,name:b,slug:c}:{kind:k,id:a,brand:b};
+    try{const d=await api('directive',body);alert('Queued. '+(d.note||''));load()}catch(e){alert(e.message)}};
+}
+
 // ------- System -------
 function renderSystem(){
   const s=data.settings;
@@ -777,8 +939,11 @@ function renderSystem(){
   // see that the */15 pipeline is alive and what it last did.
   let lastJob='';try{const j=JSON.parse(s['job:last']||'null');if(j)lastJob='<p class="meta">last cron slice: <b>'+esc(j.job)+'</b> '+ago(j.at)+' <pre style="display:inline">'+esc(JSON.stringify(j.res||{}).slice(0,160))+'</pre></p>'}catch(e){}
   let lastErr='';try{const j=JSON.parse(s['job:last_error']||'null');if(j)lastErr='<p class="meta" style="color:var(--bad)">last slice ERROR '+ago(j.at)+': '+esc(j.msg)+'</p>'}catch(e){}
-  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('dedup_paused','Dedup')+' '+tog('verify_paused','Verify')+' '+tog('popularity_paused','Popularity')+' '+tog('mfr_paused','Manufacturer harvest')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
-    +lastJob+lastErr
+  // The last 10 slice errors (the latest used to overwrite the one before).
+  let ring='';try{const r=JSON.parse(s['job:errors']||'[]');if(r.length)ring='<details><summary class="meta" style="color:var(--bad)">last '+r.length+' slice errors</summary>'+r.map((e)=>'<p class="meta">'+ago(e.at)+': '+esc(e.msg)+'</p>').join('')+'</details>'}catch(e){}
+  let cur='';try{const c=JSON.parse(s.curator_state||'null');cur='<p class="meta">AI curator: '+(s.curator_enabled==='0'?'<b style="color:var(--bad)">paused</b>':'<b>'+esc(s.curator_mode||'dry')+'</b> mode')+(c&&c.run?' · last run '+esc(c.run)+(c.active?' (running)':''):' · no run yet')+(s.curator_ai==='0'?' · AI off':'')+' · <a href="/admin?tab=curator">open the AI curator tab</a></p>'}catch(e){}
+  $('#view').innerHTML='<p>'+tog('scan_paused','Daily scan')+' '+tog('enrich_paused','Enrich')+' '+tog('dedup_paused','Dedup')+' '+tog('classify_paused','Classify')+' '+tog('verify_paused','Verify')+' '+tog('warm_paused','Image backup')+' '+tog('popularity_paused','Popularity')+' '+tog('mfr_paused','Manufacturer harvest')+' <button class="no" disabled>URL discovery: PAUSED (by design)</button></p>'
+    +cur+lastJob+lastErr+ring
     +'<p class="meta">scan cursor: <pre>'+esc(s.scan_cursor||'—')+'</pre></p>'
     +healthTable
     +'<h3>Recent audit</h3><table class="t"><tbody>'
@@ -788,4 +953,5 @@ function renderSystem(){
 }
 
 readURL();markTab();load();
+api('curator?brief=1').then((d)=>{$('#cu-needs').textContent=d.needs?String(d.needs):''}).catch(()=>{});
 </script></body></html>`

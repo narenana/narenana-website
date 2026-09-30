@@ -18,10 +18,12 @@
 import puppeteer from '@cloudflare/puppeteer'
 import { feedPage, checkPage, checkWooProduct, parseProductPage, getHtml, ogImageFrom, extractSpanMM, detectConfig, parseJsonLd, cartSignals, isChallenge } from './adapters.mjs'
 import { all, one, run, batch, q, getSetting, setSetting, claimLease, audit } from './db.mjs'
-import { findDuplicates, bestSurvivor } from './dedup.mjs'
-import { powerType, roleTags, normalizeRoleTags, ROLE_TAGS } from './public.mjs'
+import { findDuplicates } from './dedup.mjs'
+import { powerType, roleTags } from './public.mjs'
 import { popScores, videoRelevant } from './popularity.mjs'
-import { storeSnapshot } from './snapshot.mjs'
+import { storeSnapshot, extractSnapshot } from './snapshot.mjs'
+import { curatorSlice } from './curator/index.mjs'
+import { brandKey, isBlankBrand } from './curator/validate.mjs'
 import { now, imgKey } from './util.mjs'
 
 // Per-slice, Free-safe. fetches=8 keeps the worst case (each iteration ≈ 2
@@ -57,6 +59,11 @@ export async function runSlice(env, trigger = 'cron') {
       const e = await enrichSlice(env, trigger)
       if (e) return e
     }
+    // The daily AI curator (curator/index.mjs). Reaching this line means the
+    // day's scan has finished (or is paused). It returns null when no run is
+    // active or due, so the jobs below get the tick.
+    const cu = await curatorSlice(env, trigger, { scanDone: true })
+    if (cu) return cu
     if ((await getSetting(env, 'dedup_paused')) !== '1') {
       const dd = await dedupSlice(env, trigger)
       if (dd) return dd
@@ -321,9 +328,11 @@ export async function upsertProducts(env, su, products, spent) {
 // -------------------------------------------------------------- enrich slice
 // The system fills in as much data as it can BEFORE the owner reviews: one
 // product-page fetch per new sku → wingspan, config, image, price/stock (for
-// feed-less HTML/Zoho sources), brand matched against the category's brand
-// list (D1 data), plus an optional Workers-AI pass for kind + clean name.
-// Runs after the daily scan finishes, before verify; one-shot per sku.
+// feed-less HTML/Zoho sources), and a brand matched against the category's
+// brand list (D1 data) in the title or the product's own text. Heuristics
+// only: the curator's triage phase adds the AI's kind, brand and clean name
+// afterwards (curator/triage.mjs). Runs after the daily scan finishes, before
+// verify; one-shot per sku.
 async function enrichSlice(env, trigger) {
   const t = now()
   const rows = await all(
@@ -363,8 +372,13 @@ async function buildGuess(env, k) {
   // visible-ish text only: strip tags/scripts so regexes see prose, not markup
   const text = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').slice(0, 20000)
 
+  // Brand: the title, else the product's own text (the snapshot extract: its
+  // JSON-LD and meta descriptions), never the page as a whole. Page chrome
+  // (menus, "shop by brand" lists) named FMS on 83 havochobby listings and
+  // Dynam on 12 tahorizons ones. Else the shop's own house brand.
   const findBrand = (s) => brands.find((b) => new RegExp(b.replace(/[-\s]/g, '.?'), 'i').test(s))
-  let brand = findBrand(title) ?? findBrand(text.slice(0, 3000)) ?? (brands.find((b) => b.toLowerCase().replace(/[^a-z0-9]/g, '') === String(k.source_id).replace(/[^a-z0-9]/g, '')) || '')
+  const productText = html ? extractSnapshot(html).description : ''
+  let brand = findBrand(title) ?? findBrand(productText) ?? (brands.find((b) => b.toLowerCase().replace(/[^a-z0-9]/g, '') === String(k.source_id).replace(/[^a-z0-9]/g, '')) || '')
   let spanMM = extractSpanMM(title)
   let via = spanMM ? 'title' : ''
   if (!spanMM) {
@@ -390,67 +404,14 @@ async function buildGuess(env, k) {
     _stock = chk?.inStock == null ? null : chk.inStock ? 1 : 0
   }
 
-  // optional Workers AI: kind + cleaner name (+ span only as a last resort)
-  let kind = null
-  const ai = await aiGuess(env, title, text.slice(0, 1600))
-  if (ai) {
-    kind = ai.kind ?? null
-    if (!brand && ai.brand) brand = String(ai.brand).slice(0, 40)
-    if (ai.name) name = String(ai.name).slice(0, 60)
-    if (!spanMM && Number(ai.spanMM) >= 200 && Number(ai.spanMM) <= 4000) {
-      spanMM = Math.round(Number(ai.spanMM))
-      via = 'ai'
-    }
-    via = via ? via + '+ai' : 'ai'
-  }
-  return { brand, name: name.slice(0, 60), spanMM, config, kind, via: via || 'none', at: now(), _img, _price, _stock }
-}
-
-async function aiGuess(env, title, snippet) {
-  if (!env.AI) return null
-  try {
-    const r = await env.AI.run('@cf/meta/llama-3.1-8b-instruct', {
-      max_tokens: 180,
-      messages: [
-        { role: 'system', content: 'You classify RC hobby-shop listings. Reply with ONLY a JSON object: {"kind":"aircraft"|"accessory"|"other","brand":string,"name":string,"spanMM":number}. kind=aircraft only for fixed-wing airplane/flying-wing/glider AIRFRAMES (kits/PNP/RTF). Motors, ESCs, servos, batteries, props, radios, FPV gear, spare parts, multirotors are accessory/other. name = clean model name without brand or marketing text. spanMM = wingspan in millimetres, 0 if unknown. brand = manufacturer if identifiable, else "".' },
-        { role: 'user', content: `Title: ${title}\nPage: ${snippet}` },
-      ],
-    })
-    const m = String(r?.response ?? '').match(/\{[\s\S]*?\}/)
-    if (!m) return null
-    const j = JSON.parse(m[0])
-    return { kind: ['aircraft', 'accessory', 'other'].includes(j.kind) ? j.kind : null, brand: j.brand, name: j.name, spanMM: j.spanMM }
-  } catch {
-    return null
-  }
-}
-
-// Role/type tags via Workers AI — the fallback for models the deterministic
-// roleTags() rules can't confidently place. Free-tier binding; validated & pruned
-// through normalizeRoleTags so the model can only emit vocabulary tags.
-async function aiRoleTags(env, text) {
-  if (!env.AI) return null
-  try {
-    const r = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
-      max_tokens: 120,
-      messages: [
-        { role: 'system', content: `You tag fixed-wing RC model aircraft by role/type. Use ONLY these tags: ${ROLE_TAGS.join(', ')}. A model may have more than one. Rules: military JETS => "Jet / EDF" plus "Warbird"; prop military scale => "Warbird"; civilian replicas (Cessna, Piper Cub, Decathlon, Beaver) => "Scale Civilian"; dedicated aerobats (Extra, MXS, Sbach, Pitts) => "Aerobatic / 3D"; FPV platforms and flying wings => "FPV / Flying Wing"; gliders/sailplanes => "Glider / Sailplane"; commercial airliners => "Airliner"; beginner trainers => "Trainer"; generic foam sport models => "Sport / Park Flyer". Reply with ONLY a JSON array of tag strings, most defining first, e.g. ["Warbird"].` },
-        { role: 'user', content: String(text).slice(0, 600) },
-      ],
-    })
-    const m = String(r?.response ?? '').match(/\[[\s\S]*?\]/)
-    if (!m) return null
-    const tags = normalizeRoleTags(JSON.parse(m[0]))
-    return tags.length ? { tags } : null
-  } catch {
-    return null
-  }
+  return { brand, name: name.slice(0, 60), spanMM, config, kind: null, via: via || 'none', at: now(), _img, _price, _stock }
 }
 
 // ---------------------------------------------------------------- classify slice
 // Assigns role_tags to masters that lack them (new/inbound; the existing catalog
-// was seeded from a reviewed pass). Rules place the confident majority for free;
-// only the uncertain tail spends a Workers AI call (capped per slice). Returns null
+// was seeded from a reviewed pass), by rules only, so a new page has tags at
+// once. The uncertain ones (the Sport / Park Flyer catch-all) are reconsidered
+// by the curator's roles phase, under the owner's taxonomy rules. Returns null
 // when there's no backlog, so verify still gets the tick.
 const CLASSIFY_EVERY = 30 * 60e3
 async function classifySlice(env, trigger) {
@@ -472,22 +433,15 @@ async function classifySlice(env, trigger) {
   if (!rows.length) return null // no backlog — let verify have the slice
   const stmts = []
   const log = []
-  let aiCalls = 0
   for (const m of rows) {
     const text = `${m.brand ?? ''} ${m.name ?? ''} ${m.titles ?? ''}`.trim()
-    const r = roleTags(text)
-    let tags = r.tags
-    let source = 'rules'
-    if (!r.confident && aiCalls < 8) {
-      aiCalls++
-      const ai = await aiRoleTags(env, text)
-      if (ai) { tags = ai.tags; source = 'ai' }
-    }
-    stmts.push(q(env, `UPDATE master_model SET role_tags=?, role_source=?, updated_at=? WHERE id=?`, JSON.stringify(tags), source, t, m.id))
-    log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: ${tags.join('+')} [${source}]`)
+    const { tags, confident } = roleTags(text)
+    // role_tags IS NULL guards an owner edit that lands after the read
+    stmts.push(q(env, `UPDATE master_model SET role_tags=?, role_source='rules', updated_at=? WHERE id=? AND role_tags IS NULL`, JSON.stringify(tags), t, m.id))
+    log.push(`${m.id} ${String(m.name ?? '').slice(0, 24)}: ${tags.join('+')} [rules${confident ? '' : ', unsure'}]`)
   }
   await batch(env, stmts)
-  return { job: 'classify', trigger, classified: rows.length, ai: aiCalls, log }
+  return { job: 'classify', trigger, classified: rows.length, log }
 }
 
 // ---------------------------------------------------------------- popularity slice
@@ -675,10 +629,19 @@ async function ytFillStats(env, videos) {
 }
 
 // -------------------------------------------------------------- dedup slice
-// Continuously hunts duplicate masters (same brand + model). Obvious dupes
-// auto-merge; doubtful pairs go to merge_candidate for the owner to confirm.
+// Continuously hunts duplicate masters (same brand + model) and records them
+// in merge_candidate as pending pairs, with the brand anomalies. It NEVER
+// merges: the daily AI curator (curator/dedup.mjs) judges every pair and
+// merges only the obvious ones, with an undo snapshot; the rest reach the
+// owner in Duplicates. (It used to merge its "obvious" clusters here; on
+// 2026-09-29 that absorbed the owner's cleaned #141 into the all-caps #120,
+// and a foreign-key error from inserting pairs that named a master merged
+// earlier in the same pass stopped the pass, so TBS #518 was never paired.)
+// Brands are grouped by brandKey, so Havoc / Havoc Hobby pages compare.
 // Time-gated (every 6h) — the whole comparison is cheap and in-memory.
 const DEDUP_EVERY = 6 * 3600e3
+const CANDIDATES_PER_STMT = 12 // 7 values each → 84 bound parameters
+export const DEDUP_ANOMALY_KINDS = ['brand-mismatch', 'power-mismatch', 'power-review']
 
 export async function dedupSlice(env, trigger, force = false) {
   const last = Number((await getSetting(env, 'dedup_last')) ?? 0)
@@ -686,10 +649,11 @@ export async function dedupSlice(env, trigger, force = false) {
   if (!force && t - last < DEDUP_EVERY) return null // not due — let verify have the slice
   await setSetting(env, 'dedup_last', String(t))
 
-  const masters = await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status, m.category_id, m.power,
+  const masters = (await all(env, `SELECT m.id, m.slug, m.brand, m.name, m.brand_norm, m.name_norm, m.specs, m.status, m.category_id, m.power,
       (SELECT COUNT(*) FROM offer o WHERE o.master_model_id=m.id) AS offers,
       (SELECT GROUP_CONCAT(k.title, ' | ') FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=m.id) AS titles
-     FROM master_model m WHERE m.status IN ('ready','draft')`)
+     FROM master_model m WHERE m.status IN ('ready','draft')`))
+    .map((m) => ({ ...m, brand_key: isBlankBrand(m.brand) ? '' : brandKey(m.brand), brand_norm: isBlankBrand(m.brand) ? '' : m.brand_norm }))
   const { obviousClusters, candidatePairs, anomalies } = findDuplicates(masters)
   // Power anomalies (only the electric-tagged direction, so a correctly-tagged
   // gas plane whose title carries no marker never trips it): an explicit gas
@@ -702,246 +666,61 @@ export async function dedupSlice(env, trigger, force = false) {
     else if (/\b1\s*[/:]\s*[3-6]\b/.test(text)) anomalies.push({ id: m.id, kind: 'power-review', detail: 'scale model — likely gas, tagged electric' })
   }
 
-  // Rejected pairs must never be re-proposed (auto-merge or candidate).
+  // Rejected pairs are never re-proposed. (A dismissed pair — the AI said
+  // different — is not the owner's rejection: INSERT OR IGNORE leaves it.)
   const rejected = new Set((await all(env, `SELECT a_id, b_id FROM merge_candidate WHERE status='rejected'`)).map((r) => `${r.a_id}:${r.b_id}`))
   const isRejected = (a, b) => rejected.has(`${a}:${b}`) || rejected.has(`${b}:${a}`)
 
-  let merged = 0
+  const rows = []
+  const seen = new Set()
+  const push = (x, y, score, reason) => {
+    const a = Math.min(x, y)
+    const b = Math.max(x, y)
+    if (a === b || isRejected(a, b) || seen.has(`${a}:${b}`)) return
+    seen.add(`${a}:${b}`)
+    rows.push([a, b, score, String(reason ?? '').slice(0, 200), t, 'heuristic'])
+  }
+  // Obvious clusters: every pair, for the curator to confirm (it merges only
+  // with every gate and both AI verdicts); doubtful pairs for the owner.
+  for (const cluster of obviousClusters)
+    for (let i = 0; i < cluster.length; i++) for (let j = i + 1; j < cluster.length; j++) push(cluster[i].id, cluster[j].id, 1, 'obvious: same brand and model')
+  for (const p of candidatePairs) push(p.a.id, p.b.id, p.score, p.reason)
+
+  // One multi-row insert per chunk. A pair that names a master deleted since
+  // the read (a merge from the admin in the meantime) is skipped by the
+  // EXISTS guards instead of failing the foreign key; a failing chunk is
+  // logged and the others still land.
   let flagged = 0
-  const log = []
-  // Obvious dupes: merge each cluster's members into its single survivor.
-  for (const cluster of obviousClusters) {
-    const survivor = bestSurvivor(cluster)
-    for (const m of cluster) {
-      if (m.id === survivor.id || isRejected(survivor.id, m.id)) continue
-      await mergeMasters(env, survivor.id, m.id, 'auto', 'obvious duplicate')
-      merged++
-      log.push(`merged #${m.id} '${m.name?.slice(0, 24)}' → #${survivor.id} '${survivor.name?.slice(0, 24)}'`)
+  const errors = []
+  for (let i = 0; i < rows.length; i += CANDIDATES_PER_STMT) {
+    const part = rows.slice(i, i + CANDIDATES_PER_STMT)
+    try {
+      const r = await run(env,
+        `INSERT OR IGNORE INTO merge_candidate (a_id, b_id, score, reason, status, created_at, source)
+         SELECT json_extract(value,'$[0]'), json_extract(value,'$[1]'), json_extract(value,'$[2]'), json_extract(value,'$[3]'), 'pending', json_extract(value,'$[4]'), json_extract(value,'$[5]')
+         FROM json_each(?)
+         WHERE EXISTS (SELECT 1 FROM master_model WHERE id=json_extract(value,'$[0]')) AND EXISTS (SELECT 1 FROM master_model WHERE id=json_extract(value,'$[1]'))`,
+        JSON.stringify(part))
+      flagged += r?.meta?.changes ?? 0
+    } catch (e) {
+      const msg = String(e?.message ?? e).slice(0, 300)
+      console.error(JSON.stringify({ at: 'dedup', pairs: part.map((x) => `${x[0]}-${x[1]}`).join(','), msg }))
+      errors.push(msg)
     }
   }
-  // Doubtful pairs → owner's review list.
-  for (const p of candidatePairs) {
-    if (isRejected(p.a.id, p.b.id)) continue
-    const r = await run(env,
-      `INSERT OR IGNORE INTO merge_candidate (a_id, b_id, score, reason, status, created_at) VALUES (?,?,?,?, 'pending', ?)`,
-      Math.min(p.a.id, p.b.id), Math.max(p.a.id, p.b.id), p.score, p.reason, t)
-    flagged++
-  }
-  // Brand anomalies (auto-recomputed every run): clear the old set, stamp the
-  // current one. Fixing the brand — or merging the master away — clears it on
-  // the next pass. The Catalog tab shows the badge so the owner can correct it.
-  await run(env, `UPDATE master_model SET anomaly=NULL WHERE anomaly IS NOT NULL`)
+  // Anomalies it computes itself (auto-recomputed every run): clear those
+  // kinds, stamp the current set. Fixing the brand, or merging the master
+  // away, clears it on the next pass. Other kinds are left alone.
+  const kinds = DEDUP_ANOMALY_KINDS.map(() => '?').join(',')
+  await run(env, `UPDATE master_model SET anomaly=NULL WHERE anomaly IS NOT NULL AND json_valid(anomaly) AND json_extract(anomaly,'$.kind') IN (${kinds})`, ...DEDUP_ANOMALY_KINDS)
   if (anomalies.length) await batch(env, anomalies.map((a) =>
     q(env, `UPDATE master_model SET anomaly=? WHERE id=?`, JSON.stringify({ kind: a.kind, detail: a.detail, at: t }), a.id)))
-  return { job: 'dedup', trigger, merged, flagged, anomalies: anomalies.length, log }
+  return { job: 'dedup', trigger, merged: 0, flagged, pairs: rows.length, anomalies: anomalies.length, ...(errors.length ? { errors } : {}) }
 }
 
-// True once migration 0018 (slug_alias) is applied. Probed, not assumed, so the
-// code can ship before the owner runs the migration: merges and renames then
-// work as before, and old slugs stay 404s until the table exists.
-export const hasSlugAlias = (env) => one(env, `SELECT 1 AS ok FROM slug_alias LIMIT 1`).then(() => true, () => false)
-
-// Merge master B into A: move B's offers to A (dropping any that would collide
-// on a sku already offered on A), fill A's blank specs from B, drop B, and 301
-// B's slug to A (slug_alias). Reused by the owner's admin "Merge" action.
-// Returns nothing; throws on hard error.
-export async function mergeMasters(env, aId, bId, actor, reason) {
-  if (aId === bId) return
-  const a = await one(env, `SELECT * FROM master_model WHERE id=?`, aId)
-  const b = await one(env, `SELECT * FROM master_model WHERE id=?`, bId)
-  if (!a || !b) return
-  // fill A's missing specs from B (never overwrite an owner-entered value)
-  let specs = {}
-  try {
-    specs = { ...JSON.parse(b.specs || '{}'), ...JSON.parse(a.specs || '{}') }
-  } catch {}
-  const mergedAt = now()
-  // Reconcile profiles inside the same D1 batch that deletes B, so an admin
-  // save cannot land between a JavaScript pre-read and the merge. For a shared
-  // manufacturer product, B fills missing keys and A wins conflicts. Rebuilding
-  // the object from json_each (instead of json_patch) preserves explicit nulls.
-  const profileStmts = [
-    q(
-      env,
-      `UPDATE mfr_profile AS survivor
-       SET overrides_json=COALESCE((
-             SELECT json_group_object(
-                      key,
-                      json(CASE type
-                        WHEN 'text' THEN json_quote(value)
-                        WHEN 'null' THEN 'null'
-                        WHEN 'true' THEN 'true'
-                        WHEN 'false' THEN 'false'
-                        ELSE value
-                      END)
-                    )
-             FROM (
-               SELECT duplicate_value.key,duplicate_value.value,duplicate_value.type
-               FROM mfr_profile duplicate_profile,
-                    json_each(duplicate_profile.overrides_json) duplicate_value
-               WHERE duplicate_profile.master_model_id=?
-                 AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
-                 AND NOT EXISTS (
-                   SELECT 1 FROM json_each(survivor.overrides_json) survivor_value
-                   WHERE survivor_value.key=duplicate_value.key
-                 )
-               UNION ALL
-               SELECT key,value,type FROM json_each(survivor.overrides_json)
-             )
-           ),'{}'),
-           created_at=MIN(
-             survivor.created_at,
-             COALESCE((
-               SELECT duplicate_profile.created_at
-               FROM mfr_profile duplicate_profile
-               WHERE duplicate_profile.master_model_id=?
-                 AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
-             ),survivor.created_at)
-           ),
-           updated_at=MAX(
-             survivor.updated_at+1,
-             COALESCE((
-               SELECT duplicate_profile.updated_at+1
-               FROM mfr_profile duplicate_profile
-               WHERE duplicate_profile.master_model_id=?
-                 AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
-             ),0),
-             ?
-           ),
-           updated_by=?
-       WHERE survivor.master_model_id=?
-         AND EXISTS (
-           SELECT 1 FROM mfr_profile duplicate_profile
-           WHERE duplicate_profile.master_model_id=?
-             AND duplicate_profile.source_mfr_product_id=survivor.source_mfr_product_id
-         )`,
-      bId,
-      bId,
-      bId,
-      mergedAt,
-      actor,
-      aId,
-      bId,
-    ),
-    q(
-      env,
-      `INSERT OR IGNORE INTO mfr_profile
-         (master_model_id,source_mfr_product_id,overrides_json,created_at,updated_at,updated_by)
-       SELECT ?,source_mfr_product_id,overrides_json,created_at,updated_at,updated_by
-       FROM mfr_profile WHERE master_model_id=?`,
-      aId,
-      bId,
-    ),
-  ]
-  const stmts = [
-    // free B's offers from any sku already carried by A, then re-home the rest
-    q(env, `DELETE FROM offer WHERE master_model_id=? AND sku_id IN (SELECT sku_id FROM offer WHERE master_model_id=?)`, bId, aId),
-    q(env, `UPDATE offer SET master_model_id=? WHERE master_model_id=?`, aId, bId),
-    q(env, `UPDATE master_model
-            SET specs=?,hero_image=COALESCE(hero_image,?),updated_at=?,
-                pop_score=NULL,pop_raw=NULL,pop_updated_at=NULL,pop_signals=NULL
-            WHERE id=?`, JSON.stringify(specs), b.hero_image, mergedAt, aId),
-    // B is absorbed then deleted — first remove EVERY merge_candidate row that
-    // references B: the current pair AND any other pending pairs B sits in.
-    // Otherwise deleting the master trips the a_id/b_id foreign key (RESTRICT)
-    // and the whole merge throws. The next dedup pass re-evaluates the survivor
-    // A against everything and re-creates candidates if they still look alike.
-    q(env, `DELETE FROM merge_candidate WHERE a_id=? OR b_id=?`, bId, bId),
-    // YouTube rows carry a real FK to the master. Re-home them before deleting
-    // B and merge overlapping videos without dropping either model's human
-    // pin/exclude intent.
-    q(
-      env,
-      `INSERT INTO master_video
-         (master_model_id,video_id,title,channel,views,published_at,rank,
-          pinned,excluded,fetched_at)
-       SELECT ?,video_id,title,channel,views,published_at,rank,
-              CASE WHEN excluded=1 THEN 0 ELSE pinned END,excluded,fetched_at
-       FROM master_video WHERE master_model_id=?
-       ON CONFLICT(master_model_id,video_id) DO UPDATE SET
-         title=COALESCE(NULLIF(master_video.title,''),excluded.title),
-         channel=COALESCE(NULLIF(master_video.channel,''),excluded.channel),
-         views=CASE
-           WHEN master_video.views IS NULL THEN excluded.views
-           WHEN excluded.views IS NULL THEN master_video.views
-           ELSE MAX(master_video.views,excluded.views)
-         END,
-         published_at=COALESCE(master_video.published_at,excluded.published_at),
-         rank=CASE
-           WHEN master_video.rank IS NULL THEN excluded.rank
-           WHEN excluded.rank IS NULL THEN master_video.rank
-           ELSE MIN(master_video.rank,excluded.rank)
-         END,
-         pinned=CASE
-           WHEN MAX(master_video.excluded,excluded.excluded)=1 THEN 0
-           ELSE MAX(master_video.pinned,excluded.pinned)
-         END,
-         excluded=MAX(master_video.excluded,excluded.excluded),
-         fetched_at=MAX(master_video.fetched_at,excluded.fetched_at)`,
-      aId,
-      bId,
-    ),
-    q(env, `DELETE FROM master_video WHERE master_model_id=?`, bId),
-    // Manufacturer decisions are not FK-cascaded. Preserve B's accepted human
-    // decision when A has no accepted decision; otherwise A remains canonical.
-    q(
-      env,
-      `INSERT INTO mfr_match
-         (master_model_id,mfr_product_id,score,span_agree,tier,status,
-          decided_by,decided_at,updated_at,note)
-       SELECT ?,mfr_product_id,score,span_agree,tier,status,
-              decided_by,decided_at,updated_at,note
-       FROM mfr_match
-       WHERE master_model_id=? AND status='accepted'
-       ON CONFLICT(master_model_id) DO UPDATE SET
-         mfr_product_id=excluded.mfr_product_id,
-         score=excluded.score,
-         span_agree=excluded.span_agree,
-         tier=excluded.tier,
-         status=excluded.status,
-         decided_by=excluded.decided_by,
-         decided_at=excluded.decided_at,
-         updated_at=excluded.updated_at,
-         note=excluded.note
-       WHERE COALESCE(mfr_match.status,'pending')<>'accepted'`,
-      aId,
-      bId,
-    ),
-    q(
-      env,
-      `INSERT OR IGNORE INTO mfr_match
-         (master_model_id,mfr_product_id,score,span_agree,tier,status,
-          decided_by,decided_at,updated_at,note)
-       SELECT ?,mfr_product_id,score,span_agree,tier,status,
-              decided_by,decided_at,updated_at,note
-       FROM mfr_match WHERE master_model_id=?`,
-      aId,
-      bId,
-    ),
-    q(env, `DELETE FROM mfr_candidate WHERE master_model_id=?`, bId),
-    q(env, `DELETE FROM mfr_match WHERE master_model_id=?`, bId),
-    ...profileStmts,
-    q(env, `DELETE FROM mfr_profile WHERE master_model_id=?`, bId),
-    // B's public URL keeps working (SEO rec 6): its slug, and every older slug
-    // that already pointed at B, now 301 to A. Same batch as the DELETE, so a
-    // merged page is never a 404. Skipped only while migration 0018 is not
-    // applied yet, so a merge never fails for want of the table.
-    ...((await hasSlugAlias(env))
-      ? [
-          q(env, `UPDATE slug_alias SET master_model_id=? WHERE master_model_id=?`, aId, bId),
-          q(env, `INSERT INTO slug_alias (category_id, old_slug, master_model_id, created_at) VALUES (?,?,?,?)
-                  ON CONFLICT(category_id, old_slug) DO UPDATE SET master_model_id=excluded.master_model_id, created_at=excluded.created_at`,
-            b.category_id, b.slug, aId, mergedAt),
-        ]
-      : []),
-    q(env, `DELETE FROM master_model WHERE id=?`, bId),
-    audit(env, actor, 'merge-master', 'master_model', bId, { into: aId, reason, slug: b.slug }),
-  ]
-  await batch(env, stmts)
-  // Survivor absorbed B's offers — re-derive its power class from all titles.
-  const titles = (await one(env, `SELECT GROUP_CONCAT(k.title, ' ') t FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=?`, aId))?.t ?? ''
-  await run(env, `UPDATE master_model SET power=? WHERE id=?`, powerType(titles), aId)
-}
+// Merging (and undoing a merge) lives with the curator: one write path, with
+// a snapshot for undo (curator/merge.mjs). Re-exported for the old callers.
+export { mergeMasters, hasSlugAlias } from './curator/merge.mjs'
 
 // -------------------------------------------------------------- verify slice
 const FLAG_DELTA = 0.25

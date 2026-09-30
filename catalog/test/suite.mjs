@@ -1144,7 +1144,9 @@ test('flagged live listings: product pages withhold the flagged amount', async (
     if (at < 0) continue // master not public (draft) — nothing to check
     const slug = browse.slice(browse.lastIndexOf('href="/wings/', at) + 'href="/wings/'.length, at)
     const html = await (await get(`/wings/${slug}/`)).text()
-    const row = html.split('<tr').find((r) => r.includes(`href="${esc(k.url_canonical)}"`))
+    // one row only: the last row would otherwise run on to the end of the page
+    // (a "Similar models" price like ₹46,999 contains a flagged ₹6,999)
+    const row = html.split('<tr').map((r) => r.split('</tr>')[0]).find((r) => r.includes(`href="${esc(k.url_canonical)}"`))
     assert.ok(row, `${slug}: row for flagged listing ${k.id} is on the page`)
     assert.ok(row.includes('Price under review'), `${slug}: flagged listing ${k.id} is labelled Price under review`)
     assert.ok(!row.includes(k.price_inr.toLocaleString('en-IN')), `${slug}: flagged amount of listing ${k.id} is not shown`)
