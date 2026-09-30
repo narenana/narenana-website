@@ -132,12 +132,15 @@ async function clashes(ctx, wants) {
     `SELECT id, category_id, brand_norm, name_norm FROM master_model WHERE name_norm IN (${names.map(() => '?').join(',')})`,
   ).bind(...names).all()).results ?? []
   const taken = new Map(rows.map((r) => [`${r.category_id}|${r.brand_norm}|${r.name_norm}`, r.id]))
+  // Keys taken by changes queued in earlier chunks of this tick: they are only
+  // written when the tick ends, so the table above cannot see them yet.
+  const pending = (ctx.pendingKeys ??= new Map())
   const out = new Map()
   for (const w of wants) {
     const k = `${w.category}|${w.brandNorm}|${w.nameNorm}`
-    const other = taken.get(k)
+    const other = taken.get(k) ?? pending.get(k)
     if (other != null && other !== w.id) out.set(w.key, other)
-    else taken.set(k, w.id) // two changes in this chunk may not take the same key either
+    else { taken.set(k, w.id); pending.set(k, w.id) } // two changes in this tick may not take the same key either
   }
   return out
 }

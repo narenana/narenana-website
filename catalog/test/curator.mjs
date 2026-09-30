@@ -817,3 +817,54 @@ test('curator_catchup=1 lets an active run take even slots; without an active ru
   d1.run(`UPDATE setting SET v='0' WHERE k='curator_catchup'`)
   assert.equal(await curatorSlice(env, 'cron', { scanDone: true, now: evenT + 36e5 }), null, 'switched off: even slots are free again')
 })
+
+// Production, 2026-09-30: #377 and #378 were both to become "J11-Pro Stunt
+// Jet"; they sat in different chunks of one tick, so the clash check (which
+// reads the table) could not see the first rename, and the tick's batch failed
+// on the unique brand+name key, taking all 43 renames down with it.
+function renameWorld() {
+  const d1 = makeD1()
+  seedBasics(d1)
+  const names = {}
+  const add = (id, name, model) => { addMaster(d1, { id, brand: 'Acme', name, specs: { spanMM: 800 }, roleTags: ['Sport / Park Flyer'], roleSource: 'reviewed' }); names[name] = mOut({ brand: 'Acme', brand_quote: 'Acme', model, span_mm: 800, span_quote: '800mm' }) }
+  add(901, 'Foo Jet Blue PNP', 'Foo Jet')
+  for (let i = 0; i < 6; i++) add(902 + i, `Filler ${i} PNP`, `Filler ${i}`)
+  add(908, 'Foo Jet Red PNP', 'Foo Jet')
+  d1.run(`UPDATE setting SET v='10' WHERE k='curator_scale'`)
+  return { d1, names }
+}
+
+test('two renames to one name in different chunks of a tick: one applies, the other is a question, nothing fails', async () => {
+  const { d1, names } = renameWorld()
+  const env = { CATALOG_DB: d1, AI: curatorAi({ master: names }) }
+  await withErrors(() => runToEnd(env))
+  const renames = d1.sql(`SELECT entity_id, status FROM curator_action WHERE kind='rename'`)
+  assert.equal(renames.filter((r) => r.status === 'failed').length, 0, 'no rename failed')
+  for (let i = 0; i < 6; i++) assert.equal(d1.one(`SELECT name FROM master_model WHERE id=?`, 902 + i).name, `Filler ${i}`)
+  const foo = [901, 908].map((id) => d1.one(`SELECT name FROM master_model WHERE id=?`, id).name)
+  assert.equal(foo.filter((n) => n === 'Foo Jet').length, 1, 'exactly one page takes the name')
+  const q = d1.one(`SELECT entity_id, other_id FROM curator_action WHERE kind='escalate' AND json_extract(evidence,'$.issue')='name-suggestion'`)
+  assert.ok(q && [901, 908].includes(q.entity_id) && [901, 908].includes(q.other_id), 'the other is a question naming the page that has the name')
+})
+
+test('a failed tick batch is retried change by change: only the change that fails again is marked failed', async () => {
+  const { d1, names } = renameWorld()
+  delete names['Foo Jet Red PNP'] // only #901 aims at "Foo Jet"
+  // Simulate an owner edit landing between the clash check and the tick's
+  // write: the first batch that renames #901 finds "Acme Foo Jet" taken.
+  let armed = true
+  const db = Object.create(d1)
+  db.batch = async (stmts) => {
+    if (armed && stmts.some((x) => /UPDATE master_model SET/.test(x.sql ?? x.__real?.sql ?? '') )) {
+      armed = false
+      d1.run(`UPDATE master_model SET name='Foo Jet', name_norm='foo jet' WHERE id=908`)
+    }
+    return d1.batch(stmts)
+  }
+  const env = { CATALOG_DB: db, AI: curatorAi({ master: names }) }
+  await withErrors(() => runToEnd(env))
+  const byId = Object.fromEntries(d1.sql(`SELECT entity_id, status FROM curator_action WHERE kind='rename'`).map((r) => [r.entity_id, r.status]))
+  assert.equal(byId[901], 'failed', 'the clashing rename failed')
+  for (let i = 0; i < 6; i++) assert.equal(byId[902 + i], 'applied', `#${902 + i} still renamed`)
+  assert.ok(d1.one(`SELECT COUNT(*) n FROM curator_action WHERE kind='error' AND entity_id=901`).n >= 1, 'an error record names the failed change')
+})
