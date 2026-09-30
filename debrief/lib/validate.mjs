@@ -19,7 +19,7 @@ export const EVIDENCE_KEYS = {
   E5: ['impedance_baseline_mohm', 'impedance_late_mohm'],
   E6: ['dip_v', 'recovered_v', 'cells'],
   R1: ['count', 'first_phase', 'airborne'],
-  R2: ['window_count', 'longest_s'],
+  R2: ['window_count', 'longest_s', 'loss_slant_m', 'max_slant_m', 'slant_ratio', 'pattern'],
   R3: ['metric', 'flight_median', 'late_median', 'distance_correlated'],
   R4: ['window_count', 'longest_s', 'median_rate'],
   B1: ['ir_per_cell_mohm', 'punch_count', 'chemistry'],
@@ -33,6 +33,7 @@ export const EVIDENCE_KEYS = {
 const EVIDENCE_ENUMS = {
   metric: ['lq', 'rssi'],
   chemistry: ['lipo', 'liion', 'unknown'],
+  pattern: ['range_boundary', 'close_in', 'mixed'],
 }
 const MAX_FINDINGS = 24
 export const MAX_PAYLOAD_BYTES = 8192

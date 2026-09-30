@@ -7,7 +7,7 @@
  * hottest cache keys). The eval rubric in the viewer repo
  * (docs/eval/) re-runs on every bump.
  */
-export const PROMPT_VERSION = 'p2'
+export const PROMPT_VERSION = 'p3'
 
 const FINDING_MEANINGS = `
 E1 unterminated log (recording stopped without its footer — power died mid-write)
@@ -17,7 +17,7 @@ E4 instant power interruption in flight (composite: healthy battery to the last 
 E5 power connection degrading (supply impedance rising through the flight)
 E6 in-flight brownout that recovered
 R1 failsafe engaged
-R2 RC signal lost
+R2 RC signal lost (loss_slant_m = hypotenuse distance from launch to the last known position at loss; pattern range_boundary = losses at the edge of the flight's envelope, the link running out of range — expected physics; close_in = losses far inside the envelope, so distance is NOT the cause and antennas/shading/interference are; mixed = no single distance boundary)
 R3 link quality degrading (distance_correlated=true means it tracks range, likely physics not fault)
 R4 RC control updates arriving slowly
 B1 battery internal resistance high (tired pack)
