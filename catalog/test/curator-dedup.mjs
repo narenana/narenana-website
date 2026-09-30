@@ -66,7 +66,7 @@ function brain({ pair = () => unsure(), listing = {}, master = {} } = {}) {
       calls.listing.push(title)
       return openai(listing[title] ?? lOut({ kind: 'other', confidence: 0.5 }))
     }
-    const input = JSON.parse(u)
+    const input = JSON.parse(u.slice(0, u.lastIndexOf('}') + 1)) // pair-v2 closes with a rule line
     if (input.A && input.B) { calls.pair.push(`${input.A.name}~${input.B.name}`); return openai(pair(input, 'primary')) }
     calls.master.push(input.name)
     return openai(master[input.name] ?? lowMaster)
@@ -74,7 +74,8 @@ function brain({ pair = () => unsure(), listing = {}, master = {} } = {}) {
   const second = (body) => {
     const p = probeReply(body, 'legacy')
     if (p) return p
-    const input = JSON.parse(userOf({ body }))
+    const u = userOf({ body })
+    const input = JSON.parse(u.slice(0, u.lastIndexOf('}') + 1))
     calls.second.push(`${input.A.name}~${input.B.name}`)
     return legacy(pair(input, 'second'))
   }
@@ -713,4 +714,69 @@ test('admin: Duplicates carries the AI verdict and the shared keep; the merge bu
   r = await admin(env, 'duplicates?view=dismissed')
   assert.equal(r.body.view, 'dismissed')
   assert.equal(r.body.candidates.length, 1)
+})
+
+// ============================================== slug after merge, and more
+test('slug after merge: a survivor with a seller-style address takes the absorbed page\'s clean one; undo gives it back', async () => {
+  const d1 = world()
+  addMaster(d1, { id: 123, brand: 'QIDI', name: '560 M7', slug: 'qidi-560-m7-rtf-with-6-axis-gyro-stabilizer-for-beginners-white' })
+  offer(d1, 123, 'QIDI 560 M7 RTF', { source: 'shopa' })
+  offer(d1, 123, 'QIDI 560 M7 RTF gyro', { source: 'shopb' })
+  addMaster(d1, { id: 17, brand: 'QIDI', name: '560 M7 Gyro', slug: 'qidi-560-m7' })
+  offer(d1, 17, 'QIDI 560 M7 gyro RTF', { source: 'shopc', inStock: 0 })
+  const env = { CATALOG_DB: d1 }
+  const r = await mergeMasters(env, 123, 17, 'admin', 'test')
+  assert.equal(r.slug, 'qidi-560-m7')
+  assert.equal(m(d1, 123).slug, 'qidi-560-m7')
+  assert.deepEqual(aliases(d1), { 'qidi-560-m7-rtf-with-6-axis-gyro-stabilizer-for-beginners-white': 123 }, 'the old long address redirects')
+  // a directive states its own slug: the rule is off for directives
+  const u = await unmergeMasters(env, r.undoId, 'admin')
+  assert.equal(u.ok, true, u.error)
+  assert.equal(m(d1, 123).slug, 'qidi-560-m7-rtf-with-6-axis-gyro-stabilizer-for-beginners-white')
+  assert.equal(m(d1, 17).slug, 'qidi-560-m7')
+  assert.deepEqual(aliases(d1), {})
+})
+
+test('admin: Undo on an automatic merge unmerges it; Review shows the curator\'s matches; Catalog shows who set each field', async () => {
+  const d1 = world()
+  chupito(d1)
+  addSku(d1, { id: 90, source: 'shopb', title: 'TBS Chupito combo', desc: 'TBS Chupito, all electronics' })
+  const listing = { 'TBS Chupito combo': lOut({ brand: 'TBS', brand_quote: 'TBS Chupito', model: 'Chupito', config: 'combo', confidence: 0.7 }) }
+  const env = { ADMIN_PASS: 'pw', CATALOG_DB: d1, AI: chupitoBrain({ listing }) }
+  await quiet(() => runToEnd(env))
+  const a = d1.one(`SELECT id FROM curator_action WHERE kind='merge' AND other_id=344`)
+  const r = await admin(env, 'curator-revert', { actionId: a.id })
+  assert.equal(r.status, 200, r.body.error)
+  assert.ok(m(d1, 344), '#344 is back')
+  assert.equal(d1.one(`SELECT status FROM curator_action WHERE id=?`, a.id).status, 'undone')
+  assert.equal(d1.one(`SELECT reason FROM merge_candidate WHERE a_id=43 AND b_id=344`).reason, 'owner: unmerged')
+  // Review: the listing the curator was not sure about carries its reading
+  const rv = await admin(env, 'review?status=new&stock=all')
+  const k = rv.body.skus.find((x) => x.id === 90)
+  assert.ok(k.ai, 'the curator\'s note')
+  assert.match(k.ai.why, /not sure it is a plane/)
+  // Catalog: provenance badges
+  d1.run(`INSERT INTO field_src (entity, entity_id, field, src, confidence, at) VALUES ('master', 43, 'name', 'owner', NULL, 1)`)
+  const ct = await admin(env, 'catalog?q=Chupito')
+  const row = ct.body.masters.find((x) => x.id === 43)
+  assert.equal(row.field_src.name.src, 'owner')
+})
+
+test('report suggestions: a clean address for a seller-style slug, and the owner\'s name an old automatic merge carried away', async () => {
+  const d1 = world()
+  addMaster(d1, { id: 120, brand: 'Volantex', name: 'RC MUSTANG P-51D', slug: 'volantex-rc-mustang-p-51d', specs: { spanMM: 750 } })
+  offer(d1, 120, 'Volantex RC Mustang P-51D 750mm RTF')
+  addMaster(d1, { id: 70, brand: 'X-UAV', name: 'Talon GT', slug: 'x-uav-talon-gt-rebel-pnp-kit-with-motor-esc-and-servos-grey-camo' })
+  offer(d1, 70, 'X-UAV Talon GT Rebel', { source: 'shopb' })
+  d1.run(`INSERT INTO audit (at, actor, action, entity, entity_id, detail) VALUES
+    (1790650000000, 'owner (seo-2026-09 names)', 'master-update', 'master_model', '141', '{"brand":"Volantex","name":"P-51D Mustang 750mm (768-1)"}'),
+    (1790660000000, 'auto', 'merge-master', 'master_model', '141', '{"into":120,"reason":"obvious duplicate","slug":"volantex-p-51d-mustang-750mm"}')`)
+  const env = { CATALOG_DB: d1, AI: brain() }
+  await quiet(() => runToEnd(env, { mode: 'dry' }))
+  const slug = d1.one(`SELECT * FROM curator_action WHERE entity_id=70 AND json_extract(evidence,'$.issue')='slug-suggestion'`)
+  assert.equal(JSON.parse(slug.after).value, 'x-uav-talon-gt')
+  const name = d1.one(`SELECT * FROM curator_action WHERE entity_id=120 AND json_extract(evidence,'$.issue')='name-suggestion' AND json_extract(after,'$.value')='P-51D Mustang 750mm (768-1)'`)
+  assert.ok(name, 'restore your name on #120?')
+  assert.match(JSON.parse(name.evidence).why, /#141/)
+  assert.equal(m(d1, 70).slug, 'x-uav-talon-gt-rebel-pnp-kit-with-motor-esc-and-servos-grey-camo', 'a suggestion changes nothing')
 })

@@ -112,7 +112,7 @@ function curatorAi({ master = MASTER_ANSWERS, listing = LISTING_ANSWERS, onMaste
       const title = u.slice(7).split('\n')[0]
       return openai(listing[title] ?? lOut({ kind: 'other', confidence: 0.5 }))
     }
-    const input = JSON.parse(u)
+    const input = JSON.parse(u.slice(0, u.lastIndexOf('}') + 1)) // pair-v2 closes with a rule line
     if (onMaster) { const r = onMaster(input); if (r !== undefined) return r }
     return openai(master[input.name] ?? mOut({ confidence: { brand: 0.2, model: 0.2, span: 0.2, roles: 0.2 } }))
   }

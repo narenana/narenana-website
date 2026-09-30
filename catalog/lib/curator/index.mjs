@@ -47,6 +47,7 @@ import { directivesPhase } from './directives.mjs'
 import { embedPhase } from './embed.mjs'
 import { candidatesPhase, judgePhase, mergePhase } from './dedup.mjs'
 import { planSliceStatements } from './apply.mjs'
+import { suggestPhase } from './suggest.mjs'
 import { insertActions, upsertFieldSrc, ACTIONS_PER_STMT, FIELD_SRC_PER_STMT } from './store.mjs'
 
 export const PHASES = ['probe', 'directives', 'triage', 'fill', 'embed', 'candidates', 'judge', 'merge', 'names', 'roles', 'report']
@@ -154,6 +155,8 @@ export const OPEN_QUESTIONS = `SELECT COUNT(*) AS n FROM curator_action a WHERE 
   AND (a.entity<>'sku' OR EXISTS (SELECT 1 FROM sku k WHERE k.id=a.entity_id AND k.review_status='new'))`
 
 async function reportPhase(ctx) {
+  if (!ctx.room(8)) return 'more'
+  await suggestPhase(ctx) // slug suggestions, names an old merge carried away (suggest.mjs)
   const rows = (await ctx.env.CATALOG_DB.prepare(`SELECT kind, entity, status, (other_id IS NOT NULL) AS pair, COUNT(*) AS n FROM curator_action WHERE run_id=? GROUP BY kind, entity, status, pair`).bind(ctx.run.id).all()).results ?? []
   const tally = {}
   const add = (kind, entity, status, pair, n) => { const k = `${kind}:${entity}:${status}:${pair ? 1 : 0}`; tally[k] = (tally[k] ?? 0) + n }

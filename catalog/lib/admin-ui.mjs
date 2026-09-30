@@ -288,7 +288,7 @@ function renderCatalog(){
         +'<div class="ct-f"><label>Page address (slug)'+src(m,'slug')+'</label><input class="inline" data-m="'+m.id+'" data-f="slug" value="'+esc(m.slug)+'" title="Renaming keeps the old address working: it redirects here."/></div>'
         +'<div class="ct-f"><label>Wingspan mm'+src(m,'specs.spanMM')+'</label><input class="inline" data-m="'+m.id+'" data-f="spec:spanMM" value="'+esc(sp.spanMM??'')+'"/></div>'
         +'<div class="ct-f wide"><label>One-line blurb (shows on the product page)'+src(m,'blurb')+'</label><input class="inline" data-m="'+m.id+'" data-f="blurb" value="'+esc(m.blurb||'')+'" placeholder="e.g. Stable 1400mm high-wing trainer with flaps"/></div>'
-        +(m.role_tags?'<div class="ct-f wide"><label>Role tags'+src(m,'role_tags')+'</label><span class="meta">'+esc((()=>{try{return JSON.parse(m.role_tags).join(' · ')}catch(e){return ''}})())+' <span class="tag">'+esc(m.role_source||'')+'</span></span></div>':'')
+        +'<div class="ct-f wide"><label>Role tags, most defining first (comma separated; yours are never changed by automation)'+src(m,'role_tags')+(m.role_source?' <span class="tag">'+esc(m.role_source)+'</span>':'')+'</label><input class="inline" data-m="'+m.id+'" data-f="role_tags" value="'+esc((()=>{try{return JSON.parse(m.role_tags||'[]').join(', ')}catch(e){return ''}})())+'" placeholder="Trainer, Sport / Park Flyer, Aerobatic / 3D, Warbird, Jet / EDF, Glider / Sailplane, FPV / Flying Wing, Scale Civilian, Airliner"/></div>'
       +'</div></div>'
       +'<div class="ct-acts">'
         +(m.status==='ready'
@@ -311,6 +311,7 @@ function renderCatalog(){
   document.querySelectorAll('input[data-m]').forEach((i)=>i.onchange=async()=>{
     const id=+i.dataset.m,f=i.dataset.f,body={id};
     if(f.startsWith('spec:')){const row=data.masters.find((x)=>x.id===id);let sp={};try{sp=JSON.parse(row.specs||'{}')}catch(e){}sp[f.slice(5)]=i.value.trim();row.specs=JSON.stringify(sp);body.specs=row.specs}
+    else if(f==='role_tags')body.role_tags=i.value.split(',').map((x)=>x.trim()).filter(Boolean);
     else body[f]=i.value;
     // Never lose an edit silently: flash saved/failed on the input itself.
     try{await api('master',body);$('#save-status').textContent='Saved '+(i.getAttribute('aria-label')||i.labels?.[0]?.textContent||f)+'.';i.style.outline='2px solid #3fb950';setTimeout(()=>{i.style.outline=''},900);if(f==='slug')load()}
@@ -864,7 +865,9 @@ function renderCurator(){
     if(!rows.length)return '';
     return '<p class="cu-h">'+esc(title)+' ('+rows.length+')'+(link?' · <a href="/admin?tab='+link+'" data-cugo="'+link+'">open '+(link==='dupes'?'Duplicates':'Review')+'</a>':'')+'</p>'
       +rows.slice(0,60).map((a)=>{const ev=a.evidence||{};
-        const acts=ev.issue==='merge-review'?'<button class="ok" data-cumerge="'+a.id+'" data-keep="'+(ev.keep_id||a.entity_id)+'" data-drop="'+((ev.keep_id||a.entity_id)===a.entity_id?a.other_id:a.entity_id)+'">Same: merge</button><button class="no" data-cureject="'+a.id+'" data-a="'+a.entity_id+'" data-b="'+a.other_id+'">Different</button>':'';
+        const f=(a.after||{}).field;
+        const one=a.entity==='master'&&['slug-suggestion','name-suggestion'].includes(ev.issue)&&typeof (a.after||{}).value==='string'?'<button class="ok" data-cuapply="'+a.id+'" data-id="'+a.entity_id+'" data-f="'+esc(f)+'" data-v="'+esc(a.after.value)+'" title="Make this change now; it is locked as yours">Apply</button>':'';
+        const acts=ev.issue==='merge-review'?'<button class="ok" data-cumerge="'+a.id+'" data-keep="'+(ev.keep_id||a.entity_id)+'" data-drop="'+((ev.keep_id||a.entity_id)===a.entity_id?a.other_id:a.entity_id)+'">Same: merge</button><button class="no" data-cureject="'+a.id+'" data-a="'+a.entity_id+'" data-b="'+a.other_id+'">Different</button>':one;
         return '<div class="cu-row"><div>'+cuAsk(a)+'</div><span class="cu-acts">'+acts+'<button data-cudismiss="'+a.id+'" title="Close this without acting; it is not raised again for the same input">Dismiss</button></span></div>'}).join('')
       +(rows.length>60?'<p class="meta">…and '+(rows.length-60)+' more</p>':'');
   }).join('');
@@ -909,6 +912,7 @@ function renderCurator(){
   document.querySelectorAll('button[data-curevert]').forEach((b)=>b.onclick=async()=>{if(!confirm('Undo this change?'))return;b.disabled=true;try{say(await api('curator-revert',{actionId:+b.dataset.curevert}));load()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('button[data-cudismiss]').forEach((b)=>b.onclick=async()=>{b.disabled=true;try{await api('curator-dismiss',{actionId:+b.dataset.cudismiss});b.closest('.cu-row').remove()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('button[data-cumerge]').forEach((b)=>b.onclick=async()=>{if(!confirm('Merge these into one page? The absorbed page 301s to the one kept; you can undo it.'))return;b.disabled=true;try{await api('merge',{aId:+b.dataset.keep,bId:+b.dataset.drop});load()}catch(e){alert(e.message);b.disabled=false}});
+  document.querySelectorAll('button[data-cuapply]').forEach((b)=>b.onclick=async()=>{const body={id:+b.dataset.id};body[b.dataset.f]=b.dataset.v;b.disabled=true;try{await api('master',body);await api('curator-dismiss',{actionId:+b.dataset.cuapply});b.closest('.cu-row').remove()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('button[data-cureject]').forEach((b)=>b.onclick=async()=>{b.disabled=true;try{await api('reject-merge',{aId:+b.dataset.a,bId:+b.dataset.b});load()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('button[data-unmerge]').forEach((b)=>b.onclick=async()=>{if(!confirm('Undo this merge? The absorbed page comes back with its listings and address, and the pair is marked as not duplicates.'))return;b.disabled=true;try{say(await api('unmerge',{undoId:+b.dataset.unmerge}));load()}catch(e){alert(e.message);b.disabled=false}});
   document.querySelectorAll('a[data-cugo]').forEach((x)=>x.onclick=(e)=>{e.preventDefault();tab=x.dataset.cugo;F.page=1;markTab();load()});

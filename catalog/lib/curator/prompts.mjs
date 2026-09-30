@@ -98,34 +98,53 @@ export const MASTER_TASK = {
   user: (i) => JSON.stringify(i),
 }
 
-// --------------------------------------------------------------- pair-v1
+// --------------------------------------------------------------- pair-v2
 // Two entries: master vs master, or a listing vs a master.
+// v2 (2026-09-30): the v1 wording plus three rules, and the facts before the
+// verdict in the schema. On real calls llama-3.3 answered "unsure" (0.5) for
+// TBS Chupito vs "Chupito Set" while itself reporting config_or_colour_only:
+// true, same_manufacturer: yes and only configuration differences: the one
+// real gap was same_size "unknown" (the set's listing states no wingspan).
+// v2 says a detail only one side states is not a difference, that an unknown
+// size alone is no reason for "unsure" (G3 has already checked that nothing
+// contradicts the known size), and that the verdict follows from the
+// differences found. llama followed the size rule only when it also closed
+// the user message, so it does both. Real results (5 pairs): Chupito same /
+// same; Sky Surfer X8 vs V3 different / unsure; Extra 300L same / same;
+// Premiere electric vs nitro different / different.
 const PAIR_SYSTEM = [
   'You decide whether two entries in a catalog of fixed-wing RC aircraft are the same model: the same airframe from the same manufacturer. Use only this text and what you reliably know about these models.',
   'These do NOT make a different model: configuration (kit, ARF, PNP, BNF, RTF, combo, "set", "crash a lot" pack, with or without electronics), colour, livery or paint scheme, bundled radio or electronics, pack size, and how shops word their titles.',
   'These DO make a different model: a different wingspan or size class (40in vs 37in), a different version or mark (V2 vs V3, X8 vs V3, Mk I vs Mk II) unless the listings show they are one airframe, a different manufacturer, glow or gas vs electric.',
+  'A detail that only one side states (a wingspan, a configuration, a pack) is not a difference. same_size is "unknown" when one side states no wingspan; that alone is never a reason to answer "unsure".',
   'Answer "unsure" when the text cannot settle it. Do not answer "same" just because the names are similar.',
-  'Return verdict (same/different/unsure), confidence 0–1, same_manufacturer and same_size (yes/no/unknown), config_or_colour_only (true if the only differences are of the "do NOT" kind), differences (up to 4, e.g. "V3 vs X8"), evidence (up to 3 exact quotes from the titles), name (the plain shared model name if same: no brand, configuration or colour, 45 characters or fewer, words from the titles only; else "").',
+  'Decide the verdict from the differences you find: when the manufacturer and the airframe agree and every difference is of the "do NOT" kind, the verdict is "same" and config_or_colour_only is true. Answer "unsure" only when something of the "DO" kind cannot be settled.',
+  'Return, in this order: same_manufacturer and same_size (yes/no/unknown), differences (up to 4, e.g. "V3 vs X8"), config_or_colour_only (true if the only differences are of the "do NOT" kind), evidence (up to 3 exact quotes from the titles), then verdict (same/different/unsure), confidence 0–1 in that verdict, and name (the plain shared model name if same: no brand, configuration or colour, 45 characters or fewer, words from the titles only; else "").',
 ].join('\n')
 
 const yesNo = { enum: ['yes', 'no', 'unknown'] }
+const PAIR_CLOSING = 'same_size is "unknown" when one side states no wingspan; that alone is never a reason to answer "unsure". If the manufacturer and the model name agree and every difference is configuration, colour or pack, answer "same".'
 export const PAIR_TASK = {
   task: 'pair',
-  v: 'pair-v1',
+  v: 'pair-v2',
   maxOut: 400,
   system: PAIR_SYSTEM,
+  // The facts first, the verdict last: a model writes the fields in schema
+  // order, so it lists the differences before it commits to a verdict.
   schema: strict({
-    verdict: { enum: ['same', 'different', 'unsure'] },
-    confidence: unit,
     same_manufacturer: yesNo,
     same_size: yesNo,
-    config_or_colour_only: { type: 'boolean' },
     differences: quotes(4, 60),
+    config_or_colour_only: { type: 'boolean' },
     evidence: quotes(3),
+    verdict: { enum: ['same', 'different', 'unsure'] },
+    confidence: unit,
     name: str(45),
   }),
   // input: { A: {brand,name,span_mm,power,listings:[{shop,title,config}]}, B: {…} }
-  user: (i) => JSON.stringify(i),
+  user: (i) => `${JSON.stringify(i)}
+
+${PAIR_CLOSING}`,
 }
 
 // -------------------------------------------------------------- probe-v1
