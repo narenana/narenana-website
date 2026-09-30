@@ -656,6 +656,39 @@ test('Sky Surfer directives (seeded by migration 0019): #66 and #193 into #67, #
   assert.equal(res.status, 200)
 })
 
+// Production, 2026-09-30: at Workers Paid scale all four directives ran in one
+// tick and the rename failed ("#66 uses the address x-uav-sky-surfer-x8")
+// because #66's merge is only written at the end of that tick.
+test('at Paid scale all Sky Surfer directives run in one tick: the rename takes the address its earlier merge freed', async () => {
+  const d1 = world({ directives: true })
+  skySurfer(d1)
+  d1.run(`UPDATE setting SET v='10' WHERE k='curator_scale'`)
+  const env = { CATALOG_DB: d1, AI: brain() }
+  await quiet(() => runToEnd(env))
+  assert.deepEqual(d1.sql(`SELECT status FROM curator_directive ORDER BY id`).map((r) => r.status), ['applied', 'applied', 'applied', 'applied'])
+  assert.equal(m(d1, 67).slug, 'x-uav-sky-surfer-x8')
+  assert.equal(m(d1, 67).name, 'Sky Surfer X8 1400mm')
+  const al = aliases(d1)
+  assert.equal(al['x-uav-sky-surfer-x8'], undefined, "the live address is no alias")
+  assert.equal(al['x-uav-sky-surfer-v3'], 67)
+})
+
+test('a decision queued after the directives phase is applied on the next live tick', async () => {
+  const d1 = world({ directives: false })
+  skySurfer(d1)
+  const env = { CATALOG_DB: d1, AI: brain() }
+  const tick = (i) => quiet(() => curatorSlice(env, 'manual', { explicit: true, mode: 'live', now: DAY0 + i * 60e3 }))
+  await tick(0)
+  await tick(1)
+  const phase = JSON.parse(d1.one(`SELECT cursor FROM curator_run`).cursor).phase
+  assert.ok(!['probe', 'directives'].includes(phase), `the run is past its directives phase (${phase})`)
+  d1.run(`INSERT INTO curator_directive (kind, payload, status, approved_by, approved_at, source) VALUES ('rename', ?, 'approved', 'owner', ?, 'test')`,
+    JSON.stringify({ id: 68, name: 'SkySurfer 1400mm', expect: { slug: 'mapbird-skysurfer' } }), DAY0)
+  await tick(2)
+  assert.equal(d1.one(`SELECT status FROM curator_directive WHERE source='test'`).status, 'applied')
+  assert.equal(m(d1, 68).name, 'SkySurfer 1400mm')
+})
+
 test('a directive whose expectations do not match fails with the reason, and nothing changes', async () => {
   const d1 = world({ directives: true })
   skySurfer(d1)

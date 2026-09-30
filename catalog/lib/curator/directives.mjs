@@ -44,6 +44,14 @@ export async function directivesPhase(ctx) {
   return 'done'
 }
 
+// Owner decisions queued (or re-queued) after this run's directives phase:
+// a live run applies them at the start of its next tick, not a day later.
+export async function lateDirectives(ctx) {
+  if (!ctx.live) return
+  const rows = (await ctx.env.CATALOG_DB.prepare(`SELECT id FROM curator_directive WHERE status='approved' ORDER BY id LIMIT 5`).all()).results ?? []
+  for (const { id } of rows) if ((await ctx.item(`directive:${id}`, () => runDirective(ctx, id))) === 'stop') return
+}
+
 // Plan (dry) or apply (live) one directive. Also used by "Apply this plan"
 // through applyDirective().
 async function runDirective(ctx, id) {
@@ -136,8 +144,10 @@ export async function directiveStatements(env, d, { t = Date.now(), runId = null
     const others = (await env.CATALOG_DB.prepare(
       `SELECT id, slug, name FROM master_model WHERE category_id=? AND id<>? AND (slug=? OR (brand_norm=? AND name_norm=?))`,
     ).bind(m.category_id, m.id, slug ?? m.slug, bn, nn).all()).results ?? []
-    // a page this dry run merges away is not in the way: its slug becomes an alias
-    const inWay = others.filter((o) => live || !absorbed.includes(o.id))
+    // A page this run merges away (dry: planned; live: written at the end of
+    // this tick, in order, before the rename) is not in the way: its slug
+    // becomes an alias, which the rename then takes over.
+    const inWay = others.filter((o) => !absorbed.includes(o.id))
     if (inWay.length) {
       const o = inWay[0]
       return { entityId: m.id, error: o.slug === slug ? `#${o.id} "${o.name}" uses the address ${slug}` : `#${o.id} "${o.name}" already has this brand and name` }

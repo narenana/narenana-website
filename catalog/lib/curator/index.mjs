@@ -43,7 +43,7 @@ import { claimLease } from '../db.mjs'
 import { PROBE_TASK } from './prompts.mjs'
 import { triagePhase } from './triage.mjs'
 import { fillPhase, namesPhase, rolesPhase } from './fill.mjs'
-import { directivesPhase } from './directives.mjs'
+import { directivesPhase, lateDirectives } from './directives.mjs'
 import { embedPhase } from './embed.mjs'
 import { candidatesPhase, judgePhase, mergePhase } from './dedup.mjs'
 import { planSliceStatements } from './apply.mjs'
@@ -404,6 +404,11 @@ async function tick(rawEnv, { t, day, runId, state, settings, opts }) {
       cursor.idx = (cursor.idx ?? 0) + 1
       ctx.error({ phase: cursor.phase, item: null, kind: 'poison', msg: `skipped ${cursor.was.phase} item ${cursor.was.idx}: 3 ticks in a row died on it` })
     }
+  }
+
+  // Decisions queued after this run's directives phase go first.
+  if (PHASES.indexOf(cursor.phase) > PHASES.indexOf('directives')) {
+    try { await lateDirectives(ctx) } catch (e) { if (!(e instanceof BudgetExhausted)) ctx.error({ phase: 'directives', item: null, kind: 'exception', msg: String(e?.message ?? e).slice(0, 300) }) }
   }
 
   // Work through the phases until the tick's budget or time runs out.
