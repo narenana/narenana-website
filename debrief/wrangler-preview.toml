@@ -1,0 +1,29 @@
+# PREVIEW worker for the Flight Debrief narration API (D2).
+# Deploy: npx wrangler deploy -c debrief/wrangler-preview.toml
+name = "narenana-debrief-preview"
+main = "preview-entry.mjs"
+compatibility_date = "2024-12-01"
+
+[ai]
+binding = "AI"
+remote = true
+
+[[kv_namespaces]]
+binding = "DEBRIEF_KV"
+id = "a92af1ceb84643a1a59793cf204b7866"
+
+[[durable_objects.bindings]]
+name = "DEBRIEF_LIMITER"
+class_name = "DebriefLimiter"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["DebriefLimiter"]
+
+[vars]
+DEBRIEF_RATE_LIMIT = "100"
+# Cloudflare's universal always-pass Turnstile TEST keys — the widget
+# flow is real but frictionless on preview. Swap for real keys (or
+# leave unset to skip verification) when this merges to production.
+TURNSTILE_SITE_KEY = "1x00000000000000000000AA"
+TURNSTILE_SECRET = "1x0000000000000000000000000000000AA"
