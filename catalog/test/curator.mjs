@@ -87,6 +87,9 @@ function catalog() {
   addSku(d1, { id: 21, source: 'shopb', title: 'Dualsky XM2830 motor 1100kv', desc: 'Brushless outrunner motor for 3D planes', guess: { brand: '', name: 'Dualsky XM2830 motor 1100kv', spanMM: null, config: 'kit', kind: null, via: 'none', at: 1 } })
   // an approved blurb and offer config that must never change
   d1.run(`UPDATE master_model SET blurb='Owner blurb' WHERE id=120`)
+  // the category's brand list (the owner's vocabulary): X-UAV is a known
+  // brand, so #600's quoted X-UAV may be filled
+  d1.run(`UPDATE category SET triage=json_set(triage,'$.brands',json('["X-UAV","MAPBIRD","FMS"]')) WHERE id='wings'`)
   return d1
 }
 
@@ -442,6 +445,42 @@ test('owner locks: fields the owner set are never filled or renamed', async () =
   assert.equal(JSON.parse(master(d1, 600).specs).spanMM, undefined, 'a directive-locked span stays')
   assert.equal(master(d1, 600).power, 'electric', 'unlocked fields still fill')
   assert.equal(d1.one(`SELECT src FROM field_src WHERE entity_id=120 AND field='name'`).src, 'owner')
+})
+
+test('brands: a quoted brand no page uses is a suggestion; an owner-approved brand is never respelled on its own', async () => {
+  const d1 = catalog()
+  // the dry run's "Sukhoi": quoted from the listing, but the full-size maker
+  addMaster(d1, { id: 610, brand: '', name: 'Su-27 Scale Jet', slug: 'su-27-scale-jet', specs: { spanMM: 900 }, roleTags: ['Jet / EDF'], roleSource: 'reviewed' })
+  addOffer(d1, addSku(d1, { id: 30, title: 'Sukhoi Su-27 Scale Jet EPO 900mm' }), 610, 'pnp')
+  // #601 "Mapbird" was accepted at approval: the majority spelling is only suggested
+  d1.run(`INSERT INTO field_src (entity, entity_id, field, src, at) VALUES ('master', 601, 'brand', 'owner-approved', 1)`)
+  const answers = { ...MASTER_ANSWERS, 'Su-27 Scale Jet': mOut({ brand: 'Sukhoi', brand_quote: 'Sukhoi Su-27', model: 'Su-27 Scale Jet', roles: { jet: true, tags: ['Jet / EDF'] } }) }
+  const env = { CATALOG_DB: d1, AI: curatorAi({ master: answers }) }
+  await withErrors(() => runToEnd(env, { mode: 'live' }))
+  assert.equal(master(d1, 610).brand, '', 'no page uses "Sukhoi": not filled')
+  const s = d1.one(`SELECT * FROM curator_action WHERE entity_id=610 AND kind='escalate' AND json_extract(evidence,'$.issue')='brand-suggestion'`)
+  assert.ok(s, 'a brand suggestion for the owner')
+  assert.equal(JSON.parse(s.after).value, 'Sukhoi')
+  assert.equal(JSON.parse(s.evidence).quote, 'Sukhoi Su-27')
+  assert.equal(master(d1, 600).brand, 'X-UAV', 'a brand the category lists is filled')
+  assert.equal(master(d1, 601).brand, 'Mapbird', 'the approved spelling stays')
+  const sp = d1.one(`SELECT * FROM curator_action WHERE entity_id=601 AND kind='escalate' AND json_extract(evidence,'$.issue')='brand-suggestion'`)
+  assert.equal(JSON.parse(sp.after).value, 'MapBird')
+  assert.equal(d1.sql(`SELECT * FROM curator_action WHERE entity_id IN (601, 610) AND kind='fill' AND json_extract(after,'$.field')='brand'`).length, 0)
+})
+
+test('names: a page whose owner-set name an old automatic merge carried away is not renamed; the restore is suggested', async () => {
+  const d1 = catalog()
+  // 09-29: the old dedup merged the owner's cleaned #141 into #120
+  d1.run(`INSERT INTO audit (at, actor, action, entity, entity_id, detail) VALUES
+    (1, 'owner (seo-2026-09 names)', 'master-update', 'master_model', '141', '{"id":141,"name":"P-51D Mustang 750mm (768-1)"}'),
+    (2, 'auto', 'merge-master', 'master_model', '141', '{"into":120,"reason":"obvious duplicate","slug":"volantex-p-51d-768-1"}')`)
+  const env = { CATALOG_DB: d1, AI: curatorAi() }
+  await withErrors(() => runToEnd(env, { mode: 'live' }))
+  assert.equal(master(d1, 120).name, 'RC MUSTANG P-51D', 'no automatic rename competes with the restore')
+  assert.equal(d1.sql(`SELECT * FROM curator_action WHERE entity_id=120 AND kind='rename'`).length, 0)
+  const r = d1.one(`SELECT * FROM curator_action WHERE entity_id=120 AND kind='escalate' AND json_extract(evidence,'$.issue')='name-suggestion'`)
+  assert.equal(JSON.parse(r.after).value, 'P-51D Mustang 750mm (768-1)')
 })
 
 test('invalid AI output is logged and recorded as an error, and the page falls back to rules', async () => {

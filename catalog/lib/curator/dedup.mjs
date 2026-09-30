@@ -114,6 +114,12 @@ export function nameParts(name, brand = '') {
   return { core, nums }
 }
 const setEq = (a, b) => a.size === b.size && [...a].every((x) => b.has(x))
+// Words that mark a version, a mark or a size class (design § 6 G4): on one
+// side only they make a different model, even when both pages' checked model
+// names agree (the AI may drop "Mini" or "X8" from one of them). Any word with
+// a digit counts too ("v3", "x8", "mk2").
+const VERSION_WORDS = new Set(['ii', 'iii', 'iv', 'vi', 'mk', 'mkii', 'mark', 'pro', 'plus', 'evo', 'lite', 'light', 'mini', 'micro', 'nano', 'tiny', 'baby', 'xs', 'xl', 'xxl', 'ep', 'ex', 'max', 'jr', 'junior', 'twin', 'big', 'giant', 'super', 'ultra'])
+export const versionWord = (w) => /\d/.test(w) || VERSION_WORDS.has(w)
 // A number on one side only is a different model, unless it is a size the
 // pair's known wingspan already accounts for ("Ranger 600" vs "Ranger", 600 mm).
 function numConsistent(tok, spans) {
@@ -145,14 +151,20 @@ export function gates(a, b, c = {}) {
   // G4 name core, and no version or size number on one side only
   const pa = nameParts(a.name, a.brand)
   const pb = nameParts(b.name, b.brand)
+  // Both pages' checked model names agreeing may stand in for equal core
+  // words, but never for a version, mark or size on one side only: that
+  // check holds either way.
   const sameModel = c.modelA && c.modelB && normName(c.modelA) === normName(c.modelB)
   if (!sameModel) {
     if (!pa.core.size || !setEq(pa.core, pb.core)) fails.push(`G4 names differ (${[...pa.core].join(' ') || '—'} vs ${[...pb.core].join(' ') || '—'})`)
-    const spans = [a.spanMM, b.spanMM, ...(a.titleSpans ?? []), ...(b.titleSpans ?? [])].filter(Boolean)
-    const oneSided = [...[...pa.nums].filter((x) => !pb.nums.has(x)), ...[...pb.nums].filter((x) => !pa.nums.has(x))]
-    const bad = oneSided.filter((x) => !numConsistent(x, spans))
-    if (bad.length) fails.push(`G4 ${bad.join(', ')} on one side only`)
+  } else {
+    const ver = [...[...pa.core].filter((x) => !pb.core.has(x)), ...[...pb.core].filter((x) => !pa.core.has(x))].filter(versionWord)
+    if (ver.length) fails.push(`G4 ${ver.join(', ')} on one side only`)
   }
+  const spans = [a.spanMM, b.spanMM, ...(a.titleSpans ?? []), ...(b.titleSpans ?? [])].filter(Boolean)
+  const oneSided = [...[...pa.nums].filter((x) => !pb.nums.has(x)), ...[...pb.nums].filter((x) => !pa.nums.has(x))]
+  const bad = oneSided.filter((x) => !numConsistent(x, spans))
+  if (bad.length) fails.push(`G4 ${bad.join(', ')} on one side only`)
   // G5 power
   if (a.power && b.power && a.power !== b.power) fails.push(`G5 power ${a.power} vs ${b.power}`)
   // G6 what the owner locked
@@ -160,7 +172,9 @@ export function gates(a, b, c = {}) {
   const lb = c.locksB ?? new Map()
   const locked = (l, f) => ['owner', 'directive'].includes(l.get(f))
   if (locked(la, 'brand') && locked(lb, 'brand') && brandKey(a.brand) !== brandKey(b.brand)) fails.push('G6 your brands differ')
-  if (locked(la, 'name') && locked(lb, 'name') && !setEq(pa.core, pb.core)) fails.push('G6 your names differ')
+  // Two names the owner set, and set differently (say one page per paint
+  // scheme): merging would drop one of them, so the owner decides.
+  if (locked(la, 'name') && locked(lb, 'name') && normName(a.name) !== normName(b.name)) fails.push('G6 you named them differently')
   if (locked(la, 'specs.spanMM') && locked(lb, 'specs.spanMM') && a.spanMM && b.spanMM && !spanTol(a.spanMM, b.spanMM)) fails.push('G6 your wingspans differ')
   if (!c.listing && PROTECTED_ROLE_SOURCES.has(a.role_source) && PROTECTED_ROLE_SOURCES.has(b.role_source)) {
     const ta = parse(a.role_tags, []) ?? []
@@ -237,6 +251,15 @@ export const listingSide = (f) => ({
 export const mergeFingerprint = (keep, absorb, lists) => inputHash({
   keep: { brand: keep.brand, name: keep.name, spanMM: keep.spanMM ?? null, status: keep.status },
   absorb: { brand: absorb.brand, name: absorb.name, spanMM: absorb.spanMM ?? null, status: absorb.status, skus: (lists.get(absorb.id) ?? []).map((l) => l.sku_id) },
+})
+
+// One page as the judge saw it: identity, size, status and its listings. The
+// merge phase can run many ticks (hours, on a backfill) after the judge; a
+// page whose fingerprint changed in between (an owner edit, a listing added
+// or removed, a publish) is not merged on the old verdict.
+export const pageFp = (m, lists) => inputHash({
+  brand: m.brand ?? '', name: m.name ?? '', spanMM: m.spanMM ?? null, status: m.status ?? null,
+  skus: (lists.get(m.id) ?? []).map((l) => l.sku_id).sort((x, y) => x - y),
 })
 
 const pairKey = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`)
@@ -489,7 +512,8 @@ async function judgeMM(ctx, p, { meta, lists, mc, locks, seen, dirIds, keepOf })
   const keep = await keepOf(p.a, p.b)
   const doc = verdictDoc(r, fails, hash, ctx.t, { keep_id: keep, sources: p.src, cos: p.cos || null })
   if (r.obvious) {
-    ctx.cursor.obvious.push({ a: p.a, b: p.b, hash, doc })
+    const fps = { [a.id]: await pageFp(a, lists), [b.id]: await pageFp(b, lists) }
+    ctx.cursor.obvious.push({ a: p.a, b: p.b, hash, doc, fps })
     ctx.count('pairs_obvious')
     return 'next'
   }
@@ -593,7 +617,7 @@ async function buildOps(ctx) {
       if (planned >= cap) { ctx.count('merges_waiting'); continue } // G9: tomorrow
       planned++
       const o = byPair.get(pairKey(keep.id, absorb))
-      ops.push({ op: 'merge', keep: keep.id, absorb, hash: o.hash, doc: o.doc, cluster: clique })
+      ops.push({ op: 'merge', keep: keep.id, absorb, hash: o.hash, doc: o.doc, fps: o.fps ?? null, cluster: clique })
     }
     if (clique.length < comp.length) ctx.count('cluster_not_connected', comp.length - clique.length)
   }
@@ -655,6 +679,15 @@ async function doMerge(ctx, op) {
   const B = snap.b.row
   if (!['ready', 'draft'].includes(A.status) || !['ready', 'draft'].includes(B.status) || (A.status === 'draft' && B.status === 'ready')) { ctx.count('merge_status_changed'); return 'next' }
   if (snap.b.x.cands.some((c) => c.status === 'rejected' && ((c.a_id === A.id && c.b_id === B.id) || (c.a_id === B.id && c.b_id === A.id)))) return 'next'
+  // Either page changed since it was judged: no merge on the old verdict (the
+  // pair is found and judged again on its new input). The survivor of an
+  // earlier merge in this group has, by then, gained that page's listings.
+  if (op.fps) {
+    const now = new Map([[A.id, snap.a.x.offers], [B.id, snap.b.x.offers]])
+    const fb = await pageFp(eff(B, cursor.planned, { light: true }), now)
+    const fa = await pageFp(eff(A, cursor.planned, { light: true }), now)
+    if (fb !== op.fps[B.id] || (!(cursor.touched ?? []).includes(A.id) && fa !== op.fps[A.id])) { ctx.count('merge_stale'); return 'next' }
+  }
   const plan = planMerge(snap)
   const { stmts } = mergeStatements(ctx.env, snap, plan, { actor: 'curator', reason: `curator run ${ctx.run.id}: same plane`, t: ctx.t, aliases: true })
   if (ctx.live && !ctx.room(stmts.length + 1)) return 'stop' // next tick, with the whole budget

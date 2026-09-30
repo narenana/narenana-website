@@ -15,6 +15,7 @@ import { gates, nameParts, eff, rulesObvious } from '../lib/curator/dedup.mjs'
 import { revertCuratorAction } from '../lib/curator/apply.mjs'
 import { ruleAgrees } from '../lib/curator/triage.mjs'
 import { quantize, decode, cosine } from '../lib/vectors.mjs'
+import { checkName, checkBrand } from '../lib/curator/validate.mjs'
 import { dedupSlice } from '../lib/jobs.mjs'
 
 const GEMMA = DEFAULT_MODELS.primary
@@ -169,6 +170,41 @@ test('name core (G4): config, colour and brand words go; versions and one-sided 
   assert.equal(rulesObvious(P(1, 'Ranger 1220', null, { brand: 'FMS' }), P(2, 'Ranger 1220mm Premium RC Airplane', null, { brand: 'FMS' })), true)
 })
 
+test('G4: agreeing AI model names never excuse a version, mark or size on one side only', () => {
+  const P = (id, brand, name, span = null, o = {}) => eff({ id, category_id: 'wings', status: 'ready', brand, name, specs: span ? JSON.stringify({ spanMM: span }) : '{}', power: 'electric', titles: '', ...o })
+  const same = (x) => ({ modelA: x, modelB: x })
+  // the AI dropped the version word from both checked names
+  assert.match(gates(P(1, 'X-UAV', 'Mini Talon'), P(2, 'X-UAV', 'Talon', 1718), same('Talon')).join(), /G4 mini on one side only/)
+  assert.match(gates(P(1, 'X-UAV', 'Sky Surfer V3', 1400), P(2, 'X-UAV', 'Sky Surfer X8', 1400), same('Sky Surfer')).join(), /G4 v3, x8 on one side only/)
+  assert.match(gates(P(1, 'Volantex', 'Ranger Pro', 1600), P(2, 'Volantex', 'Ranger', 1600), same('Ranger')).join(), /G4 pro on one side only/)
+  assert.match(gates(P(1, 'HobbyKing', 'Bixler 2', 1500), P(2, 'HobbyKing', 'Bixler', 1500), same('Bixler')).join(), /G4 2 on one side only/)
+  assert.match(gates(P(1, 'X-UAV', 'Sky Surfer V4 1500mm'), P(2, 'X-UAV', 'Sky Surfer 1400mm'), same('Sky Surfer')).join(), /G3/)
+  // what the checked names are for: shop words that are not a version
+  assert.deepEqual(gates(P(1, 'Freewing', 'J11 Stunt Jet', 700), P(2, 'Freewing', 'J11 Fighter', 700), same('J11')), [])
+  assert.deepEqual(gates(P(1, 'Volantex', 'Ranger 600', 600), P(2, 'Volantex', 'Ranger', 600), same('Ranger')), [], 'a size the wingspan accounts for is still fine')
+})
+
+test('G6: two names the owner set differently are the owner\'s call; one owner name is not', () => {
+  const P = (id, name) => eff({ id, category_id: 'wings', status: 'ready', brand: 'TA Horizons', name, specs: JSON.stringify({ spanMM: 838 }), power: 'electric', titles: '' })
+  const owner = new Map([['name', 'owner']])
+  const a = P(460, 'Laser Z2300 33in (RT scheme)')
+  const b = P(461, 'Laser Z2300 33in (SH scheme)')
+  assert.match(gates(a, b, { locksA: owner, locksB: owner }).join(), /G6 you named them differently/)
+  assert.deepEqual(gates(a, b, { locksA: owner, locksB: new Map() }), [], 'only one side is the owner\'s name: the livery rule applies')
+  assert.deepEqual(gates(a, P(462, 'Laser Z2300 33in (RT scheme)'), { locksA: owner, locksB: owner }), [], 'the same owner name on both')
+})
+
+test('names: a size alone or an HTML character code is never a model name; a brand never carries one', () => {
+  assert.equal(checkName('510mm', 'QIDI 510mm Gyro RTF Plane').name, '')
+  assert.match(checkName('510mm', 'QIDI 510mm Gyro RTF Plane').why, /only a size/)
+  assert.equal(checkName('.46', 'Lazer .46 ARF').name, '')
+  assert.equal(checkName('Extra NG 37&quot;', 'Ta Horizons 37&quot; Extra Ng(Red) Kit').name, '')
+  assert.match(checkName('Extra NG 37&quot;', 'Ta Horizons 37&quot; Extra Ng(Red) Kit').why, /HTML/)
+  assert.equal(checkName('Trainer 60', 'Havoc Trainer 60 Nitro RC Plane').name, 'Trainer 60')
+  assert.equal(checkName('Extra NG 37in', 'Ta Horizons 37in Extra NG kit').name, 'Extra NG 37in')
+  assert.equal(checkBrand('TA &amp; Co', 'TA &amp; Co', 'TA &amp; Co Stol X'), '')
+})
+
 test('survivor: ready, live sellers, the owner\'s work, approved offers, clean name and slug, then the lower id', () => {
   const s = (o) => ({ id: 1, status: 'ready', live_sellers: 0, owner_work: 0, approved_offers: 0, name: 'Chupito', brand: 'TBS', slug: 'tbs-chupito', ...o })
   assert.equal(pickSurvivor([s({ id: 1, status: 'draft', live_sellers: 5 }), s({ id: 2 })]).id, 2, 'ready over draft')
@@ -242,6 +278,63 @@ test('Chupito dry run: nothing changes, the merges are planned; Apply this plan 
   assert.ok(m(d1, 518), 'the stale one was not')
   assert.equal(d1.one(`SELECT status FROM curator_action WHERE kind='merge' AND other_id=518 AND run_id='2026-10-01'`).status, 'skipped')
   assert.equal(aliases(d1)['tbs-chupito-set'], 43)
+})
+
+test('a live merge is skipped when a page changed between the judge and the merge phase', async () => {
+  const d1 = world()
+  chupito(d1)
+  const env = { CATALOG_DB: d1, AI: chupitoBrain() }
+  const phase = () => d1.one(`SELECT phase FROM curator_run WHERE id='2026-10-01'`)?.phase
+  const ticks = []
+  await quiet(async () => {
+    for (let i = 0; i < 90; i++) {
+      const r = await curatorSlice(env, 'manual', { explicit: true, mode: 'live', now: DAY0 + i * 60e3 })
+      ticks.push(r)
+      if (phase() === 'merge' && !ticks.edited) {
+        // judged obvious; now the owner fixes #518's wingspan before any merge lands
+        assert.equal(d1.sql(`SELECT * FROM merge_undo`).length, 0, 'no merge yet')
+        d1.run(`UPDATE master_model SET specs=json_set(specs,'$.spanMM',810) WHERE id=518`)
+        ticks.edited = true
+      }
+      if (!r || r.phase === 'done') break
+    }
+  })
+  assert.ok(ticks.edited, 'the run reached the merge phase')
+  assert.equal(m(d1, 344), null, 'the unchanged pair merged')
+  assert.ok(m(d1, 518), 'the changed page was not merged on the old verdict')
+  assert.equal(d1.sql(`SELECT * FROM curator_action WHERE kind='merge' AND other_id=518`).length, 0)
+  assert.ok(JSON.parse(d1.one(`SELECT counts FROM curator_run WHERE id='2026-10-01'`).counts).merge_stale >= 1)
+})
+
+test('undo round trip with manufacturer profiles and the slug rule: every table as before', async () => {
+  const d1 = world()
+  addMaster(d1, { id: 20, brand: 'QIDI', name: '560 M7', slug: 'qidi-560-m7-rtf-with-gyro-stabilizer-for-beginners-white-60c', specs: { spanMM: 560 } })
+  addMaster(d1, { id: 21, brand: 'QIDI', name: '560 M7 Gyro', slug: 'qidi-560-m7', specs: { spanMM: 560 } })
+  offer(d1, 20, 'QIDI 560 M7 RTF with gyro', { config: 'rtf' })
+  offer(d1, 21, 'QIDI-560 M7 560mm', { source: 'shopb', config: 'rtf' })
+  d1.run(`INSERT OR IGNORE INTO manufacturer (id, brand) VALUES (9001, 'QIDI test')`)
+  d1.run(`INSERT INTO mfr_product (id, manufacturer_id, ext_id, title) VALUES (9091, 9001, 'm7', 'M7'), (9092, 9001, 'm7b', 'M7 B')`)
+  d1.run(`INSERT INTO mfr_profile (master_model_id, source_mfr_product_id, overrides_json, created_at, updated_at, updated_by) VALUES
+    (20, 9091, '{"wingspan":"560 mm"}', 1, 2, 'admin'), (21, 9091, '{"weight":"80 g","wingspan":null}', 3, 4, 'admin'), (21, 9092, '{"motor":"8520"}', 5, 6, 'admin')`)
+  d1.run(`INSERT INTO slug_alias (category_id, old_slug, master_model_id, created_at) VALUES ('wings','qidi-m7-old',21,1)`)
+  const TBL = [...TABLES, 'mfr_profile']
+  const snap = () => Object.fromEntries(TBL.map((t) => [t, d1.sql(`SELECT * FROM ${t} ORDER BY rowid`).map((r) => JSON.stringify(r)).sort()]))
+  const before = snap()
+  const env = { CATALOG_DB: d1 }
+  const r = await mergeMasters(env, 20, 21, 'curator', 'test')
+  assert.equal(m(d1, 20).slug, 'qidi-560-m7', 'the survivor takes the clean address')
+  assert.equal(aliases(d1)['qidi-560-m7-rtf-with-gyro-stabilizer-for-beginners-white-60c'], 20)
+  assert.equal(aliases(d1)['qidi-m7-old'], 20)
+  assert.deepEqual(JSON.parse(d1.one(`SELECT overrides_json FROM mfr_profile WHERE master_model_id=20 AND source_mfr_product_id=9091`).overrides_json), { wingspan: '560 mm', weight: '80 g' })
+  assert.ok(d1.one(`SELECT 1 AS x FROM mfr_profile WHERE master_model_id=20 AND source_mfr_product_id=9092`))
+  const u = await unmergeMasters(env, r.undoId, 'admin')
+  assert.equal(u.ok, true, u.error)
+  const after = snap()
+  for (const t of TBL) {
+    if (t === 'merge_candidate') continue
+    assert.deepEqual(after[t], before[t], `${t} is as before`)
+  }
+  assert.deepEqual(d1.sql(`SELECT a_id, b_id, status, reason FROM merge_candidate`).map((x) => ({ ...x })), [{ a_id: 20, b_id: 21, status: 'rejected', reason: 'owner: unmerged' }])
 })
 
 // ================================================================ gates (6)

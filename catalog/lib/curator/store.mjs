@@ -24,14 +24,17 @@ export const hasCuratorTables = (env) => env.CATALOG_DB.prepare(`SELECT 1 AS ok 
 
 // ---------------------------------------------------------------- locks
 // Map id → Map(field → src) of the LOCKED fields (owner, directive) of one
-// entity kind: the only provenance automation has to obey. (Loading just
-// these keeps the queue build small: ~80 rows, not the ~1,600 owner-approved.)
+// entity kind, plus the brands accepted at approval ('owner-approved', not a
+// lock: isLocked() is false for it, but the fill phase respells no such brand
+// on its own). (Loading just these keeps the queue build small: ~500 rows,
+// not the ~1,600 owner-approved.)
+const LOCK_ROWS = `(src IN ('owner','directive') OR (field='brand' AND src='owner-approved'))`
 export async function loadLocks(env, entity, ids = null) {
   const rows = ids
     ? ids.length
-      ? (await env.CATALOG_DB.prepare(`SELECT entity_id, field, src FROM field_src WHERE entity=? AND src IN ('owner','directive') AND entity_id IN (${ids.map(() => '?').join(',')})`).bind(entity, ...ids).all()).results
+      ? (await env.CATALOG_DB.prepare(`SELECT entity_id, field, src FROM field_src WHERE entity=? AND ${LOCK_ROWS} AND entity_id IN (${ids.map(() => '?').join(',')})`).bind(entity, ...ids).all()).results
       : []
-    : (await env.CATALOG_DB.prepare(`SELECT entity_id, field, src FROM field_src WHERE entity=? AND src IN ('owner','directive')`).bind(entity).all()).results
+    : (await env.CATALOG_DB.prepare(`SELECT entity_id, field, src FROM field_src WHERE entity=? AND ${LOCK_ROWS}`).bind(entity).all()).results
   const out = new Map()
   for (const r of rows ?? []) {
     if (!out.has(r.entity_id)) out.set(r.entity_id, new Map())

@@ -22,6 +22,29 @@ const parse = (s, d) => { try { return s ? JSON.parse(s) : d } catch { return d 
 const MAX_PER_RUN = 20 // slug suggestions per run: low priority, a few at a time
 const HUMAN = ['admin', 'owner (seo-2026-09 names)', 'owner (seo-2026-09 aliases)']
 
+// Survivors of an old automatic merge (dedup, before the curator) that
+// absorbed a page whose name the owner had set, and that still carry another
+// name: [{m, name, absorbed, at}]. One statement. The names phase leaves these
+// pages alone, so its own cleanup never competes with restoring the owner's
+// name (#120 "RC MUSTANG P-51D" vs the owner's "P-51D Mustang 750mm (768-1)").
+export async function ownerNameRestores(env, masters) {
+  const lost = (await env.CATALOG_DB.prepare(
+    `SELECT a.entity_id AS absorbed, CASE WHEN json_valid(a.detail) THEN json_extract(a.detail,'$.into') END AS survivor, a.at,
+       (SELECT u.detail FROM audit u WHERE u.action='master-update' AND u.entity_id=a.entity_id AND u.actor IN (${HUMAN.map(() => '?').join(',')})
+          AND u.detail LIKE '%"name":%' ORDER BY u.id DESC LIMIT 1) AS edit
+     FROM audit a WHERE a.action='merge-master' AND a.actor='auto' ORDER BY a.id DESC LIMIT 50`,
+  ).bind(...HUMAN).all()).results ?? []
+  const byId = new Map(masters.map((m) => [m.id, m]))
+  const restore = []
+  for (const r of lost) {
+    const name = parse(r.edit, null)?.name
+    const s = byId.get(Number(r.survivor))
+    if (!s || typeof name !== 'string' || !name.trim() || name === s.name) continue
+    restore.push({ m: s, name: name.trim(), absorbed: r.absorbed, at: r.at })
+  }
+  return restore
+}
+
 export async function suggestPhase(ctx) {
   if (ctx.cursor.scope || ctx.cursor.suggested) return
   ctx.cursor.suggested = true
@@ -43,20 +66,7 @@ export async function suggestPhase(ctx) {
     out.push({ m, to })
   }
   // restore the owner's names that an old automatic merge carried away
-  const lost = (await env.CATALOG_DB.prepare(
-    `SELECT a.entity_id AS absorbed, CASE WHEN json_valid(a.detail) THEN json_extract(a.detail,'$.into') END AS survivor, a.at,
-       (SELECT u.detail FROM audit u WHERE u.action='master-update' AND u.entity_id=a.entity_id AND u.actor IN (${HUMAN.map(() => '?').join(',')})
-          AND u.detail LIKE '%"name":%' ORDER BY u.id DESC LIMIT 1) AS edit
-     FROM audit a WHERE a.action='merge-master' AND a.actor='auto' ORDER BY a.id DESC LIMIT 50`,
-  ).bind(...HUMAN).all()).results ?? []
-  const byId = new Map(masters.map((m) => [m.id, m]))
-  const restore = []
-  for (const r of lost) {
-    const name = parse(r.edit, null)?.name
-    const s = byId.get(Number(r.survivor))
-    if (!s || typeof name !== 'string' || !name.trim() || name === s.name) continue
-    restore.push({ m: s, name: name.trim(), absorbed: r.absorbed, at: r.at })
-  }
+  const restore = await ownerNameRestores(env, masters)
   const ids = [...new Set([...out.map((x) => x.m.id), ...restore.map((x) => x.m.id)])]
   if (!ids.length) return
   const seen = await openActionKeys(env, 'master', ids)

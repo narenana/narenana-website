@@ -30,6 +30,7 @@ import { powerType, normalizeRoleTags } from '../public.mjs'
 import { inputHash } from '../ai.mjs'
 import { loadLocks, srcOf, isLocked, openActionKeys, actionKey, masterUpdate, PROTECTED_ROLE_SOURCES } from './store.mjs'
 import { normName } from '../util.mjs'
+import { ownerNameRestores } from './suggest.mjs'
 
 export const CATCH_ALL = JSON.stringify(['Sport / Park Flyer'])
 export const FILL_CONF = 0.9
@@ -46,7 +47,13 @@ export function needsOf(m, locks, spell = {}) {
   const n = {}
   const brandFree = !isLocked(locks, m.id, 'brand')
   if (brandFree && isBlankBrand(m.brand)) n.brand = true
-  else if (brandFree && spell[brandKey(m.brand)] && spell[brandKey(m.brand)] !== m.brand) n.spelling = true
+  else if (brandFree && spell[brandKey(m.brand)] && spell[brandKey(m.brand)] !== m.brand) {
+    // A brand accepted at approval is the owner's reviewed value: the curator
+    // may fill blanks, not respell it (design § 11), so the spelling becomes
+    // a suggestion. (The 2026-09-30 dry run: "SkyWing" → "SKYWING".)
+    if (srcOf(locks, m.id, 'brand') === 'owner-approved') n.spellAsk = true
+    else n.spelling = true
+  }
   if (blankSpan(m) && !isLocked(locks, m.id, 'specs.spanMM')) n.span = true
   if ((nameLint(m.name) || nameSmell(m.name, m.brand)) && !isLocked(locks, m.id, 'name')) n.name = true
   if (m.power == null) n.power = true
@@ -222,6 +229,7 @@ export async function fillPhase(ctx) {
       const locks = await loadLocks(ctx.env, 'master')
       const spell = brandSpellings(all, locks)
       ctx.cursor.spell = spell
+      ctx.cursor.knownBrands = await knownBrandKeys(ctx.env, all)
       return all.filter((m) => Object.keys(needsOf(m, locks, spell)).length).map((m) => m.id)
     },
     async perMaster(ctx, m, chunk) {
@@ -240,8 +248,10 @@ export async function fillPhase(ctx) {
     async finish(ctx, plans, chunk) {
       // brand changes that would take another page's (brand, name) key
       const wants = []
+      const known = new Set(ctx.cursor.knownBrands ?? [])
       for (const p of plans) {
-        p.brandTo = planBrand(p, ctx.cursor.spell ?? {})
+        p.brandTo = planBrand(p, ctx.cursor.spell ?? {}, known)
+        p.known = known
         if (p.brandTo) wants.push({ key: `b${p.m.id}`, id: p.m.id, category: p.m.category_id, brandNorm: normName(p.brandTo.to), nameNorm: p.m.name_norm })
       }
       const clash = await clashes(ctx, wants)
@@ -250,10 +260,26 @@ export async function fillPhase(ctx) {
   })
 }
 
+// Brand keys the catalog already knows: those of the pages (ready or draft)
+// and of the category's own brand list (category.triage.brands, the owner's
+// vocabulary). A blank brand is filled only with one of these; any other
+// brand the AI quotes becomes a suggestion. The 2026-09-30 dry run on
+// production data: the AI's quoted "brands" included the full-size maker
+// ("Sukhoi", "Honda") and model names ("Dirty Birdy", "Ultra Stick", "Fox");
+// every correct fill (FMS, TA Horizons, X-UAV) was a brand other pages use.
+export async function knownBrandKeys(env, masters) {
+  const keys = new Set()
+  for (const m of masters) if (!isBlankBrand(m.brand)) keys.add(brandKey(m.brand))
+  const cats = (await env.CATALOG_DB.prepare(`SELECT triage FROM category`).all()).results ?? []
+  for (const c of cats) for (const b of parse(c.triage, {})?.brands ?? []) if (typeof b === 'string' && !isBlankBrand(b)) keys.add(brandKey(b))
+  keys.delete('')
+  return [...keys].sort()
+}
+
 // The brand change a plan makes, or null. {to, src, confidence, why}
-function planBrand(p, spell) {
+function planBrand(p, spell, known) {
   const { m, n, c } = p
-  if (n.brand && c?.brand && c.brandConf >= FILL_CONF) return { to: c.brand, src: 'curator', confidence: c.brandConf, quote: c.brandQuote }
+  if (n.brand && c?.brand && c.brandConf >= FILL_CONF && known.has(brandKey(c.brand))) return { to: c.brand, src: 'curator', confidence: c.brandConf, quote: c.brandQuote }
   if (n.spelling) return { to: spell[brandKey(m.brand)], src: 'rules', confidence: 1, why: 'same brand, the spelling most pages use' }
   return null
 }
@@ -275,6 +301,18 @@ function writeFill(ctx, chunk, p, clashId) {
       evidence: evidenceOf(b.src === 'rules' ? null : r, { quote: b.quote ?? null, why: b.why ?? null }), confidence: b.confidence, fieldSrc: { field: 'brand', src: b.src, confidence: b.confidence } })) {
       ch.brand = { from: m.brand, to: b.to }
     }
+  }
+  // a checked brand no page uses yet: the owner's call
+  if (n.brand && !p.brandTo && c?.brand && c.brandConf >= FILL_CONF && !p.known?.has(brandKey(c.brand))) {
+    note(ctx, chunk, { ...base, kind: 'escalate', before: { field: 'brand', value: m.brand }, after: { field: 'brand', value: c.brand },
+      evidence: evidenceOf(r, { issue: 'brand-suggestion', why: 'no other page uses this brand yet (it may be the full-size maker or part of the model name)', quote: c.brandQuote }), confidence: c.brandConf })
+  }
+  // the same brand spelled another way, on a brand accepted at approval
+  if (n.spellAsk) {
+    const to = (ctx.cursor.spell ?? {})[brandKey(m.brand)]
+    if (to && to !== m.brand)
+      note(ctx, chunk, { ...base, kind: 'escalate', before: { field: 'brand', value: m.brand }, after: { field: 'brand', value: to },
+        evidence: { issue: 'brand-suggestion', why: `the same brand, spelled "${to}" on most pages`, priority: 'low' }, confidence: null })
   }
   if (c?.brand && !isBlankBrand(m.brand) && !n.brand && brandKey(c.brand) !== brandKey(m.brand) && c.brandConf >= FILL_CONF) {
     note(ctx, chunk, { ...base, kind: 'escalate', before: { field: 'brand', value: m.brand }, after: { field: 'brand', value: c.brand },
@@ -340,7 +378,9 @@ export async function namesPhase(ctx) {
     async build(ctx) {
       const all = await loadAll(ctx.env)
       const locks = await loadLocks(ctx.env, 'master')
-      return all.filter((m) => needsOf(m, locks).name).map((m) => m.id)
+      // a page waiting for the owner's own name back is the owner's call
+      const restore = new Set((await ownerNameRestores(ctx.env, all)).map((x) => x.m.id))
+      return all.filter((m) => needsOf(m, locks).name && !restore.has(m.id)).map((m) => m.id)
     },
     async perMaster(ctx, m, chunk) {
       if (!needsOf(m, chunk.locks).name) return null

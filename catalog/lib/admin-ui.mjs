@@ -866,7 +866,7 @@ function renderCurator(){
     return '<p class="cu-h">'+esc(title)+' ('+rows.length+')'+(link?' · <a href="/admin?tab='+link+'" data-cugo="'+link+'">open '+(link==='dupes'?'Duplicates':'Review')+'</a>':'')+'</p>'
       +rows.slice(0,60).map((a)=>{const ev=a.evidence||{};
         const f=(a.after||{}).field;
-        const one=a.entity==='master'&&['slug-suggestion','name-suggestion'].includes(ev.issue)&&typeof (a.after||{}).value==='string'?'<button class="ok" data-cuapply="'+a.id+'" data-id="'+a.entity_id+'" data-f="'+esc(f)+'" data-v="'+esc(a.after.value)+'" title="Make this change now; it is locked as yours">Apply</button>':'';
+        const one=a.entity==='master'&&['slug-suggestion','name-suggestion','brand-suggestion'].includes(ev.issue)&&typeof (a.after||{}).value==='string'?'<button class="ok" data-cuapply="'+a.id+'" data-id="'+a.entity_id+'" data-f="'+esc(f)+'" data-v="'+esc(a.after.value)+'" title="Make this change now; it is locked as yours">Apply</button>':'';
         const acts=ev.issue==='merge-review'?'<button class="ok" data-cumerge="'+a.id+'" data-keep="'+(ev.keep_id||a.entity_id)+'" data-drop="'+((ev.keep_id||a.entity_id)===a.entity_id?a.other_id:a.entity_id)+'">Same: merge</button><button class="no" data-cureject="'+a.id+'" data-a="'+a.entity_id+'" data-b="'+a.other_id+'">Different</button>':one;
         return '<div class="cu-row"><div>'+cuAsk(a)+'</div><span class="cu-acts">'+acts+'<button data-cudismiss="'+a.id+'" title="Close this without acting; it is not raised again for the same input">Dismiss</button></span></div>'}).join('')
       +(rows.length>60?'<p class="meta">…and '+(rows.length-60)+' more</p>':'');

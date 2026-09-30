@@ -76,10 +76,14 @@ export function isBlankBrand(brand) {
   return !raw || HOUSE_BRANDS.has(raw) || CONFIG_BRANDS.has(raw)
 }
 
+// HTML character references a seller's text carries ("37&quot;", "&#038;"):
+// never part of a brand or model name on a public page.
+export const HTML_ENTITY = /&(?:#\d+|#x[0-9a-f]+|[a-z]+);/i
+
 // A brand counts only when its quote is in the input and contains it.
 export function checkBrand(brand, quote, text) {
   const b = String(brand ?? '').trim().replace(/\s+/g, ' ')
-  if (!b || isBlankBrand(b)) return ''
+  if (!b || isBlankBrand(b) || HTML_ENTITY.test(b)) return ''
   if (!quote || !quoteIn(quote, text) || !quoteIn(b, quote)) return ''
   return b
 }
@@ -107,9 +111,13 @@ export function nameSmell(name, brand = '') {
 
 // A model name passes when every word is in the input, nameLint (45 chars, no
 // ':', not all capitals) is clean, and it does not smell of a seller title.
+// A name that is only a size or a number ("510mm", ".46", "60") names no model.
+const SIZE_ONLY = /^[\d.,]+(?:mm|cm|m|in|inch|inches|"|″|cc)?$/i
 export function checkName(model, text, brand = '') {
   const n = String(model ?? '').trim().replace(/\s+/g, ' ')
   if (!n) return { name: '', why: 'empty' }
+  if (HTML_ENTITY.test(n)) return { name: '', why: 'has an HTML character code from the seller text' }
+  if (n.split(' ').every((w) => SIZE_ONLY.test(w))) return { name: '', why: 'is only a size or a number' }
   if (!tokenSubset(n, text)) return { name: '', why: 'uses a word that is not in the listings' }
   const lint = nameLint(n)
   if (lint) return { name: '', why: lint }
