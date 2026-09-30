@@ -1,8 +1,8 @@
 // Embeddings for finding duplicate model pages (design § 6).
 //
-//   text      a master: "brand | name | span NNNmm | up to 5 distinct offer
-//             titles" (300 characters); a pending listing: "brand guess |
-//             title | span". Re-embedded only when sha256(text) changes.
+//   text      a master: "brand name NNNmm RC plane"; a pending listing: its
+//             checked brand and model the same way, else its title (see
+//             masterText). Re-embedded only when sha256(text) changes.
 //   storage   embedding.vec: the L2-normalised vector quantised to int8 with a
 //             per-row scale (max |x| / 127), as base64 TEXT (about 1.4 KB at
 //             1,024 dimensions). Base64 because D1 returns BLOBs over its JSON
@@ -15,28 +15,24 @@
 // Vectorize could replace nearest() with no change to its callers; below
 // about 10,000 pages it is not needed.
 
-export const TITLES = 5
-export const TITLE_CHARS = 300
 export const NEIGHBOUR_MIN = 0.8 // cosine for a candidate pair
 export const TOP_K = 5
 
-const spanText = (mm) => (Number(mm) > 0 ? `span ${Math.round(Number(mm))}mm` : '')
+const spanText = (mm) => (Number(mm) > 0 ? ` ${Math.round(Number(mm))}mm` : '')
 const clean = (s) => String(s ?? '').replace(/\s+/g, ' ').trim()
 
-export function masterText(m, titles = [], spanMM = null) {
-  const seen = new Set()
-  const list = []
-  for (const t of titles) {
-    const c = clean(t)
-    if (!c || seen.has(c.toLowerCase())) continue
-    seen.add(c.toLowerCase())
-    list.push(c)
-    if (list.length >= TITLES) break
-  }
-  return [clean(m.brand), clean(m.name), spanText(spanMM), list.join(' ; ').slice(0, TITLE_CHARS)].join(' | ')
-}
+// "TBS Chupito 800mm RC plane". Deliberately lean: on real bge-m3 vectors
+// (2026-09-30) the design's text with up to five offer titles scored TBS
+// Chupito vs "Chupito Set" 0.62, about the same as Chupito vs Sky Surfer X8
+// (0.60), because shop words and configurations dominate the titles. The
+// lean text put the true duplicates at 0.83–0.97 (Chupito 0.83, Sky Surfer
+// V3 vs Original 0.89, MapBird 0.87, Extra 300L 0.97) and unrelated pages at
+// 0.51–0.66. The titles still reach the pair judge.
+export const masterText = (m, spanMM = null) => clean(`${clean(m.brand)} ${clean(m.name)}${spanText(spanMM)} RC plane`)
 
-export const listingText = ({ brand, title, spanMM }) => [clean(brand), clean(title), spanText(spanMM)].join(' | ')
+// A pending listing in the same form: its checked brand and model when the
+// triage has them, else its title.
+export const listingText = ({ brand, model, title, spanMM }) => (model ? clean(`${clean(brand)} ${clean(model)}${spanText(spanMM)} RC plane`) : clean(title))
 
 // ------------------------------------------------------------ int8 + base64
 export function quantize(vec) {

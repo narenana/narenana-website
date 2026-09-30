@@ -13,23 +13,20 @@ const ROWS_PER_STMT = 14 // 7 columns → 98 bound parameters
 
 // Every item that should have a vector now: [{k: 'm:ID' | 's:ID', text}].
 export async function embedItems(env, { lst = {}, scope = null } = {}) {
-  const masters = (await env.CATALOG_DB.prepare(
-    `SELECT m.id, m.brand, m.name, m.specs, (SELECT GROUP_CONCAT(k.title, char(31)) FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=m.id) AS titles
-     FROM master_model m WHERE m.status IN ('ready','draft') ORDER BY m.id`,
-  ).all()).results ?? []
+  const masters = (await env.CATALOG_DB.prepare(`SELECT m.id, m.brand, m.name, m.specs FROM master_model m WHERE m.status IN ('ready','draft') ORDER BY m.id`).all()).results ?? []
   const skus = (await env.CATALOG_DB.prepare(
     `SELECT id, title, guess FROM sku WHERE review_status='new' AND dead=0 AND flagged IS NULL AND enriched_at IS NOT NULL ORDER BY id`,
   ).all()).results ?? []
   const out = []
   for (const m of masters) {
     if (scope && !scope.masters.includes(m.id)) continue
-    out.push({ k: `m:${m.id}`, text: masterText(m, String(m.titles ?? '').split('\u001f'), spanOf(m.specs)) })
+    out.push({ k: `m:${m.id}`, text: masterText(m, spanOf(m.specs)) })
   }
   for (const s of skus) {
     if (scope && !scope.skus.includes(s.id)) continue
     const g = parse(s.guess, {}) ?? {}
     const f = lst[s.id] ?? {}
-    out.push({ k: `s:${s.id}`, text: listingText({ brand: f.brand || g.brand || '', title: s.title ?? '', spanMM: f.spanMM ?? g.spanMM ?? null }) })
+    out.push({ k: `s:${s.id}`, text: listingText({ brand: f.brand || g.brand || '', model: f.model || '', title: s.title ?? '', spanMM: f.spanMM ?? g.spanMM ?? null }) })
   }
   return out
 }

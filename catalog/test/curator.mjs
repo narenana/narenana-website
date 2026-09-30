@@ -394,7 +394,7 @@ test('live run: fills blanks with provenance, cleans a seller name, applies the 
   assert.equal(JSON.stringify(d1.sql(`SELECT * FROM offer ORDER BY sku_id`)), offersBefore, 'offer configs and pack sizes never change')
   // #344: "Chupito" would clash with #43 → a suggestion, not a rename
   assert.equal(master(d1, 344).name, 'Chupito Set')
-  const sugg = d1.one(`SELECT * FROM curator_action WHERE entity_id=344 AND kind='escalate'`)
+  const sugg = d1.one(`SELECT * FROM curator_action WHERE entity_id=344 AND kind='escalate' AND json_extract(evidence,'$.issue')='name-suggestion'`)
   assert.equal(JSON.parse(sugg.evidence).issue, 'name-suggestion')
   assert.equal(sugg.other_id, 43)
   // #700: Cessna keeps no Trainer tag; #701 reviewed and #702 human untouched

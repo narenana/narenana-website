@@ -40,13 +40,11 @@ export const different = (confidence = 0.95, differences = ['different model']) 
 export const unsure = (confidence = 0.6) => ({ verdict: 'unsure', confidence, same_manufacturer: 'unknown', same_size: 'unknown', config_or_colour_only: false, differences: [], evidence: [], name: '' })
 
 // A bag-of-words embedding: pages that share their model words point the same way.
-const STOP = new Set(['set', 'kit', 'pnp', 'rtf', 'arf', 'combo', 'crash', 'a', 'lot', 'span', 'mm', 'rc', 'with', 'the', 'plane', 'airplane'])
+const STOP = new Set(['set', 'kit', 'pnp', 'rtf', 'arf', 'combo', 'crash', 'a', 'lot', 'span', 'mm', 'rc', 'with', 'the', 'plane', 'airplane', 'unbranded'])
 function bagEmbed(body) {
   const data = body.text.map((t) => {
     const v = Array.from({ length: 24 }, () => 0)
-    const [brand, name] = String(t).toLowerCase().split('|')
-    const bw = new Set(brand.split(/[^a-z0-9]+/))
-    const words = String(name ?? '').split(/[^a-z0-9]+/).filter((w) => w && !STOP.has(w) && !bw.has(w) && !/^\d/.test(w))
+    const words = String(t).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w && !STOP.has(w) && !/^\d/.test(w))
     for (const w of words) { let h = 7; for (const ch of w) h = (h * 31 + ch.charCodeAt(0)) >>> 0; v[h % 24] += 1 }
     if (!words.length) v[23] = 1
     return v
