@@ -277,7 +277,7 @@ function makeCtx({ env, raw, t, day, run, cursor, state, settings, meter, ai }) 
 }
 
 // ------------------------------------------------------------------ the tick
-const settingKeys = (day) => ['curator_enabled', 'curator_state', 'curator_mode', 'curator_scale', 'curator_automerge_max', 'curator_drafts', ...aiSettingKeys(day)]
+const settingKeys = (day) => ['curator_enabled', 'curator_state', 'curator_mode', 'curator_scale', 'curator_automerge_max', 'curator_drafts', 'curator_restart', 'curator_catchup', ...aiSettingKeys(day)]
 
 // Returns null when there is nothing to do (so later jobs get the tick), or a
 // log object. opts: { scanDone, explicit, mode, force, now, limits }
@@ -298,14 +298,44 @@ export async function curatorSlice(rawEnv, trigger = 'cron', opts = {}) {
   if (settings.curator_enabled !== '1') return explicit ? { job: 'curator', skipped: 'the curator is paused (curator_enabled=0)' } : null
   const state = parse(settings.curator_state, {}) ?? {}
   const odd = Math.floor(t / 9e5) % 2 === 1
-  if (!explicit && !odd) return null
+  // Owner switches in the setting table, for use without an admin session:
+  //   curator_restart = 'live' | 'dry': close an active run of the other mode
+  //     now (its planned changes become 'superseded' so the new run acts on
+  //     them; its open questions stay open) and start a new run in that mode
+  //     on this tick, any slot, without the daily gates. Cleared when used.
+  //   curator_catchup = '1': while a run is active, it takes every */15 slot,
+  //     not only the odd ones (a backfill finishes in half the time).
+  const restart = !explicit && ['live', 'dry'].includes(settings.curator_restart) ? settings.curator_restart : null
+  const catchup = settings.curator_catchup === '1' && !!state.active
+  if (!explicit && !odd && !restart && !catchup) return null
+  let forceStart = false
+  if (restart) {
+    const cur = state.active ? await rawEnv.CATALOG_DB.prepare(`SELECT id, mode FROM curator_run WHERE id=? AND status='running'`).bind(state.run).first() : null
+    if (cur && cur.mode === restart) {
+      await rawEnv.CATALOG_DB.prepare(`UPDATE setting SET v='' WHERE k='curator_restart'`).run() // already that mode: resume it
+    } else {
+      // Close the active run, and retire the plans a live run would otherwise
+      // treat as already handled: the closed run's, and (going live) every dry
+      // run's, finished or not. Questions (escalate) stay open.
+      await rawEnv.CATALOG_DB.batch([
+        ...(cur ? [rawEnv.CATALOG_DB.prepare(`UPDATE curator_run SET status='done', finished_at=? WHERE id=? AND status='running'`).bind(t, cur.id)] : []),
+        rawEnv.CATALOG_DB.prepare(`UPDATE curator_action SET status='superseded' WHERE status='planned' AND kind<>'escalate'
+          AND (run_id=? OR (?='live' AND run_id IN (SELECT id FROM curator_run WHERE mode='dry')))`).bind(cur?.id ?? '', restart),
+      ])
+      console.log(JSON.stringify({ at: 'curator', run: cur?.id ?? null, msg: `curator_restart=${restart}: plans superseded, new run starts` }))
+      state.active = false
+      forceStart = true
+    }
+  }
 
   // "Apply this plan": when no run is active, apply the chosen dry run's plan.
-  if (state.apply && !state.active) return applyTick(rawEnv, { t, state, settings, opts })
+  if (!forceStart && state.apply && !state.active) return applyTick(rawEnv, { t, state, settings, opts })
 
   let runId = state.active ? state.run : null
   if (!runId) {
-    if (!explicit) {
+    if (forceStart) {
+      // curator_restart: no daily gates; a same-day restart becomes '#n'
+    } else if (!explicit) {
       if ((state.day ?? '') >= day) return null
       if (!opts.scanDone) return null
       if (t < dayStart + START_AFTER_MS) return null
@@ -323,12 +353,13 @@ export async function curatorSlice(rawEnv, trigger = 'cron', opts = {}) {
       runId = seq === 1 ? day : `${day}#${seq}`
       next = { ...state, day, run: runId, active: true, scoped: false, seq, apply: null }
     }
-    const mode = ['dry', 'live'].includes(opts.mode) ? opts.mode : settings.curator_mode === 'live' ? 'live' : 'dry'
+    const mode = forceStart ? restart : ['dry', 'live'].includes(opts.mode) ? opts.mode : settings.curator_mode === 'live' ? 'live' : 'dry'
     const cap = Number(settings.curator_neuron_cap)
     await rawEnv.CATALOG_DB.batch([
       rawEnv.CATALOG_DB.prepare(`INSERT OR IGNORE INTO curator_run (id, mode, trig, status, phase, cursor, started_at, neuron_cap) VALUES (?,?,?,'running','probe',?,?,?)`)
         .bind(runId, mode, explicit ? 'manual' : 'cron', JSON.stringify({ phase: 'probe', idx: 0, ...(scope ? { scope } : {}) }), t, Number.isFinite(cap) ? cap : 8000),
       rawEnv.CATALOG_DB.prepare(`INSERT INTO setting (k, v) VALUES ('curator_state', ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`).bind(JSON.stringify(next)),
+      ...(forceStart ? [rawEnv.CATALOG_DB.prepare(`UPDATE setting SET v='' WHERE k='curator_restart'`)] : []),
     ])
     Object.assign(state, next)
   }

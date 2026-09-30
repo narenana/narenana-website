@@ -767,3 +767,53 @@ test('migration 0020 queues the Chupito merge, keeps #425/#514 apart and sets th
   assert.equal(d1.one(`SELECT v FROM setting WHERE k='curator_scale'`).v, '10')
   assert.equal(d1.one(`SELECT v FROM setting WHERE k='curator_neuron_cap'`).v, '20000')
 })
+
+// Owner switches without an admin session (2026-09-30: "go live and make the
+// first run happen now" while a dry run was part-way).
+test('curator_restart=live closes an active dry run and starts a live run on any slot; its plan is acted on', async () => {
+  const d1 = catalog()
+  const env = { CATALOG_DB: d1, AI: curatorAi() }
+  const oddT = Math.floor(DAY0 / 9e5) % 2 === 1 ? DAY0 : DAY0 + 9e5
+  // a cron-started dry run, a few ticks in
+  let r = await withErrors(() => curatorSlice(env, 'cron', { scanDone: true, now: oddT }))
+  assert.equal(r.result.run, '2026-10-01')
+  for (let i = 1; i < 6; i++) await withErrors(() => curatorSlice(env, 'cron', { scanDone: true, now: oddT + i * 18e5 }))
+  const planned = d1.sql(`SELECT kind, entity_id, status FROM curator_action WHERE run_id='2026-10-01' AND status='planned' AND kind<>'escalate'`)
+  assert.ok(planned.length > 0, 'the dry run planned changes')
+  const questions = d1.one(`SELECT COUNT(*) n FROM curator_action WHERE run_id='2026-10-01' AND status='planned' AND kind='escalate'`).n
+  // even slot, no gates: the switch takes effect at once
+  d1.run(`INSERT INTO setting (k, v) VALUES ('curator_restart','live') ON CONFLICT(k) DO UPDATE SET v=excluded.v`)
+  const evenT = oddT + 6 * 18e5 + 9e5
+  assert.equal(Math.floor(evenT / 9e5) % 2, 0)
+  r = await withErrors(() => curatorSlice(env, 'cron', { scanDone: true, now: evenT }))
+  assert.equal(r.result.run, '2026-10-01#2', 'a new run the same day')
+  assert.equal(d1.one(`SELECT status FROM curator_run WHERE id='2026-10-01'`).status, 'done', 'the dry run is closed')
+  assert.equal(d1.one(`SELECT mode FROM curator_run WHERE id='2026-10-01#2'`).mode, 'live')
+  assert.equal(d1.one(`SELECT COUNT(*) n FROM curator_action WHERE run_id='2026-10-01' AND status='planned' AND kind<>'escalate'`).n, 0, 'its planned changes are superseded')
+  assert.equal(d1.one(`SELECT COUNT(*) n FROM curator_action WHERE run_id='2026-10-01' AND status='planned' AND kind='escalate'`).n, questions, 'its questions stay open')
+  assert.equal(d1.one(`SELECT v FROM setting WHERE k='curator_restart'`).v, '', 'the switch clears itself')
+  // run the live run to the end: it applies what the dry run had only planned
+  await runToEnd(env, { now: evenT + 60e3 })
+  const applied = d1.sql(`SELECT kind, entity_id FROM curator_action WHERE run_id='2026-10-01#2' AND status='applied'`).map((a) => `${a.kind}:${a.entity_id}`)
+  for (const p of planned) assert.ok(applied.includes(`${p.kind}:${p.entity_id}`), `live run applied ${p.kind} on #${p.entity_id}`)
+  // a second restart to the mode already running is a no-op that clears itself
+  d1.run(`UPDATE setting SET v='live' WHERE k='curator_restart'`)
+  r = await curatorSlice(env, 'cron', { scanDone: true, now: evenT + 36e5 })
+  assert.equal(d1.one(`SELECT COUNT(*) n FROM curator_run`).n, 3, 'one more run only because the live one had finished')
+})
+
+test('curator_catchup=1 lets an active run take even slots; without an active run it changes nothing', async () => {
+  const d1 = catalog()
+  const env = { CATALOG_DB: d1, AI: curatorAi() }
+  const oddT = Math.floor(DAY0 / 9e5) % 2 === 1 ? DAY0 : DAY0 + 9e5
+  const evenT = oddT + 9e5
+  d1.run(`INSERT INTO setting (k, v) VALUES ('curator_catchup','1') ON CONFLICT(k) DO UPDATE SET v=excluded.v`)
+  assert.equal(await curatorSlice(env, 'cron', { scanDone: true, now: evenT }), null, 'no active run: even slot stays free')
+  await withErrors(() => curatorSlice(env, 'cron', { scanDone: true, now: oddT }))
+  const ticks = () => d1.one(`SELECT ticks FROM curator_run WHERE id='2026-10-01'`).ticks
+  const before = ticks()
+  await withErrors(() => curatorSlice(env, 'cron', { scanDone: true, now: evenT + 18e5 }))
+  assert.equal(ticks(), before + 1, 'an even slot ticks the active run')
+  d1.run(`UPDATE setting SET v='0' WHERE k='curator_catchup'`)
+  assert.equal(await curatorSlice(env, 'cron', { scanDone: true, now: evenT + 36e5 }), null, 'switched off: even slots are free again')
+})
