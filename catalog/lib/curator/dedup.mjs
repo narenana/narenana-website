@@ -68,17 +68,25 @@ const specSpan = (specs) => { const v = Number(parse(specs, {})?.spanMM); return
 
 // A page as the gates see it. planned: this dry run's planned fills
 // ({id: {brand, spanMM}}), so a dry run judges what a live run would.
-export function eff(m, planned = null) {
+export function eff(m, planned = null, { light = false } = {}) {
   const p = planned?.[m.id] ?? {}
-  const titles = String(m.titles ?? '').split('\u001f').filter(Boolean)
+  const titles = Array.isArray(m.titles) ? m.titles : String(m.titles ?? '').split('\u001f').filter(Boolean)
+  const brand = isBlankBrand(m.brand) && p.brand ? p.brand : m.brand ?? ''
   return {
     ...m,
-    brand: isBlankBrand(m.brand) && p.brand ? p.brand : m.brand ?? '',
+    brand,
     spanMM: specSpan(m.specs) ?? p.spanMM ?? null,
     titles,
-    titleSpans: titles.map(titleSpan).filter(Boolean),
+    titleSpans: light ? [] : titles.map(titleSpan).filter(Boolean), // light: the vector ticks do not need them
     inStock: (m.live ?? 0) > 0,
+    ...brandFacts(brand, titles),
   }
+}
+// Worked out once per page, not once per comparison: the vector blocking
+// looks at every pair.
+function brandFacts(brand, titles) {
+  const blank = isBlankBrand(brand)
+  return { bBlank: blank, bKey: blank ? '' : brandKey(brand), bConf: blank || brandConfirmed(normName(brand), (titles ?? []).join(' | ')) }
 }
 
 // ------------------------------------------------------------- tolerances
@@ -255,7 +263,7 @@ export async function candidatesPhase(ctx) {
   if (cursor.idx < cursor.queue.length) {
     if (ctx.late() || !ctx.room(6)) return 'more'
     // this tick's pool: every page's vector (one read) and the meta for blocking
-    const meta = new Map((await loadMeta(env)).map((m) => [m.id, eff(m, cursor.planned)]))
+    const meta = new Map((await loadMeta(env)).map((m) => [m.id, eff(m, cursor.planned, { light: true })]))
     const vecs = (await env.CATALOG_DB.prepare(`SELECT entity, entity_id, scale, vec FROM embedding WHERE entity='master'`).all()).results ?? []
     const pool = []
     for (const r of vecs) {
@@ -283,7 +291,7 @@ export async function candidatesPhase(ctx) {
             min: NEIGHBOUR_MIN,
             block: (x, p) => !doneChanged.has(p.id) && (!scopeM || scopeM.includes(p.id)) && blockOk(x.m, p.m),
           })
-          ctx.meter.vec += r.compared
+          ctx.meter.vec += r.compared + Math.ceil(pool.length / 16) // the blocking scan costs too
           for (const n of r.top) found.push([Math.min(id, n.id), Math.max(id, n.id), n.cos])
         }
         doneChanged.add(id)
@@ -293,7 +301,7 @@ export async function candidatesPhase(ctx) {
         if (lv && f) {
           const item = { id: -id, ...lv, m: { category_id: f.catId, brand: f.brand, spanMM: f.spanMM, brand_norm: normName(f.brand ?? ''), titles: [f.title] } }
           const r = nearest(item, pool, { k: 3, min: 0.5, block: (x, p) => (!scopeM || scopeM.includes(p.id)) && blockOk(x.m, p.m) })
-          ctx.meter.vec += r.compared
+          ctx.meter.vec += r.compared + Math.ceil(pool.length / 16)
           cursor.lnb[id] = r.top
         }
       }
@@ -324,7 +332,11 @@ export async function candidatesPhase(ctx) {
     pairs.set(k, p)
   }
   for (const [a, b, cos] of cursor.found ?? []) add(a, b, 'embedding', { cos })
-  const withKey = all.map((m) => ({ ...m, brand_key: isBlankBrand(m.brand) ? '' : brandKey(m.brand), brand_norm: isBlankBrand(m.brand) ? '' : normName(m.brand), titles: m.titles.join(' | ') }))
+  // Same-brand heuristic pairs. titles: null skips findDuplicates' cross-brand
+  // mislabel pass (about 100 ms of CPU on the full catalog): dedupSlice runs
+  // it every 6 hours and records those pairs as pending, which this phase
+  // takes in below.
+  const withKey = all.map((m) => ({ ...m, brand_key: m.bKey, brand_norm: m.bBlank ? '' : normName(m.brand), titles: null }))
   const dd = findDuplicates(withKey)
   for (const cl of dd.obviousClusters) for (let i = 0; i < cl.length; i++) for (let j = i + 1; j < cl.length; j++) add(cl[i].id, cl[j].id, 'heuristic', { score: 1 })
   for (const p of dd.candidatePairs) add(p.a.id, p.b.id, 'heuristic', { score: p.score })
@@ -372,12 +384,9 @@ export async function candidatesPhase(ctx) {
 // within 10% or unknown.
 function blockOk(a, b) {
   if (!a || !b || a.category_id !== b.category_id) return false
-  const blankA = isBlankBrand(a.brand)
-  const blankB = isBlankBrand(b.brand)
-  if (!blankA && !blankB && brandKey(a.brand) !== brandKey(b.brand)) {
-    const t = (m) => (Array.isArray(m.titles) ? m.titles.join(' | ') : m.titles ?? '')
-    if (brandConfirmed(normName(a.brand), t(a)) && brandConfirmed(normName(b.brand), t(b))) return false
-  }
+  if (a.bKey === undefined) Object.assign(a, brandFacts(a.brand, a.titles))
+  if (b.bKey === undefined) Object.assign(b, brandFacts(b.brand, b.titles))
+  if (!a.bBlank && !b.bBlank && a.bKey !== b.bKey && a.bConf && b.bConf) return false
   if (a.spanMM && b.spanMM && Math.abs(a.spanMM - b.spanMM) / Math.max(a.spanMM, b.spanMM) > 0.1) return false
   return true
 }

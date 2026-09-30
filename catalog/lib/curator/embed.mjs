@@ -47,12 +47,12 @@ export async function embedPhase(ctx) {
     const items = await embedItems(ctx.env, { lst: cursor.lst ?? {}, scope: cursor.scope ?? null })
     const have = new Map(((await ctx.env.CATALOG_DB.prepare(`SELECT entity, entity_id, input_hash, model FROM embedding`).all()).results ?? [])
       .map((r) => [`${r.entity === 'master' ? 'm' : 's'}:${r.entity_id}`, r]))
+    const hashes = await Promise.all(items.map((it) => sha256Hex(it.text)))
     const queue = []
-    for (const it of items) {
-      const hash = await sha256Hex(it.text)
+    items.forEach((it, i) => {
       const h = have.get(it.k)
-      if (!h || h.input_hash !== hash || h.model !== model) queue.push({ k: it.k, text: it.text, hash })
-    }
+      if (!h || h.input_hash !== hashes[i] || h.model !== model) queue.push({ k: it.k, text: it.text, hash: hashes[i] })
+    })
     // vectors of pages merged away or listings decided since: gone
     if (!cursor.scope) {
       const live = new Set(items.map((x) => x.k))

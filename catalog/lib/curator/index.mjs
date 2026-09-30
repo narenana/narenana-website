@@ -517,6 +517,11 @@ export async function curatorReport(env, runId = null) {
        m.brand AS survivor_brand, m.name AS survivor_name, m.slug AS survivor_slug
      FROM merge_undo u LEFT JOIN master_model m ON m.id=u.survivor_id ORDER BY u.id DESC LIMIT 30`,
   ).all()).results ?? []
+  // draft pages the curator made from new listings, still waiting to be published
+  const drafts = (await db.prepare(
+    `SELECT m.id, m.brand, m.name, m.slug FROM master_model m WHERE m.status='draft'
+       AND EXISTS (SELECT 1 FROM field_src f WHERE f.entity='master' AND f.entity_id=m.id AND f.field='slug' AND f.src='curator') ORDER BY m.id DESC LIMIT 50`,
+  ).all()).results ?? []
   const settings = Object.fromEntries(((await db.prepare(`SELECT k, v FROM setting WHERE k LIKE 'curator%' OR k=?`).bind(`ai_neurons:${dayKey(Date.now())}`).all()).results ?? []).map((r) => [r.k, r.v]))
   // names for everything shown, and which subjects still exist / are pending
   const decode = (a) => ({ ...a, before: parse(a.before, null), after: parse(a.after, null), evidence: parse(a.evidence, null) })
@@ -539,6 +544,7 @@ export async function curatorReport(env, runId = null) {
     history,
     directives: directives.map((d) => ({ ...d, payload: parse(d.payload, null), result: parse(d.result, null) })),
     merges,
+    drafts,
     masters: Object.fromEntries(masters),
     skus: Object.fromEntries(skus),
   }
