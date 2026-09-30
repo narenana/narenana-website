@@ -123,11 +123,28 @@ LOG_VIEWER_ORIGIN = "https://edgetx-log-parser.pages.dev"
 #     --project-name=edgetx-log-parser --branch=latest
 LOG_VIEWER_ORIGIN_LATEST = "https://latest.edgetx-log-parser.pages.dev"
 
+# Flight Debrief narration (debrief/lib/worker.mjs). Model is a var so it
+# can be swapped without a code change (the cache key includes it, so a
+# swap never serves stale narrations). DEBRIEF_TOKEN_SECRET is set via
+# `npx wrangler secret put`. Turnstile is OPTIONAL: set TURNSTILE_SECRET +
+# TURNSTILE_SITE_KEY (both secrets) to turn on the bot-check; unset, the
+# endpoint mints a device token on first contact and relies on the DO
+# rate limit + daily budget alone.
+DEBRIEF_MODEL = "@cf/meta/llama-3.2-3b-instruct"
+DEBRIEF_DAILY_CAP = "400"
+
 # KV namespace for the parsed feed JSON.
 # Created with:  npx wrangler kv namespace create VIDEOS_KV
 [[kv_namespaces]]
 binding = "VIDEOS_KV"
 id = "e048dd7b7b0849bcba7b51557c4c6752"
+
+# Flight Debrief narration cache (debrief/lib/worker.mjs). Stores vetted
+# narrations keyed SHA-256(payload‖model‖prompt_version), 30-day TTL, so
+# the shared sample logs cost zero Neurons after the first call.
+[[kv_namespaces]]
+binding = "DEBRIEF_KV"
+id = "a92af1ceb84643a1a59793cf204b7866"
 
 # Workers AI — used by the catalog's daily AI curator (catalog/lib/curator/,
 # every call through catalog/lib/ai.mjs) to sort new listings, fill blank
@@ -151,6 +168,19 @@ invocation_logs = false
 # is used ONLY for sources that opt in; all code guards on env.BROWSER.
 [browser]
 binding = "BROWSER"
+
+# Flight Debrief rate limiter + daily budget — a Durable Object gives the
+# strongly-consistent per-key counting KV can't (eventual consistency, no
+# atomic increment). One class, two roles by instance name: idFromName(ip
+# prefix) does the sliding-window rate limit; idFromName('budget') counts
+# the global daily Neuron spend.
+[[durable_objects.bindings]]
+name = "DEBRIEF_LIMITER"
+class_name = "DebriefLimiter"
+
+[[migrations]]
+tag = "v-debrief-1"
+new_sqlite_classes = ["DebriefLimiter"]
 
 # R2 — durable cache of product images. The /img proxy stores each fetched
 # image here on first request and serves from R2 thereafter, so images survive

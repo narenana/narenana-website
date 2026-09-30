@@ -15,6 +15,12 @@ import { consumeManufacturerHarvestQueue } from '../catalog/lib/mfr-jobs.mjs'
 import { homeCatalogQueries } from '../catalog/lib/home-queries.mjs'
 import { ASSET_VERSIONS } from './asset-versions.mjs'
 import { handleStats, refreshStats } from './stats.js'
+import { handleDebrief, DebriefLimiter } from '../debrief/lib/worker.mjs'
+
+// Durable Object for the Flight Debrief rate limiter + daily budget.
+// Re-exported so the runtime can instantiate the class named in
+// wrangler.toml's [[durable_objects.bindings]].
+export { DebriefLimiter }
 
 export default {
   async fetch(request, env, ctx) {
@@ -67,6 +73,15 @@ export default {
 
     if (url.pathname === '/videos.json') {
       return harden(await videosResponse(env), url, isLocal)
+    }
+
+    // Flight Debrief narration API (debrief/lib/worker.mjs). The RC Log
+    // Viewer POSTs a validated findings JSON (never the log) and gets a
+    // streamed plain-English narration from Workers AI. Sets its own CORS
+    // + no-store + noindex headers, so — like /log-viewer and /stats —
+    // it's returned unwrapped rather than through harden().
+    if (url.pathname === '/api/debrief') {
+      return handleDebrief(request, env)
     }
 
     // Private portfolio dashboard (src/stats.js). Sets its own security headers
