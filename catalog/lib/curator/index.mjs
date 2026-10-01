@@ -84,6 +84,10 @@ export function makeMeter(scale = 1, t0 = Date.now(), limits = LIMITS) {
     merges: 0,
     vec: 0,
     t0,
+    // Wall time is measured on the real clock from when this meter was made,
+    // not from t0 (the tick's possibly injected timestamp): a test tick dated
+    // 2026-10-01 01:00 UTC must not look 18 hours late when run that evening.
+    startedAt: Date.now(),
     force: false, // set for the final batch, which is accounted for in advance
     stmt(n = 1) {
       if (!this.force && this.stmts + n > this.lim.stmts) throw new BudgetExhausted('D1 statements')
@@ -93,8 +97,8 @@ export function makeMeter(scale = 1, t0 = Date.now(), limits = LIMITS) {
       if (this.ais >= this.lim.ai) throw new BudgetExhausted('AI calls')
       this.ais++
     },
-    canAi() { return this.ais < this.lim.ai && Date.now() - this.t0 < this.lim.wallMs },
-    late() { return Date.now() - this.t0 > this.lim.wallMs },
+    canAi() { return this.ais < this.lim.ai && Date.now() - this.startedAt < this.lim.wallMs },
+    late() { return Date.now() - this.startedAt > this.lim.wallMs },
   }
 }
 
@@ -296,7 +300,7 @@ function makeCtx({ env, raw, t, day, run, cursor, state, settings, meter, ai }) 
 }
 
 // ------------------------------------------------------------------ the tick
-const settingKeys = (day) => ['curator_enabled', 'curator_state', 'curator_mode', 'curator_scale', 'curator_automerge_max', 'curator_drafts', 'curator_restart', 'curator_catchup', ...aiSettingKeys(day)]
+const settingKeys = (day) => ['curator_enabled', 'curator_state', 'curator_mode', 'curator_scale', 'curator_automerge_max', 'curator_drafts', 'curator_restart', 'curator_catchup', 'curator_require_maker', 'curator_rebadge_brands', ...aiSettingKeys(day)]
 
 // Returns null when there is nothing to do (so later jobs get the tick), or a
 // log object. opts: { scanDone, explicit, mode, force, now, limits }

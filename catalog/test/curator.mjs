@@ -13,7 +13,7 @@ import { check } from '../lib/schema.mjs'
 import { listingTask, MASTER_TASK, PAIR_TASK, PROBE_TASK } from '../lib/curator/prompts.mjs'
 import { checkListing, checkMaster, coerceListing, coerceMaster, rolePolicy, brandKey, isBlankBrand, nameSmell, checkName, checkSpan, checkBrand, normConfig, quoteIn, tokenSubset, spanFromQuote } from '../lib/curator/validate.mjs'
 import { curatorSlice, makeMeter, budgetedEnv, BudgetExhausted, curatorReport, curatorNeeds } from '../lib/curator/index.mjs'
-import { mergeGuess } from '../lib/curator/triage.mjs'
+import { mergeGuess, isMaker, requireMaker } from '../lib/curator/triage.mjs'
 import { brandSpellings, needsOf } from '../lib/curator/fill.mjs'
 import { revertAction } from '../lib/curator/store.mjs'
 import { readFileSync } from 'node:fs'
@@ -365,6 +365,8 @@ test('brand keys, blank brands, name smells and quotes', () => {
 // ============================================================ fill-up (live)
 test('live run: fills blanks with provenance, cleans a seller name, applies the role policy, escalates the rest', async () => {
   const d1 = catalog()
+  // these listings name no maker; the 2026-10-01 maker policy has its own test
+  d1.run("INSERT INTO setting (k, v) VALUES ('curator_require_maker','0') ON CONFLICT(k) DO UPDATE SET v=excluded.v")
   const env = { CATALOG_DB: d1, AI: curatorAi() }
   const offersBefore = JSON.stringify(d1.sql(`SELECT * FROM offer ORDER BY sku_id`))
   const { result: ticks } = await withErrors(() => runToEnd(env, { mode: 'live' }))
@@ -521,6 +523,8 @@ test('dry run changes no catalog table, records the plan; a second run the same 
 
 test('apply this plan: planned changes are applied, a field changed since is skipped as stale', async () => {
   const d1 = catalog()
+  // these listings name no maker; the 2026-10-01 maker policy has its own test
+  d1.run("INSERT INTO setting (k, v) VALUES ('curator_require_maker','0') ON CONFLICT(k) DO UPDATE SET v=excluded.v")
   const env = { CATALOG_DB: d1, AI: curatorAi() }
   await withErrors(() => runToEnd(env, { mode: 'dry' }))
   d1.run(`UPDATE master_model SET name='Mustang P51-D (owner)' WHERE id=120`) // the owner edits after planning
@@ -867,4 +871,43 @@ test('a failed tick batch is retried change by change: only the change that fail
   assert.equal(byId[901], 'failed', 'the clashing rename failed')
   for (let i = 0; i < 6; i++) assert.equal(byId[902 + i], 'applied', `#${902 + i} still renamed`)
   assert.ok(d1.one(`SELECT COUNT(*) n FROM curator_action WHERE kind='error' AND entity_id=901`).n >= 1, 'an error record names the failed change')
+})
+
+// Owner policy, 2026-10-01: Wings lists only planes whose maker we can name.
+test('maker policy: a seller rebadge or a blank brand is no maker; real makers, including seller-makers, are', () => {
+  for (const b of ['', 'Havoc', 'Havoc Hobby', 'Robosync', 'Robosynckits', 'Unbranded', 'generic']) assert.equal(isMaker(b, {}), false, b || '(blank)')
+  for (const b of ['Seagull Models', 'X-UAV', 'Vortex-RC', 'Aeromodellingtutor', 'FlyingMachines', 'WLtoys']) assert.equal(isMaker(b, {}), true, b)
+  assert.equal(isMaker('Acme', { curator_rebadge_brands: 'acme' }), false, 'the rebadge list is a setting')
+  assert.equal(requireMaker({}), true)
+  assert.equal(requireMaker({ curator_require_maker: '0' }), false)
+})
+
+test('triage rejects a plane listing with no identifiable maker; a named maker is kept; Restore and the switch override', async () => {
+  const d1 = makeD1()
+  seedBasics(d1)
+  addSku(d1, { id: 801, title: 'Foam Glider 1200mm Kit' })
+  addSku(d1, { id: 802, title: 'Havoc Trainer 40 Nitro Kit' })
+  addSku(d1, { id: 803, title: 'Seagull Models Low Wing Sport 1400mm ARF' })
+  addSku(d1, { id: 804, title: 'Generic Foam Cub 800mm' })
+  d1.run("INSERT INTO field_src (entity, entity_id, field, src, confidence, run_id, at) VALUES ('sku', 804, 'review', 'owner', NULL, NULL, 1)")
+  const listing = {
+    'Foam Glider 1200mm Kit': lOut({ model: 'Foam Glider', span_mm: 1200, span_quote: '1200mm' }),
+    'Havoc Trainer 40 Nitro Kit': lOut({ brand: 'Havoc', brand_quote: 'Havoc', model: 'Trainer 40', power: 'gas' }),
+    'Seagull Models Low Wing Sport 1400mm ARF': lOut({ brand: 'Seagull Models', brand_quote: 'Seagull Models', model: 'Low Wing Sport', span_mm: 1400, span_quote: '1400mm', config: 'arf' }),
+    'Generic Foam Cub 800mm': lOut({ model: 'Foam Cub', span_mm: 800, span_quote: '800mm' }),
+  }
+  const env = { CATALOG_DB: d1, AI: curatorAi({ listing }) }
+  await withErrors(() => runToEnd(env))
+  const st = Object.fromEntries(d1.sql('SELECT id, review_status, reject_reason FROM sku WHERE id BETWEEN 801 AND 804').map((r) => [r.id, r]))
+  assert.equal(st[801].review_status, 'rejected')
+  assert.equal(st[801].reject_reason, 'no identifiable maker')
+  assert.equal(st[802].review_status, 'rejected', 'a seller rebadge is no maker')
+  assert.notEqual(st[803].review_status, 'rejected', 'a named maker is kept')
+  assert.equal(st[804].review_status, 'new', 'a listing the owner restored is never auto-rejected')
+  const d2 = makeD1()
+  seedBasics(d2)
+  addSku(d2, { id: 801, title: 'Foam Glider 1200mm Kit' })
+  d2.run("INSERT INTO setting (k, v) VALUES ('curator_require_maker','0') ON CONFLICT(k) DO UPDATE SET v=excluded.v")
+  await withErrors(() => runToEnd({ CATALOG_DB: d2, AI: curatorAi({ listing }) }))
+  assert.equal(d2.one('SELECT review_status FROM sku WHERE id=801').review_status, 'new', 'switched off: nothing is rejected for want of a maker')
 })

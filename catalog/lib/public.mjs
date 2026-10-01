@@ -419,7 +419,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   const offerRow = (o) => `
     <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
       <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
-      <td>${esc(configLabel(o, 'Not stated'))}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}</td>
+      <td>${esc(configLabel(o, 'Not stated'))}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}${o.variant ? `<span class="rp-note">${esc(o.variant)}</span>` : ''}</td>
       <td>${o.flagged ? '<span style="color:var(--muted);font-weight:600">Price under review</span>' : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
       <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
       <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>

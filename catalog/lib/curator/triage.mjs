@@ -128,6 +128,19 @@ export async function triagePhase(ctx) {
   return 'done'
 }
 
+// Owner policy (2026-10-01): a maker is a real manufacturer, not a seller's
+// rebadge label. Vortex-RC, Aeromodellingtutor and FlyingMachines build their
+// own planes and count; Havoc and Robosync labels do not.
+export const DEFAULT_REBADGE = 'havoc,havochobby,robosync,robosynckits,unbranded,generic,oem'
+const keyOf = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+export const requireMaker = (settings = {}) => (settings.curator_require_maker ?? '1') !== '0'
+export function isMaker(brand, settings = {}) {
+  const k = keyOf(brand)
+  if (!k) return false
+  const rebadge = String(settings.curator_rebadge_brands ?? DEFAULT_REBADGE).split(',').map(keyOf).filter(Boolean)
+  return !rebadge.includes(k)
+}
+
 async function triageOne(ctx, { id, k, task, input }, seen, locks) {
   const tally = (ctx.cursor.srcTally[k.source_id] ??= { seen: 0, rejected: 0 })
   tally.seen++
@@ -164,6 +177,30 @@ async function triageOne(ctx, { id, k, task, input }, seen, locks) {
       stmt: () => ctx.env.CATALOG_DB.prepare(`UPDATE sku SET review_status='rejected', reject_reason=?, reviewed_at=? WHERE id=? AND review_status='new'`).bind(reason, ctx.t, id),
     })
     ctx.count('listings_rejected')
+    return 'next'
+  }
+
+  // ---- no identifiable maker (owner policy, 2026-10-01): Wings lists only
+  // planes whose maker we can name, because we cannot vouch for the rest. A
+  // plane whose listing names no maker, or only a seller's own rebadge label
+  // (curator_rebadge_brands), is rejected. Restore in Review locks it.
+  if (!locked && c.kind === 'airframe' && requireMaker(ctx.settings) && !isMaker(c.brand, ctx.settings)) {
+    const reason = 'no identifiable maker'
+    facts.rejected = true
+    tally.rejected++
+    if (seen.has(actionKey('reject', id, 'review', null, hash))) return 'next'
+    ctx.change({
+      kind: 'reject',
+      entity: 'sku',
+      entityId: id,
+      before: { field: 'review', value: 'new' },
+      after: { field: 'review', value: 'rejected', reason },
+      evidence: { kind: c.kind, rule: 'no-maker', brand: c.brand || null, quotes: c.evidence, source_id: k.source_id, model: r.model, prompt_v: task.v },
+      confidence: c.confidence,
+      inputHash: hash,
+      stmt: () => ctx.env.CATALOG_DB.prepare(`UPDATE sku SET review_status='rejected', reject_reason=?, reviewed_at=? WHERE id=? AND review_status='new'`).bind(reason, ctx.t, id),
+    })
+    ctx.count('listings_rejected_no_maker')
     return 'next'
   }
 

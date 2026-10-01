@@ -170,9 +170,14 @@ export function planMerge(snap, { slugRule = true } = {}) {
     set.role_source = B.role_source
     took.push('role_tags')
   }
-  // power from every title the survivor will carry
-  const power = powerType(`${snap.a.x.titles ?? ''} ${snap.b.x.titles ?? ''}`)
-  if (power !== A.power) set.power = power
+  // power from every title the survivor will carry, unless a person set it:
+  // an owner or directive lock wins (the survivor's first), and travels with
+  // the value (2026-09-30: merges re-derived 'electric' over a locked 'gas').
+  const LOCKED = ['owner', 'directive']
+  const aPowerLocked = LOCKED.includes(fa.get('power')?.src)
+  const bPowerLocked = LOCKED.includes(fb.get('power')?.src)
+  const power = aPowerLocked ? A.power : bPowerLocked ? B.power : powerType(`${snap.a.x.titles ?? ''} ${snap.b.x.titles ?? ''}`)
+  if (power !== A.power) { set.power = power; if (!aPowerLocked && bPowerLocked) took.push('power') }
   // slug after merge
   let slugTo = null
   const finalBrand = set.brand ?? A.brand
