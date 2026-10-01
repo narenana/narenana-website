@@ -290,7 +290,7 @@ async function publicCatalogPages(url, env, notFound = (cat) => notFoundGrid(env
     if (m) {
       const offers = await all(
         env,
-        `SELECT o.config, o.pack_qty, k.*, s.name AS source_name, s.grey_import, s.made_in_india, s.tax_included
+        `SELECT o.config, o.pack_qty, o.note AS variant, k.*, s.name AS source_name, s.grey_import, s.made_in_india, s.tax_included
          FROM offer o JOIN sku k ON k.id=o.sku_id JOIN source s ON s.id=k.source_id
          WHERE o.master_model_id=? AND k.review_status='approved'
          ORDER BY k.dead ASC, k.in_stock DESC, k.price_inr ASC`,
