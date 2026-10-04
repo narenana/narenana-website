@@ -16,6 +16,7 @@ import { homeCatalogQueries } from '../catalog/lib/home-queries.mjs'
 import { ASSET_VERSIONS } from './asset-versions.mjs'
 import { handleStats, refreshStats } from './stats.js'
 import { handleDebrief, DebriefLimiter } from '../debrief/lib/worker.mjs'
+import { handleUsage } from '../usage/lib/worker.mjs'
 
 // Durable Object for the Flight Debrief rate limiter + daily budget.
 // Re-exported so the runtime can instantiate the class named in
@@ -82,6 +83,13 @@ export default {
     // it's returned unwrapped rather than through harden().
     if (url.pathname === '/api/debrief') {
       return handleDebrief(request, env)
+    }
+
+    // First-party anonymous usage counter (usage/lib/worker.mjs) — the
+    // log viewer beacons key events here; we tally them in D1. No PII,
+    // no consent dependency (pure aggregate counts).
+    if (url.pathname === '/api/usage') {
+      return handleUsage(request, env)
     }
 
     // Private portfolio dashboard (src/stats.js). Sets its own security headers

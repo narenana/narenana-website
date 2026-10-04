@@ -354,7 +354,28 @@
             landings <b style="color:var(--fg)">${fmt(t.landings)}</b> · crashes <b style="color:var(--fg)">${fmt(t.crashes)}</b> ·
             stalls <b style="color:var(--fg)">${fmt(t.stalls)}</b>${data.nanawing.racers !== null ? ` · racers <b style="color:var(--fg)">${fmt(data.nanawing.racers)}</b>` : ''}</div></div>`
       })() : `<div class="panel empty">Nanawing: ${esc((data.nanawing && data.nanawing.error) || 'no data')}</div>`
-      $('funnels').innerHTML = lcHtml + nwHtml
+      /* ---- Log Viewer funnel (first-party usage counters, D1) ---- */
+      const lvHtml = ok(data.logviewer) ? (() => {
+        const d = data.logviewer
+        const pct = d.successRate != null ? (d.successRate * 100).toFixed(0) + '%' : '—'
+        const dimRows = (list, label) => list.length
+          ? `<div class="tbl"><table><thead><tr><th>${label}</th><th class="num">count</th></tr></thead><tbody>${
+              list.map((x) => `<tr><td>${esc(x.dim)}</td><td class="num">${fmt(x.n)}</td></tr>`).join('')}</tbody></table></div>`
+          : `<div style="color:var(--muted);font-size:0.8rem">no ${esc(label)} data yet</div>`
+        return `<div class="panel"><div class="title">Log Viewer — uploads &amp; parse success (${d.days}d, first-party)</div>
+          <div class="facts" style="color:var(--muted);font-size:0.82rem;margin-bottom:10px">
+            loads <b style="color:var(--fg)">${fmt(d.loaded)}</b> ·
+            failed <b style="color:var(--fg)">${fmt(d.failed)}</b> ·
+            success <b style="color:var(--fg)">${pct}</b> ·
+            reached dashboard <b style="color:var(--fg)">${fmt(d.summaries)}</b> ·
+            debriefs <b style="color:var(--fg)">${fmt(d.debriefShown)}</b> ·
+            AI narrations <b style="color:var(--fg)">${fmt(d.narrations)}</b></div>
+          <div style="font-size:0.78rem;color:var(--muted);margin:4px 0 2px">What they upload</div>
+          ${dimRows(d.byFormat, 'format')}
+          <div style="font-size:0.78rem;color:var(--muted);margin:10px 0 2px">Why parses fail</div>
+          ${dimRows(d.byFailReason, 'reason')}</div>`
+      })() : `<div class="panel empty">Log Viewer: ${esc((data.logviewer && data.logviewer.error) || 'no first-party data yet')}</div>`
+      $('funnels').innerHTML = lcHtml + nwHtml + lvHtml
 
       /* ---- www page split (wings catalog etc.) appended to search column ---- */
       if (ok(data.ga) && data.ga.wwwPages.length) {

@@ -20,6 +20,8 @@
 // full service-account JSON), CF_API_TOKEN, YT_API_KEY (shared w/ the catalog).
 // Vars: GA4_PROPERTY_ID, CF_ACCOUNT_TAG. See docs/STATS-SETUP.md.
 
+import { usageSummary } from '../usage/lib/worker.mjs'
+
 const SNAPSHOT_KEY = 'stats_snapshot'
 const CF_IDS_KEY = 'stats_cf_ids'
 const WINDOW_DAYS = 28
@@ -124,13 +126,14 @@ export async function handleStats(request, env, ctx, url) {
 
 /** Fetch every source (independently fail-soft) and persist the snapshot. */
 export async function refreshStats(env) {
-  const [ga, gsc, cf, lastcall, nanawing, youtube] = await Promise.all([
+  const [ga, gsc, cf, lastcall, nanawing, youtube, logviewer] = await Promise.all([
     section(() => fetchGa(env)),
     section(() => fetchGsc(env)),
     section(() => fetchCf(env)),
     section(() => fetchLastCall(env)),
     section(() => fetchNanawing(env)),
     section(() => fetchYouTube(env)),
+    section(() => usageSummary(env, WINDOW_DAYS)),
   ])
   const json = JSON.stringify({
     v: 1,
@@ -142,6 +145,7 @@ export async function refreshStats(env) {
     lastcall,
     nanawing,
     youtube,
+    logviewer,
   })
   try {
     await env.VIDEOS_KV.put(SNAPSHOT_KEY, json)

@@ -85,6 +85,15 @@ binding = "LASTCALL_DB"
 database_name = "last-call-leaderboard"
 database_id = "b056ee20-eb0a-4b20-813b-ca4c8900cd07"
 
+# First-party anonymous usage counters (usage/lib/worker.mjs) for the
+# log-viewer funnel on /stats. No migrations_dir: the schema is applied
+# once via `npx wrangler d1 execute narenana-usage --remote --file
+# usage/schema.sql`.
+[[d1_databases]]
+binding = "USAGE_DB"
+database_name = "narenana-usage"
+database_id = "3c3ffb09-cb58-409d-aa9b-4e6523da55ff"
+
 # Nanawing's stats + leaderboard Workers, read by /stats. Service bindings,
 # because a deployed Worker may NOT fetch() another same-account *.workers.dev
 # URL (Cloudflare blocks it, error 1042). src/stats.js falls back to the public
