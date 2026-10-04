@@ -247,8 +247,8 @@ const glanceNote = (sum, notStated) => {
   const when = checkedRange(sum.first, sum.last)
   return `<p class="fx-gnote">Lowest price for one new unit${when ? `, as last checked ${esc(when)}` : ', as last checked'}. Prices held for review are left out. Kit: the airframe only; you add the power system, servos and radio. PNP: the power system is fitted; you add a receiver and battery. RTF: comes with a radio.${notStated ? ' Some listings don’t say which they are, so check the seller’s page before you buy.' : ''}</p>`
 }
-const glanceTable = (head, body, note) =>
-  `<section class="fx-glance" aria-labelledby="fx-glance"><h2 id="fx-glance">Prices at a glance</h2><div class="fx-gscroll"><table class="fx-gt"><thead><tr>${head.map((h) => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>${note}</section>`
+const glanceTable = (head, body, note, cls = '') =>
+  `<section class="fx-glance" aria-labelledby="fx-glance"><h2 id="fx-glance">Prices at a glance</h2><div class="fx-gscroll"><table class="fx-gt${cls ? ` ${cls}` : ''}"><thead><tr>${head.map((h) => `<th scope="col">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>${note}</section>`
 
 // A landing's table: one row per configuration its listings state.
 function landingGlance(sum) {
@@ -274,11 +274,11 @@ function hubGlance(cat, all, valid) {
     .filter((x) => x.rows.length)
     .map((x) => ({ label: link(x.slug, HUB_LABEL[x.slug]), sum: priceSummary(x.rows) }))
   const electric = all.filter((m) => !isGas(m)), gas = all.filter(isGas)
-  if (electric.length) lines.push({ label: 'All electric', sum: priceSummary(electric), total: true, note: ', listed below' })
+  if (electric.length) lines.push({ label: 'All electric', sum: priceSummary(electric), total: true, note: ', listed above' })
   if (gas.length) lines.push({ label: link('nitro', 'All nitro and gas'), sum: priceSummary(gas), total: true })
   const cell = (price) => (price ? `<td>${inr(price)}</td>` : '<td class="is-none">—</td>')
   const body = lines.map(({ label, sum, total, note = '' }) => `<tr${total ? ' class="is-total"' : ''}><th scope="row">${label}<span class="fx-gn">${sum.models} in stock${note}</span></th>${cell(sum.from)}${cell(sum.bands.kit?.from)}${cell(sum.bands.pnp?.from)}${cell(sum.bands.rtf?.from)}</tr>`).join('')
-  return glanceTable(['Type', 'From', 'Kit', 'PNP', 'RTF'], body, glanceNote(whole, !!whole.bands['']))
+  return glanceTable(['Type', 'From', 'Kit', 'PNP', 'RTF'], body, glanceNote(whole, !!whole.bands['']), 'is-hub')
 }
 
 // Hub title, description and intro from the same numbers. all: every in-stock
@@ -715,7 +715,6 @@ export function renderGridNext(cat, rows, opts = {}) {
     <div class="fx-bar">${q ? `<a class="fx-qclear" href="${pref}/">← all models</a>` : powerSeg('fx-powmain')}<form class="fx-qform" role="search" action="${pref}/" method="get"><input class="fx-q" type="search" name="q" value="${esc(q)}" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="fx-qbtn" type="submit" aria-label="Search">Search</button></form><button class="fx-fbtn" id="fx-open" aria-haspopup="dialog" aria-expanded="false">Filter &amp; Sort<span class="fx-badge" id="fx-badge"${nActive ? '' : ' hidden'}>${nActive}</span></button></div>
   </div></div>
   <main class="shop">
-    ${glanceHtml}
     <div class="fx-summary">
       <span class="fx-rescount"><b id="fx-nres">${resultN}</b> models</span>
       <div class="fx-active" id="fx-active">${activeTags}</div>
@@ -723,6 +722,7 @@ export function renderGridNext(cat, rows, opts = {}) {
     </div>
     <ul class="prods" id="fx-grid">${ordered.filter(visible).map((it,i) => cardNext(it, pref, false,i<2)).join('')}</ul>
     <p class="empty" id="fx-empty"${resultN ? ' hidden' : ''}>No models match — try removing a filter.</p>
+    ${glanceHtml /* below the grid: shoppers came for the planes (owner, 2026-10-04) */}
     ${content ? `<section class="fx-content">${content}</section>` : ''}
     ${moreHtml}
     ${browseHtml}
@@ -773,7 +773,8 @@ const FX_CSS = `
 .fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
 .fx-intro a{color:var(--orange-deep);font-weight:700;text-decoration:none}
 .fx-intro a:hover{text-decoration:underline}
-.fx-glance{margin:0 0 28px;max-width:760px}
+.fx-glance{margin:40px 0 28px;max-width:760px}
+@media (max-width:600px){.fx-gt.is-hub th:nth-child(n+3),.fx-gt.is-hub td:nth-child(n+3){display:none}}
 .fx-glance h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.25rem;font-weight:800;margin:0 0 8px;color:var(--ink)}
 .fx-gscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .fx-gt{border-collapse:collapse;width:100%;font-size:.88rem}
