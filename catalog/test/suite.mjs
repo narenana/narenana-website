@@ -833,7 +833,8 @@ test('hub and landings: sentence-case titles, ₹ figures from comparable listin
     title: unesc(html.match(/<title>([^<]*)<\/title>/)[1]),
     desc: unesc(html.match(/<meta name="description" content="([^"]*)"/)[1]),
     h1: unesc(html.match(/<h1 class="shop-h1">([^<]*)<\/h1>/)[1]),
-    intro: html.match(/<p class="fx-intro">([\s\S]*?)<\/p>/)?.[1] || '',
+    sub: unesc(html.match(/<p class="shop-sub" id="fx-sub">([^<]*)<\/p>/)?.[1] || ''),
+    hasIntro: /class="fx-intro"/.test(html),
     glance: html.match(/<section class="fx-glance"[\s\S]*?<\/section>/)?.[0] || '',
     more: html.match(/<section class="fx-more">[\s\S]*?<\/section>/)?.[0] || '',
   })
@@ -844,11 +845,13 @@ test('hub and landings: sentence-case titles, ₹ figures from comparable listin
   assert.equal(t.title, 'Trainer RC planes for beginners: prices in India | narenana')
   assert.equal(t.h1, 'Trainer RC planes for beginners in India')
   assert.equal(t.desc, '3 trainers in stock at 3 Indian sellers, from ₹1,650. Kits from ₹2,000, ready-to-fly from ₹7,790, ARFs from ₹15,500. Prices as last checked 28 Sep 2026.')
-  assert.equal(t.intro, '3 trainers in stock at 3 Indian sellers, from ₹1,650. Kits start at ₹2,000, ready-to-fly at ₹7,790 and ARFs at ₹15,500. 1 is sold by two or more sellers. Prices as last checked 28 Sep 2026.')
+  // One short line under the H1 (owner, 2026-10-04); per-configuration figures are in the table below the grid
+  assert.equal(t.sub, '3 trainers at 3 Indian sellers, from ₹1,650 · last checked 28 Sep 2026')
+  assert.equal(t.hasIntro, false, 'no intro paragraph above the grid')
   assert.match(t.glance, /<th scope="row">Configuration not stated<\/th><td>1<\/td><td>₹1,650<\/td>/, 'a kit the listing never calls one sits under not stated')
   assert.match(t.glance, /<th scope="row">Kit \(airframe only\)<\/th><td>1<\/td><td>₹2,000<\/td>/)
   assert.match(t.glance, /as last checked 28 Sep 2026/)
-  assert.ok(!(t.desc + t.intro + t.glance).includes('₹999'), 'a figure never comes from outside the live, priced listings')
+  assert.ok(!(t.desc + t.sub + t.glance).includes('₹999'), 'a figure never comes from outside the live, priced listings')
   assert.ok(t.more.includes('href="https://nanawing2.narenana.com/">Nanawing 2</a>') && t.more.includes('laptop or desktop'), 'trainers: the line-of-sight sim')
   assert.ok(t.more.includes('href="/wings/browse/"') && t.more.includes('href="/catalog-methodology/"'))
   for (const [, s] of t.more.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(s === 'browse' || valid.has(s), `related link /wings/${s}/ is an indexable landing`)
@@ -1126,7 +1129,7 @@ test('hub and landings: own ₹ figures that match the product pages, computed s
   }
   const expected = Object.fromEntries(Object.entries(CELL).filter(([, c]) => seen[c]).map(([label, c]) => [label, seen[c]]))
   assert.deepEqual(table, expected, 'the trainers table matches the product pages')
-  assert.match(landing, new RegExp(`<p class="fx-intro">\\d+ trainers in stock at \\d+ Indian sellers?, from ₹${from.toLocaleString('en-IN')}\\.`), 'the intro quotes the lowest product-page price')
+  assert.match(landing, new RegExp(`<p class="shop-sub" id="fx-sub">\\d+ trainers at \\d+ Indian sellers?, from ₹${from.toLocaleString('en-IN')} · last checked `), 'the header line quotes the lowest product-page price')
 })
 
 // Live data: every in-stock flagged listing (admin "flagged" queue) must show

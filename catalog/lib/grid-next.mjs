@@ -209,17 +209,6 @@ const bandsProse = (sum) => BAND_PROSE.filter(([c]) => sum.bands[c])
 // '30 trainers in stock at 7 Indian sellers, from ₹1,650. Kits start at
 // ₹2,189, ready-to-fly at ₹7,790 … 8 are sold by two or more sellers. Prices
 // as last checked 27–29 Sep 2026.'
-function landingIntro(noun, sum) {
-  const what = `${sum.models} ${sum.models === 1 ? noun.one : noun.many}`
-  if (!sum.sellers) return `${what} in stock at Indian sellers; prices under review.`
-  const parts = [`${what} in stock at ${nSellers(sum.sellers)}${sum.from ? `, from ${inr(sum.from)}` : ''}.`]
-  const bands = bandsProse(sum).map(([c, w], i) => (i ? `${w} at ${inr(sum.bands[c].from)}` : `${cap(w)} start${/s$/.test(w) ? '' : 's'} at ${inr(sum.bands[c].from)}`))
-  if (bands.length) parts.push(`${joinList(bands)}.`)
-  if (sum.multi) parts.push(`${sum.multi} ${sum.multi === 1 ? 'is' : 'are'} sold by two or more sellers.`)
-  const when = checkedRange(sum.first, sum.last)
-  if (when) parts.push(`Prices as last checked ${when}.`)
-  return parts.join(' ')
-}
 
 // Landing meta description: the '₹ from' figure and the seller count first,
 // then as many configuration figures as fit beside the check date, the most
@@ -292,11 +281,7 @@ function hubCopy(cat, all) {
   const pw = [electric.from && `electric from ${inr(electric.from)}`, gas.from && `nitro and gas from ${inr(gas.from)}`].filter(Boolean)
   const head = whole.sellers ? `${whole.models} RC planes in stock at ${nSellers(whole.sellers)}${pw.length ? `: ${pw.join(', ')}` : ''}.` : `${whole.models} RC planes in stock at Indian sellers, with prices and stock as last checked.`
   const desc = [head + (when ? ` Prices as last checked ${when}.` : ''), head].find((d) => d.length <= DESC_MAX) || head.slice(0, DESC_MAX)
-  const nitro = gas.models ? ` <a href="${cat.path_prefix}/nitro/">Nitro and gas planes</a> (${gas.models}${gas.from ? `, from ${inr(gas.from)}` : ''}) have their own page.` : ''
-  const intro = whole.sellers
-    ? `${whole.models} RC planes in stock at ${nSellers(whole.sellers)}${whole.from ? `, from ${inr(whole.from)}` : ''}. The grid below lists the ${electric.models} electric ones.${nitro}${when ? ` Prices as last checked ${esc(when)}.` : ''} We don’t sell anything: every offer links straight to the seller.`
-    : ''
-  return { title, desc, intro, when }
+  return { title, desc, when, whole, models: whole.models }
 }
 
 // Practise-first lines for the types a sim covers. Laptop or desktop only:
@@ -678,11 +663,17 @@ export function renderGridNext(cat, rows, opts = {}) {
   // ?power=gas canonicalises to /nitro/, so it is named like that page.
   const gasMeta = !Lmeta && !q && power === 'gas' ? landingMeta(cat, resolveLanding('nitro'), 'nitro') : null
   const h1 = Lmeta ? Lmeta.h1 : gasMeta ? gasMeta.h1 : 'RC plane prices in India'
+  // One short line under the H1 (owner, 2026-10-04: the header was too verbose):
+  // how many, at how many sellers, from what price, last checked when. The
+  // per-configuration figures are in the price table below the grid, and the
+  // power tabs carry the electric / nitro split.
+  const line = (what, sum, w) => (sum?.sellers && sum.from ? `${what} at ${nSellers(sum.sellers)}, from ${inr(sum.from)}${w ? ` · last checked ${w}` : ''}` : null)
   const subTxt = q
     ? `${resultN} result${resultN === 1 ? '' : 's'} for “${q}” · electric & nitro, in stock`
-    : Lmeta ? `${resultN} ${resultN === 1 ? Lmeta.noun.one : Lmeta.noun.many} in stock · ${checked}` : `${items.length} ${power === 'gas' ? 'nitro and gas' : 'electric'} RC planes in stock · ${checked}`
+    : Lmeta ? line(`${resultN} ${resultN === 1 ? Lmeta.noun.one : Lmeta.noun.many}`, lsum, when) ?? `${resultN} ${resultN === 1 ? Lmeta.noun.one : Lmeta.noun.many} in stock · ${checked}`
+    : hub ? line(`${hc.models} RC planes`, hc.whole, when) ?? `${items.length} electric RC planes in stock · ${checked}`
+    : `${items.length} ${power === 'gas' ? 'nitro and gas' : 'electric'} RC planes in stock · ${checked}`
   const crumbHtml = Lmeta ? `<nav class="fx-crumbs" aria-label="Breadcrumb">${Lmeta.crumbs.map((c, i) => i < Lmeta.crumbs.length - 1 ? `<a href="${esc(c.url)}">${esc(c.name)}</a>` : `<span aria-current="page">${esc(c.name)}</span>`).join(' <i>›</i> ')}</nav>` : ''
-  const introHtml = Lmeta ? `<p class="fx-intro">${esc(landingIntro(Lmeta.noun, lsum))}</p>` : hc?.intro ? `<p class="fx-intro">${hc.intro}</p>` : ''
   const glanceHtml = Lmeta ? landingGlance(lsum) : hub ? hubGlance(cat, opts.all, valid) : ''
   // Editorial: the landing's own row; the hub shows the editorial of the
   // /electric/ page it replaced (opts.content).
@@ -711,7 +702,6 @@ export function renderGridNext(cat, rows, opts = {}) {
     ${crumbHtml || '<p class="shop-kicker">narenana catalog</p>'}
     <h1 class="shop-h1">${esc(h1)}</h1>
     <p class="shop-sub" id="fx-sub">${esc(subTxt)}</p>
-    ${introHtml}
     <div class="fx-bar">${q ? `<a class="fx-qclear" href="${pref}/">← all models</a>` : powerSeg('fx-powmain')}<form class="fx-qform" role="search" action="${pref}/" method="get"><input class="fx-q" type="search" name="q" value="${esc(q)}" placeholder="Search models — name, brand or type…" aria-label="Search models"/><button class="fx-qbtn" type="submit" aria-label="Search">Search</button></form><button class="fx-fbtn" id="fx-open" aria-haspopup="dialog" aria-expanded="false">Filter &amp; Sort<span class="fx-badge" id="fx-badge"${nActive ? '' : ' hidden'}>${nActive}</span></button></div>
   </div></div>
   <main class="shop">
@@ -770,9 +760,6 @@ const FX_CSS = `
 .fx-crumbs a:hover{color:var(--ink);text-decoration:underline}
 .fx-crumbs i{font-style:normal;opacity:.5}
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
-.fx-intro{color:var(--muted);font-size:.95rem;margin:10px 0 0;max-width:70ch;line-height:1.55}
-.fx-intro a{color:var(--orange-deep);font-weight:700;text-decoration:none}
-.fx-intro a:hover{text-decoration:underline}
 .fx-glance{margin:40px 0 28px;max-width:760px}
 @media (max-width:600px){.fx-gt.is-hub th:nth-child(n+3),.fx-gt.is-hub td:nth-child(n+3){display:none}}
 .fx-glance h2{font-family:'Barlow Condensed',system-ui,sans-serif;font-size:1.25rem;font-weight:800;margin:0 0 8px;color:var(--ink)}
