@@ -20,6 +20,10 @@ const DEFAULT_MODEL = '@cf/meta/llama-3.2-3b-instruct'
 const TOKEN_TTL_S = 24 * 3600
 const RATE_LIMIT = { limit: 10, windowS: 3600 }
 const DAILY_BUDGET = 400 // narrations/day across everyone (free-tier Neuron headroom)
+// Per-IP-prefix daily cap on MODEL calls. Bounds how much of the global
+// budget any single network can claim, so a distributed quota-drain needs
+// many prefixes, not two. Tunable via env.DEBRIEF_PREFIX_DAILY_CAP.
+const PREFIX_DAILY_CAP = 20
 const CACHE_TTL_S = 30 * 24 * 3600
 
 const ALLOWED_ORIGINS = [
@@ -162,6 +166,19 @@ export class DebriefLimiter {
       await this.state.storage.put('day', fresh)
       return json({ ok: true, n: fresh.n }, 200)
     }
+    // Per-prefix DAILY model-call cap. Same shape as /budget but stored on
+    // the per-prefix instance (idFromName(ipPrefix)) under its own key, so
+    // it counts only this network's spend. Resets at UTC midnight.
+    if (url.pathname === '/dtake') {
+      const cap = Number(url.searchParams.get('cap'))
+      const day = new Date().toISOString().slice(0, 10)
+      const rec = (await this.state.storage.get('pday')) || { day, n: 0 }
+      const fresh = rec.day === day ? rec : { day, n: 0 }
+      if (fresh.n >= cap) return json({ ok: false }, 200)
+      fresh.n++
+      await this.state.storage.put('pday', fresh)
+      return json({ ok: true, n: fresh.n }, 200)
+    }
     return json({ error: 'no route' }, 404)
   }
 }
@@ -247,11 +264,12 @@ export async function handleDebrief(request, env) {
     return sseResponse(cached, meta, cors)
   }
 
-  const budget = env.DEBRIEF_LIMITER.get(env.DEBRIEF_LIMITER.idFromName('budget'))
-  const bd = await budget.fetch(`https://do/budget?cap=${env.DEBRIEF_DAILY_CAP || DAILY_BUDGET}`).then(r => r.json())
-  if (!bd.ok) return json({ error: 'daily budget exhausted', fallback: 'templates', ...(freshToken ? { token: freshToken } : {}) }, 503, cors)
-
   // ── inference ──────────────────────────────────────────────────────
+  // Only genuinely worth-narrating flights reach the model. Clean flights
+  // are deterministic (no model call, no cost), so they must NOT charge the
+  // AI budget — otherwise a flood of cheap clean payloads could exhaust it
+  // and deny the feature for everyone. The budget + per-prefix daily cap
+  // are therefore charged HERE, gating the one expensive action: an AI call.
   const hasWorthyFindings = payload.findings.some(f => ['warning', 'critical'].includes(f.severity))
   let text
   if (payload.clean || !hasWorthyFindings) {
@@ -261,6 +279,17 @@ export async function handleDebrief(request, env) {
   } else if (env.DEBRIEF_TEST_MODE === '1') {
     text = cannedNarration(payload)
   } else {
+    // Per-prefix daily model-call cap: no single network can drain more
+    // than a small slice of the global budget in a day.
+    const prefixCap = Number(env.DEBRIEF_PREFIX_DAILY_CAP) || PREFIX_DAILY_CAP
+    const pd = await limiter.fetch(`https://do/dtake?cap=${prefixCap}`).then(r => r.json())
+    if (!pd.ok) return json({ error: 'daily limit reached for this network', fallback: 'templates', ...(freshToken ? { token: freshToken } : {}) }, 429, cors)
+
+    // Global daily AI budget (shared cost ceiling across everyone).
+    const budget = env.DEBRIEF_LIMITER.get(env.DEBRIEF_LIMITER.idFromName('budget'))
+    const bd = await budget.fetch(`https://do/budget?cap=${env.DEBRIEF_DAILY_CAP || DAILY_BUDGET}`).then(r => r.json())
+    if (!bd.ok) return json({ error: 'daily budget exhausted', fallback: 'templates', ...(freshToken ? { token: freshToken } : {}) }, 503, cors)
+
     try {
       const out = await env.AI.run(model, { messages: buildMessages(payload), max_tokens: 700 })
       text = typeof out === 'string' ? out : out?.response
