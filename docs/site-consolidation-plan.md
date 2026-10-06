@@ -243,7 +243,11 @@ Found on the live sites on 6 Oct.
   - the www homepage lastmod says 27 Sep (`STATIC_PAGE_LASTMOD`).
 
   Fix by hand now; M3 automates it.
-- [ ] **FAQPage structured data contradicts itself across repos.** Five sim guides use it, while the log viewer bans it on purpose. **Owner decision:** keep it or drop it everywhere.
+- [x] **FAQPage structured data contradicts itself across repos.** Five sim guides use it, while the log viewer bans it on purpose. **Decided 6 Oct: keep it.**
+  - Any page with a visible FAQ carries FAQPage markup that matches it word for word.
+  - The M3 generator emits it from each page's `faqs`.
+  - The log viewer's "no FAQPage" rule (`scripts/gen-content.mjs` comment, growth plan) is retired; its pages get the markup when their sources move here in M3.
+  - Since Aug 2023, Google shows FAQ rich results only for well-known government and health sites, so the markup mainly helps other search engines and AI assistants read the answers.
 - [ ] **Nanawing 2's "Source & feedback" link points at a private GitHub repo**, which returns 404 for visitors. Replace it with the contact link.
 - [ ] **The log viewer's copy hasn't caught up with what it now does** (log viewer session). The AI Flight Debrief isn't mentioned anywhere. "Nothing is uploaded" sits next to consent-gated findings sent to `/api/debrief`, usage counts to `/api/usage` and anonymous Sentry error reports. The log file itself never leaves the browser; say exactly what does.
 - [ ] **Stale internal notes:**
@@ -344,4 +348,5 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-06** · Owner decision: keep FAQPage structured data on every page with a visible FAQ. The log viewer's ban is retired (M2 item ticked; the generator emits it from M3).
 - **2026-10-06** · narenana-website: plan written. Decisions locked: folders `/nanawing/`, `/nanawing2/`; the homepage stays Nanawing's front door. The "update this plan" rule was added to all four repos. M1 done.
