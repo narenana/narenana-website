@@ -226,6 +226,34 @@ Rules: every old URL gets one 301 to its exact new URL, never a chain or a catch
 
 Found on the live sites on 6 Oct.
 
+**M2 status (6 Oct, evening).** Fixed on three branches with previews, waiting for the owner's OK to deploy. Production is unchanged.
+
+| Repo | Branch | Head | Preview |
+|---|---|---|---|
+| fpvsim | `feat/m2-content-fixes` | `6920ede` | https://m2-content-fixes.fpvsim.pages.dev |
+| nanawing2 | `codex/m2-content-fixes` | `e18adca` | https://codex-m2-content-fixes.nanawing2.pages.dev |
+| website | `feat/m2-content-fixes` | local branch | Checked on a local server (Worker preview URLs are off) |
+
+Still open:
+- **Log viewer items** (header and footer, the debrief copy, the old widget guard): the log viewer session's.
+- **In-game wording in Nanawing 2** (owner call):
+  - `app/page.tsx:298` "KEYBOARD / RC RADIO";
+  - `:402` says touch controls are "coming later", while the landing says "aren't supported yet".
+
+Correction to the Island item below: there is no separate race menu. The Hangar tab is labelled "Leaderboard" and only browses the boards; a race starts when you fly through the green arch. What was stale in the old guide was the single course and the single railway loop.
+
+Also found during M2 and fixed on the branches:
+- fpvsim's service worker turned moved pages into an error page for returning players.
+- The service worker also deleted some offline map files after each deploy.
+- The aircraft guide's climb rates didn't match the measured specs: Morok 24.6 and Sukhoi 32.3 m/s.
+- Nanawing 2's landing CSS overrode the family footer's padding.
+
+Found and not yet fixed (all already live):
+- **Nanawing 2 landing:** the final "Ready?" heading and its buttons are nearly invisible on the dark background, because `simulator.css` sets `--tx` for `#landing`.
+- **www at 768px:** the page scrolls sideways by 11px (the `.nn-cta` header button and `.depth-image`).
+- **www at 1366px:** the floating Share button covers "Back to the top".
+- **Nanawing's controls** are worded four ways on www. Fix in M3 with a fact token.
+
 - [ ] **Two different headers are live on www.** fpvsim, nanawing2 and the log viewer still show "Compare RC aircraft" and "Explore your flights", against the website's current "Compare RC plane prices" and "Replay your flight logs". Copy the current `familyNav()` output into fpvsim (index, guides, leaderboard, 404) and nanawing2 (index, guide, 404, `build/` mirror). The log viewer session does `scripts/brand-shell.mjs` and `src/FamilyNav.jsx`.
 - [ ] **The footer tagline differs.** www says "Free sims and tools for RC pilots."; the apps say "Made for the joy of flying." Use the website's `familyFooter()` everywhere.
 - [ ] **The Nanawing 2 aircraft count disagrees.**
@@ -347,6 +375,31 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-06** · M2 branches, not deployed yet:
+  - **fpvsim** `feat/m2-content-fixes` (11a4dae..6920ede):
+    - current family header and footer;
+    - `/guides/the-island` merged into `/maps/island/` with a 301;
+    - "Sukhoi S-70 Okhotnik" in full;
+    - Island facts corrected (two lakes, two rail loops), in the game too;
+    - measured climb rates in the aircraft guide;
+    - Desert labelled beta;
+    - two service-worker fixes;
+    - sitemap dates.
+  - **nanawing2** `codex/m2-content-fixes` (e18adca):
+    - family header and footer;
+    - 8 aircraft everywhere, with the guide listing all 8;
+    - Nanawing described with two maps;
+    - "keyboard, gamepad or USB RC radio";
+    - the private GitHub link replaced with "Get in touch";
+    - footer padding;
+    - sitemap dates.
+  - **website** `feat/m2-content-fixes`:
+    - "See all 8 aircraft";
+    - the Nanawing 2 controls chip;
+    - "Sukhoi S-70 Okhotnik" in the race card and leaderboard;
+    - homepage lastmod;
+    - stale notes fixed.
 
 - **2026-10-06** · Owner decision: keep FAQPage structured data on every page with a visible FAQ. The log viewer's ban is retired (M2 item ticked; the generator emits it from M3).
 - **2026-10-06** · narenana-website: plan written. Decisions locked: folders `/nanawing/`, `/nanawing2/`; the homepage stays Nanawing's front door. The "update this plan" rule was added to all four repos. M1 done.
