@@ -451,7 +451,7 @@ async function setMasterPower(env, masterId) {
 const SITE = 'https://www.narenana.com'
 // Editorial change dates, not build/request dates. Keep the static fallback
 // in site/sitemap.xml in sync when changing these pages.
-const STATIC_PAGE_LASTMOD = { '/': '2026-09-27' }
+const STATIC_PAGE_LASTMOD = { '/': '2026-10-06' }
 
 // sitemap.xml: homepage + each live category + its valid landing pages (>=3
 // in-stock) + every IN-STOCK ready product page.
