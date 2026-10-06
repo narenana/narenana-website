@@ -150,7 +150,10 @@ No moves between hosts. One page merge on the sim host. Checklist and status in 
 
 - [x] Website live 6 Oct (`2f12b44`).
 - [x] fpvsim live 6 Oct (`0de8fe7`, deployed 16:17 UTC).
-- [ ] Nanawing 2: [PR #60](https://github.com/narenana/nanawing2/pull/60) is merged with Nanawing 2's own 5 Oct release and its gates are re-running. It merges when they pass and no other Nanawing 2 release is running. Expected Wed 7 Oct.
+- [ ] Nanawing 2: [PR #60](https://github.com/narenana/nanawing2/pull/60) is **green and ready**. It includes Nanawing 2's own 5 Oct release (PR #59).
+  - That release failed two browser gates on `main` on 6 Oct (rendering field-ready; media flight-stats timeout), so live Nanawing 2 is unchanged.
+  - Owner decision (7 Oct): the Nanawing 2 session fixes or re-runs its own release first, and PR #60 merges right after. One PR at a time.
+  - If `main` moves again before then, update PR #60 from `main` (regenerate `build/`) and let its gates re-run.
 - [ ] Log viewer items (header and footer, AI Debrief copy, old widget guard), by the log viewer session, by Fri 16 Oct.
 
 Exit: every item in §7 is either fixed or assigned to a later milestone, and the live sites agree with each other.
