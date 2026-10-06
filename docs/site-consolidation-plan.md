@@ -9,6 +9,7 @@
 - **Revised 6 Oct:** M2 finished eight days early, so the later milestones move one week earlier.
 - The work now finishes **Tue 10 Nov**, and 11–17 Nov is buffer.
 - The 17 Nov deadline is unchanged.
+
 **Owner:** narenana. Every production deploy needs the owner's OK, as usual.
 **Covers four repos:**
 - `narenana-website`: this repo. It runs www.narenana.com and Wings.
