@@ -352,7 +352,7 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
 - **2026-10-06** · **Pending release, date not set.** fpvsim `spectre-release` a725ad8 (not on `main`), with its guide pages on `chase-camera` 831e283 and the chase framing not yet committed. What visitors will see:
-  - Aircraft 3 → 4: the **WUDFLY Spectre**, a 0.60 m, 215 g twin-motor wing. The Hangar credits "Aircraft by WUDFLY ↗", linked to `https://wudfly.com/spectre`, WUDFLY's Spectre product page. The owner wants the designer's website and the Spectre's buy page linked; at a725ad8 both are that one URL.
+  - Aircraft 3 → 4: the **WUDFLY Spectre**, a 0.60 m, 215 g twin-motor wing, in its original white skin and lettering on an improved model (smoother shading, lettering that shimmers far less, about 30% fewer triangles). The Hangar credits "Aircraft by WUDFLY ↗", linked to WUDFLY's website `https://wudfly.com/`, and a second link, "Buy the SPECTRE ↗", goes to the Spectre's store page `https://wudfly.com/store/spectre` (fpvsim 6d66ff9). The aircraft guide and CREDITS.md carry the same two links.
   - Its simulator specs: 100 km/h top, 25 km/h stall, 344°/s roll, 8.9 m/s climb. The three other wings fly as before, but their published stall speeds become 24 / 28 / 34 km/h (were 27 / 32 / 39, which are now their stall-warning speeds): stall is now the level-flight lift limit.
   - Yaw on the Spectre only, by differential thrust, on a controller's yaw (rudder) stick. A standard gamepad uses its left stick pushed sideways. No yaw key and no touch yaw.
   - The calibration wizard has 8 steps, with an optional Yaw step (was 7).
