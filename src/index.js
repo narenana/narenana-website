@@ -475,10 +475,12 @@ async function forward(request, origin, prefix) {
   const target = origin.replace(/\/$/, '') + path + url.search
   const upstream = new Request(target, request)
   upstream.headers.delete('host')
-  // Don't pass the client's accept-encoding through: with it, workerd keeps
-  // the upstream body COMPRESSED end-to-end and HTMLRewriter (share-widget
-  // injection below) silently parses nothing. Without it, the runtime hands
-  // us a decoded body and re-compresses toward the client on its own.
+  // Don't pass the client's accept-encoding through. Without it, the runtime
+  // hands us a decoded body and re-compresses toward the client on its own.
+  // This dates from when the Worker rewrote the proxied HTML (an injected
+  // share widget, removed in the September 2026 release); nothing here reads
+  // the body now, so the header could pass through. Left as is so behaviour
+  // stays unchanged.
   upstream.headers.delete('accept-encoding')
 
   // redirect: 'manual' so we can rewrite Location ourselves before passing on.
