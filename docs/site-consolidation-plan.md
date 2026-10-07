@@ -351,13 +351,19 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
-- **2026-10-06** · **Pending release, date not set.** fpvsim `spectre-release` a725ad8 (not on `main`), with its guide pages on `chase-camera` 831e283 and the chase framing not yet committed. What visitors will see:
+- **2026-10-07** · **Pending release (the WUDFLY Spectre, entry below), date not set.** fpvsim `codex/spectre-wing` c652793 (pushed; the designer's preview), merged with `main` locally at 27f0011 (not pushed). Added since 6 Oct, visible to visitors when it ships:
+  - **Sim landing redesign:** the hero uses the Island art (a freight train through the fields), the first screen carries two map cards (the Island, and the Desert marked beta) linking to the map pages, the sections are tighter and show the Island and Desert art, the final launch band shows the Windmill Run start arches, and the FAQ gains "Where can I learn more?" (the guides and both map pages). The stat strip says "the desert (beta)". No URL changes.
+  - **Island map page tour (main's M2 copy):** with the Spectre in the fleet, the gorge tip says the Spectre rolls fastest (344°/s against the Nanawing One's 241°/s), and the biplane line names the three wings that can keep up with it (the Spectre tops out at 100 km/h).
+  - **Practice guide:** the Sukhoi S-70 Okhotnik line gives its 34 km/h level-flight stall (main's M2 line said 39, the stall-warning speed).
+
+  Fact inventory: the aircraft row's pending note stands. No milestone moves. At M5 the sim landing's unique content folds into the homepage; the redesign's map cards and art are candidates.
+- **2026-10-06** · **Pending release, date not set.** fpvsim `codex/spectre-wing` (the designer's preview; not on `main`); its state on 7 Oct is in the entry above. What visitors will see:
   - Aircraft 3 → 4: the **WUDFLY Spectre**, a 0.60 m, 215 g twin-motor wing, in its original white skin and lettering on an improved model (smoother shading, lettering that shimmers far less, about 30% fewer triangles). The Hangar credits "Aircraft by WUDFLY ↗", linked to WUDFLY's website `https://wudfly.com/`, and a second link, "Buy the SPECTRE ↗", goes to the Spectre's store page `https://wudfly.com/store/spectre` (fpvsim 6d66ff9). The aircraft guide and CREDITS.md carry the same two links.
   - Its simulator specs: 100 km/h top, 25 km/h stall, 344°/s roll, 8.9 m/s climb. The three other wings fly as before, but their published stall speeds become 24 / 28 / 34 km/h (were 27 / 32 / 39, which are now their stall-warning speeds): stall is now the level-flight lift limit.
   - Yaw on the Spectre only, by differential thrust, on a controller's yaw (rudder) stick. A standard gamepad uses its left stick pushed sideways. No yaw key and no touch yaw.
   - The calibration wizard has 8 steps, with an optional Yaw step (was 7).
-  - The chase camera frames every aircraft at the same size: the wingspan covers 30% of a 16:9 screen's width. Before, one fixed distance made the Spectre the smallest on screen.
-  - fpvsim's landing, guides, map pages and leaderboard page say four aircraft; the guides also cover yaw and the 8-step calibration (on `chase-camera`; at a725ad8 they still say 7 steps and that yaw isn't modelled).
+  - The chase camera frames every aircraft at the same size: the wingspan covers 24% of a 16:9 screen's width (30% was tried first; the owner moved it back on 6 Oct). Before, one fixed distance made the Spectre the smallest on screen.
+  - fpvsim's landing, guides, map pages and leaderboard page say four aircraft; the guides also cover yaw and the 8-step calibration.
 
   Fact inventory: aircraft and controls rows. The www copies to change in the same release are in [§7](#7-live-inconsistencies-to-fix-m2). No milestone moves; if this ships before M3, fpvsim's `product.json` starts with four aircraft.
 - **2026-10-06** · Owner decision: keep FAQPage structured data on every page with a visible FAQ. The log viewer's ban is retired (M2 item ticked; the generator emits it from M3).
