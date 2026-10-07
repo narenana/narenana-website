@@ -99,7 +99,7 @@ These need at least one of the Now/Next ships to feel solid before they're worth
 
 ## What's intentionally NOT here
 
-- **A blog or CMS.** YouTube is the channel; narenana.com is the toolset. Don't compete with the YouTube content — link to it.
+- **A blog or CMS.** YouTube is the channel; narenana.com is the toolset. Don't compete with the YouTube content — link to it. *Owner, 7 Oct 2026: the blog is dropped for good; the unmerged `feat/blog-phase-2` branch was deleted. Don't revive it.*
 - **Custom user-generated content moderation.** Curated only — channel owner picks what to feature. Avoids forum/comment hell.
 - **A login wall on tool basics.** Every tool's core flow must work anonymously. Login is for opt-in extras (cross-device sync, share-link aliases).
 - **Native mobile apps.** PWA install via the existing web is sufficient.
