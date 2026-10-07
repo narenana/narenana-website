@@ -352,7 +352,7 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
-- **2026-10-07** · **Pending release, date not set.** fpvsim `desert-civilian` (local, off `main`): nothing military on the Desert map (owner decision, 7 Oct). The army base becomes a manufacturing plant, and every military vehicle, aircraft and building is replaced by civilian models made for the project: container and cargo trucks, excavators, bulldozers, dump trucks, mobile cranes, a utility helicopter, business jets on the flyover circuit, factory halls, warehouses, gas storage spheres and a process unit. Visitor-visible copy:
+- **2026-10-07** · **Pending: ships with the WUDFLY Spectre release** (owner decision, 7 Oct; fpvsim `codex/spectre-wing`, merged from `desert-civilian`): nothing military on the Desert map. The army base becomes a manufacturing plant, and every military vehicle, aircraft and building is replaced by civilian models made for the project: container and cargo trucks, excavators, bulldozers, dump trucks, mobile cranes, a utility helicopter, business jets on the flyover circuit, factory halls, warehouses, gas storage spheres and a process unit. Visitor-visible copy:
   - the Hangar's Desert description: "an airbase" → "a factory", "an air base" → "a manufacturing plant";
   - the sim landing: "army base" → "manufacturing plant";
   - the Desert map page: the "Airfield & factory" feature, a photo caption, and the Tunnel Run line "back round the factory" (also in the course registry).
