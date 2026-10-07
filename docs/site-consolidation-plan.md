@@ -2,7 +2,7 @@
 
 **Status (6 Oct, 17:30 IST):** in progress.
 - M1 is done.
-- M2 is live on the website and the Nanawing sim. Nanawing 2's M2 release is in its pipeline ([PR #60](https://github.com/narenana/nanawing2/pull/60)).
+- M2 is live on the website and the Nanawing sim. Nanawing 2's M2 changes are inside its consolidated release, [PR #64](https://github.com/narenana/nanawing2/pull/64), which the Nanawing 2 session merges.
 - M3 is next, due **Fri 16 Oct**.
 
 **Window:** Tue 6 Oct → Tue 17 Nov 2026. Results are judged in February 2027.
@@ -150,10 +150,10 @@ No moves between hosts. One page merge on the sim host. Checklist and status in 
 
 - [x] Website live 6 Oct (`2f12b44`).
 - [x] fpvsim live 6 Oct (`0de8fe7`, deployed 16:17 UTC).
-- [ ] Nanawing 2: [PR #60](https://github.com/narenana/nanawing2/pull/60) is **green and ready**. It includes Nanawing 2's own 5 Oct release (PR #59).
-  - That release failed two browser gates on `main` on 6 Oct (rendering field-ready; media flight-stats timeout), so live Nanawing 2 is unchanged.
-  - Owner decision (7 Oct): the Nanawing 2 session fixes or re-runs its own release first, and PR #60 merges right after. One PR at a time.
-  - If `main` moves again before then, update PR #60 from `main` (regenerate `build/`) and let its gates re-run.
+- [ ] Nanawing 2: ships with Nanawing 2's consolidated release, [PR #64](https://github.com/narenana/nanawing2/pull/64) (`release/2026-10-07`).
+  - On 7 Oct the Nanawing 2 session closed PR #60 and folded it into PR #64, which contains the M2 commits (`e18adca`, `ceba5ab`; checked by ancestry).
+  - That session owns the merge; its gates were re-running on 7 Oct. Live Nanawing 2 is unchanged until PR #64 merges and promotes.
+  - After it ships, check the live landing: 8 aircraft, the two-maps line, "Get in touch", the new header and footer.
 - [ ] Log viewer items (header and footer, AI Debrief copy, old widget guard), by the log viewer session, by Fri 16 Oct.
 
 Exit: every item in §7 is either fixed or assigned to a later milestone, and the live sites agree with each other.
@@ -267,7 +267,7 @@ Found on the live sites on 6 Oct.
 |---|---|---|
 | website | `2f12b44` (merge of `feat/m2-content-fixes`) | **Live** 6 Oct. Checked: "See all 8 aircraft", the controls phrase, the full Sukhoi name, homepage lastmod |
 | fpvsim | `0de8fe7` (merge of `feat/m2-content-fixes`) | **Live** 6 Oct. Checked: new header on every page, `/guides/the-island` 301 → `/maps/island/`, the Island tour, the full Sukhoi name |
-| nanawing2 | [PR #60](https://github.com/narenana/nanawing2/pull/60), branch head `ceba5ab` | **In the release pipeline.** Merged with Nanawing 2's own 5 Oct release (one docs conflict; `build/` regenerated; provenance and 407 unit tests pass). Merges when its gates pass and no other Nanawing 2 release is running; expected Wed 7 Oct |
+| nanawing2 | Inside [PR #64](https://github.com/narenana/nanawing2/pull/64) (`release/2026-10-07`), which contains M2's `e18adca` and `ceba5ab` | **Not live yet.** The Nanawing 2 session folded PR #60 into its consolidated release on 7 Oct and merges it when its gates pass |
 
 Still open:
 - **Log viewer items** (header and footer, the debrief copy, the old widget guard): the log viewer session's, by Fri 16 Oct.
@@ -319,10 +319,15 @@ Found and not yet fixed (all already live):
   - `docs/post-release-todo.md` says the log viewer has no GA or Sentry ID; both are set now.
   - The `forward()` comment in `src/index.js` mentions a share widget the Worker no longer injects.
   - The log viewer's `share.css` has a guard for that old widget.
-- [ ] **Names vary.** "Sukhoi S-70" vs "Sukhoi S-70 Okhotnik". Nanawing 2's input is described four ways (keyboard / gamepad / RC radio / USB game controller). Pick one wording each.
+- [x] **Names vary.** "Sukhoi S-70" vs "Sukhoi S-70 Okhotnik". Nanawing 2's input is described four ways (keyboard / gamepad / RC radio / USB game controller). Pick one wording each.
+  - **Decided:** "Sukhoi S-70 Okhotnik" (6 Oct) and "keyboard, gamepad or USB RC radio" for Nanawing 2 (6 Oct).
+  - **Owner, 7 Oct:** the new aircraft is **"WUDFLY Spectre"**, in full wherever a name is shown, the same rule as the Sukhoi. "The Spectre" is fine only as a second reference in the same text.
 - Later milestones:
   - **M3:** structured-data `@id` conflicts across hosts (one scheme in `products.json`); map pages without the family header and footer; `/log-viewer/` listed in two sitemaps; GA4 missing on the sim guides.
   - **M5:** two hosts competing for "nanawing" with near-identical titles.
+  - **At the Spectre release (pending, date not set; see the Change log):**
+    - The www homepage names three Nanawing aircraft: the racing card's list ("Nanawing One, Sukhoi S-70 Okhotnik, Morok UAV") and the podium's aircraft `<select>` (three options), both in `site/index.html`. `site/assets/leaderboard.js` reads the `<select>`, so it needs no edit. Add the WUDFLY Spectre in the same release, once the production leaderboard worker accepts `spectre` (its `AIRCRAFT` set on fpvsim `main` has three).
+    - **Name: "WUDFLY Spectre"** (owner, 7 Oct). fpvsim's `spectre-release` branch names it three ways: "Spectre" in the Hangar, "Spectre · WUDFLY" on the leaderboard page and in guide tables, and "WUDFLY Spectre" on the map pages and in the aircraft guide. Before it ships, the Hangar, leaderboard page and guide tables change to "WUDFLY Spectre".
 
 ## 8. Fact inventory
 
@@ -337,9 +342,9 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Family assets (shell.css, fonts, share.js…) | website `site/assets/family/*` | Copied by hand into the three apps; already diverged | Family manifest + `family:sync` |
 | Nanawing maps (count, names, beta) | fpvsim `src/world/maps.ts` | fpvsim landing, guides, map pages, leaderboard page; www homepage (strip, Desert band, `<select>`, JSON-LD); nanawing2 landing | `product.json` → tokens and `data-fact` |
 | Race courses (ids, names, km, medals) | fpvsim `src/race/courses.ts`, `desertCourses.json` | fpvsim map pages, leaderboard page, guides; www homepage + `site/assets/leaderboard.js` | Same |
-| Nanawing aircraft (names, count, specs) | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing, aircraft guide (specs typed by hand), other guides, leaderboard page; www homepage | Same |
+| Nanawing aircraft (names, count, specs). *Pending release: 4 with the WUDFLY Spectre, new stall figures (Change log, 6 Oct)* | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing (stat strip, feature list, hero top-3 names), aircraft guide (specs typed by hand), other guides, map pages (wing count, wing tiles, `public/maps/maps.js`), leaderboard page; www homepage (racing card list, podium aircraft `<select>`) | Same |
 | Nanawing 2 aircraft (selectable count, names) | nanawing2 `lib/aircraft-availability.ts` (8) | nanawing2 landing (says 5 and 8), guide (names 5), `build/`; www homepage ("5"), Wings practise links | Same |
-| Controls and keys | fpvsim `src/hud/menuCopy.ts`; nanawing2 `lib/keymap.ts` | fpvsim landing FAQ, 4 guides; nanawing2 guide; www homepage | Same |
+| Controls and keys. *Pending release: Spectre yaw stick, 8-step calibration (Change log, 6 Oct)* | fpvsim `src/hud/menuCopy.ts`, calibration steps in `src/hud/controlsUI.ts` (`src/hud/wizardMath.ts` from the Spectre release); nanawing2 `lib/keymap.ts` | fpvsim landing FAQ, 4 guides (the step count: how-to-play, the guides index, the no-controller guide and its FAQPage); nanawing2 guide; www homepage | Same |
 | Log formats and firmware limits | log viewer `src/App.jsx` + parsers | Log viewer landing and 9 content pages, README; www homepage, `/videos/log-viewer-walkthrough/`, Wings practise links | `product.json` |
 | Claims: free, no install, no login, offline, phones | Behaviour in each app | www homepage, fpvsim landing, nanawing2 FAQ, log viewer pages ("nothing is uploaded") | `product.json` claims |
 | Wings prices, stock, sellers | Database (rendered per request) | Homepage fallback text (rewritten per request) | Unchanged + `/wings/facts.json` |
@@ -414,6 +419,19 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-07** · Owner decisions and Nanawing 2 status:
+  - The new aircraft is named **"WUDFLY Spectre"** everywhere, like the Sukhoi (see §7, Names).
+  - Nanawing 2: the Nanawing 2 session folded PR #60 into its consolidated release, PR #64 (`release/2026-10-07`). Nanawing 2's M2 ships when that merges.
+  - The other session's `plan-spectre-release` notes (below) are merged into this plan; the conflict with the 6 Oct M2 entries was resolved by keeping both.
+- **2026-10-06** · **Pending release, date not set.** fpvsim `spectre-release` a725ad8 (not on `main`), with its guide pages on `chase-camera` 831e283 and the chase framing not yet committed. What visitors will see:
+  - Aircraft 3 → 4: the **WUDFLY Spectre**, a 0.60 m, 215 g twin-motor wing, in its original white skin and lettering on an improved model (smoother shading, lettering that shimmers far less, about 30% fewer triangles). The Hangar credits "Aircraft by WUDFLY ↗", linked to WUDFLY's website `https://wudfly.com/`, and a second link, "Buy the SPECTRE ↗", goes to the Spectre's store page `https://wudfly.com/store/spectre` (fpvsim 6d66ff9). The aircraft guide and CREDITS.md carry the same two links.
+  - Its simulator specs: 100 km/h top, 25 km/h stall, 344°/s roll, 8.9 m/s climb. The three other wings fly as before, but their published stall speeds become 24 / 28 / 34 km/h (were 27 / 32 / 39, which are now their stall-warning speeds): stall is now the level-flight lift limit.
+  - Yaw on the Spectre only, by differential thrust, on a controller's yaw (rudder) stick. A standard gamepad uses its left stick pushed sideways. No yaw key and no touch yaw.
+  - The calibration wizard has 8 steps, with an optional Yaw step (was 7).
+  - The chase camera frames every aircraft at the same size: the wingspan covers 30% of a 16:9 screen's width. Before, one fixed distance made the Spectre the smallest on screen.
+  - fpvsim's landing, guides, map pages and leaderboard page say four aircraft; the guides also cover yaw and the 8-step calibration (on `chase-camera`; at a725ad8 they still say 7 steps and that yaw isn't modelled).
+
+  Fact inventory: aircraft and controls rows. The www copies to change in the same release are in [§7](#7-live-inconsistencies-to-fix-m2). No milestone moves; if this ships before M3, fpvsim's `product.json` starts with four aircraft.
 - **2026-10-06, 17:30 IST** · Schedule revised: M2 finished early, so the later milestones move one week earlier.
   - M3 Fri 16 Oct (was Wed 21 Oct)
   - M4 Tue 20 Oct (was Tue 27 Oct)
@@ -449,6 +467,5 @@ Add newest entries at the top: date, repo and commit, what changed, and the mile
     - "Sukhoi S-70 Okhotnik" in the race card and leaderboard;
     - homepage lastmod;
     - stale notes fixed.
-
 - **2026-10-06** · Owner decision: keep FAQPage structured data on every page with a visible FAQ. The log viewer's ban is retired (M2 item ticked; the generator emits it from M3).
 - **2026-10-06** · narenana-website: plan written. Decisions locked: folders `/nanawing/`, `/nanawing2/`; the homepage stays Nanawing's front door. The "update this plan" rule was added to all four repos. M1 done.
