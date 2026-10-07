@@ -352,6 +352,9 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-07** · **Pending: ships with the WUDFLY Spectre release** (owner request, 7 Oct; fpvsim `spectre-release` 4f8e030, local, not yet on `codex/spectre-wing`): the sim landing's hero shows the Desert (the pyramids and the river) instead of the Island train, and a new picture of the WUDFLY Spectre and the Nanawing One flies over it (rendered from the game's models; between the copy and the map cards on desktops, between the copy and the review on phones). No copy, facts or URLs change.
+
+  Fact inventory: none. No milestone moves; at M5 the hero art and the flyby picture are candidates for the homepage's Nanawing band.
 - **2026-10-07** · **Pending: ships with the WUDFLY Spectre release** (owner decision, 7 Oct; fpvsim `spectre-release` 561eb01, local, not yet on `codex/spectre-wing`): the Spectre's battery becomes 2S 1500 mAh with 12 A at full throttle (was 2S 1000 mAh, 15 A), about 7 minutes flat out and about 18 at 60% throttle. Its flight physics is unchanged. Visitor-visible: the Hangar's spec line and the aircraft guide's spec row say "2S LiHV 1500 mAh · 12 A" (changed in the same commit; no www page states the pack).
 
   Fact inventory: the aircraft row's pending note. No milestone moves.
