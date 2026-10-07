@@ -1,8 +1,8 @@
 # One site: moving every indexable page onto www.narenana.com
 
-**Status (6 Oct, 17:30 IST):** in progress.
+**Status (7 Oct, 22:50 IST):** in progress.
 - M1 is done.
-- M2 is live on the website and the Nanawing sim. Nanawing 2's M2 changes are inside its consolidated release, [PR #64](https://github.com/narenana/nanawing2/pull/64), which the Nanawing 2 session merges.
+- M2 is live on all three sites: the website and the Nanawing sim on 6 Oct, Nanawing 2 on 7 Oct. Only the log viewer's items remain, with the log viewer session.
 - M3 is next, due **Fri 16 Oct**.
 
 **Window:** Tue 6 Oct → Tue 17 Nov 2026. Results are judged in February 2027.
@@ -118,7 +118,7 @@ Revised 6 Oct. The "Was" column is the original 6 Oct schedule.
 | # | Due | Was | What | Status |
 |---|---|---|---|---|
 | **M1** | **Tue 6 Oct** | Tue 6 Oct | Plan and guardrails | **Done** 6 Oct |
-| **M2** | **Wed 14 Oct** | Wed 14 Oct | Fix today's drift in place; merge the two Island pages | **Live** on the website and fpvsim 6 Oct. Nanawing 2 in its release pipeline. Log viewer items with the log viewer session, by Fri 16 Oct |
+| **M2** | **Wed 14 Oct** | Wed 14 Oct | Fix today's drift in place; merge the two Island pages | **Live** on all three sites: the website and fpvsim 6 Oct, Nanawing 2 7 Oct. Log viewer items with the log viewer session, by Fri 16 Oct |
 | **M3** | **Fri 16 Oct** | Wed 21 Oct | One content home, facts files and checks; new pages ready on a preview | Next |
 | **M4** | **Tue 20 Oct** | Tue 27 Oct | Nanawing 2's pages move to `/nanawing2/` (the trial run) | — |
 | — | 20 Oct → 3 Nov | 27 Oct → 10 Nov | Let Nanawing 2's move settle (Google's advice: one host at a time) | — |
@@ -144,16 +144,15 @@ Rough effort: M2 2–3 days, M3 5–7 days, M4 2–3 days, M5 4–6 days, M6 1�
 - [x] Baseline numbers recorded ([§10](#10-measurement)).
 - [x] The "update this plan" rule added to all four repos (`CLAUDE.md` and `AGENTS.md`), as docs-only `[skip ci]` commits.
 
-### M2: Fix today's drift in place (due Wed 14 Oct) — live on 2 of 3 sites
+### M2: Fix today's drift in place (due Wed 14 Oct) — live on all three sites
 
 No moves between hosts. One page merge on the sim host. Checklist and status in [§7](#7-live-inconsistencies-to-fix-m2).
 
 - [x] Website live 6 Oct (`2f12b44`).
 - [x] fpvsim live 6 Oct (`0de8fe7`, deployed 16:17 UTC).
-- [ ] Nanawing 2: ships with Nanawing 2's consolidated release, [PR #64](https://github.com/narenana/nanawing2/pull/64) (`release/2026-10-07`).
-  - On 7 Oct the Nanawing 2 session closed PR #60 and folded it into PR #64, which contains the M2 commits (`e18adca`, `ceba5ab`; checked by ancestry).
-  - That session owns the merge; its gates were re-running on 7 Oct. Live Nanawing 2 is unchanged until PR #64 merges and promotes.
-  - After it ships, check the live landing: 8 aircraft, the two-maps line, "Get in touch", the new header and footer.
+- [x] Nanawing 2 live 7 Oct, inside Nanawing 2's consolidated release [PR #64](https://github.com/narenana/nanawing2/pull/64) (merged 17:10 UTC as `7195988`, live build `04d4c81e`).
+  - Checked live: "8 powered aircraft" with no "5 aircraft" left; the new header and footer; "the Island and the Desert"; no private GitHub link.
+  - The guide lists Electric Kato, Extra 3D and Gee Bee.
 - [ ] Log viewer items (header and footer, AI Debrief copy, old widget guard), by the log viewer session, by Fri 16 Oct.
 
 Exit: every item in §7 is either fixed or assigned to a later milestone, and the live sites agree with each other.
@@ -267,7 +266,7 @@ Found on the live sites on 6 Oct.
 |---|---|---|
 | website | `2f12b44` (merge of `feat/m2-content-fixes`) | **Live** 6 Oct. Checked: "See all 8 aircraft", the controls phrase, the full Sukhoi name, homepage lastmod |
 | fpvsim | `0de8fe7` (merge of `feat/m2-content-fixes`) | **Live** 6 Oct. Checked: new header on every page, `/guides/the-island` 301 → `/maps/island/`, the Island tour, the full Sukhoi name |
-| nanawing2 | Inside [PR #64](https://github.com/narenana/nanawing2/pull/64) (`release/2026-10-07`), which contains M2's `e18adca` and `ceba5ab` | **Not live yet.** The Nanawing 2 session folded PR #60 into its consolidated release on 7 Oct and merges it when its gates pass |
+| nanawing2 | Inside [PR #64](https://github.com/narenana/nanawing2/pull/64) (`release/2026-10-07`, merged as `7195988`), which contains M2's `e18adca` and `ceba5ab` | **Live** 7 Oct, 17:14 UTC (build `04d4c81e`). Checked: 8 powered aircraft, the new header and footer, the two-maps line, no private GitHub link, and the guide lists all 8 |
 
 Still open:
 - **Log viewer items** (header and footer, the debrief copy, the old widget guard): the log viewer session's, by Fri 16 Oct.
@@ -418,6 +417,11 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-07, 22:50 IST** · Nanawing 2's M2 is live.
+  - PR #64 (`release/2026-10-07`) merged at 17:10 UTC as `7195988` and promoted as build `04d4c81e`.
+  - Checked on the live landing and guide.
+  - M2 is now live on all three sites; the log viewer items remain with the log viewer session.
 
 - **2026-10-07** · Owner decisions and Nanawing 2 status:
   - The new aircraft is named **"WUDFLY Spectre"** everywhere, like the Sukhoi (see §7, Names).
