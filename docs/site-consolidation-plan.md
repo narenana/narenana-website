@@ -248,6 +248,7 @@ Found on the live sites on 6 Oct.
   - The M3 generator emits it from each page's `faqs`.
   - The log viewer's "no FAQPage" rule (`scripts/gen-content.mjs` comment, growth plan) is retired; its pages get the markup when their sources move here in M3.
   - Since Aug 2023, Google shows FAQ rich results only for well-known government and health sites, so the markup mainly helps other search engines and AI assistants read the answers.
+- [ ] **The www homepage calls the Desert's compound an army base** (`site/index.html`, Desert band: "An airfield and army base under the mesas"). From fpvsim `desert-civilian` on, the Desert has nothing military: change it to "An airfield and a manufacturing plant under the mesas" when that branch ships.
 - [ ] **Nanawing 2's "Source & feedback" link points at a private GitHub repo**, which returns 404 for visitors. Replace it with the contact link.
 - [ ] **The log viewer's copy hasn't caught up with what it now does** (log viewer session). The AI Flight Debrief isn't mentioned anywhere. "Nothing is uploaded" sits next to consent-gated findings sent to `/api/debrief`, usage counts to `/api/usage` and anonymous Sentry error reports. The log file itself never leaves the browser; say exactly what does.
 - [ ] **Stale internal notes:**
@@ -351,6 +352,12 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-07** · **Pending release, date not set.** fpvsim `desert-civilian` (local, off `main`): nothing military on the Desert map (owner decision, 7 Oct). The army base becomes a manufacturing plant, and every military vehicle, aircraft and building is replaced by civilian models made for the project: container and cargo trucks, excavators, bulldozers, dump trucks, mobile cranes, a utility helicopter, business jets on the flyover circuit, factory halls, warehouses, gas storage spheres and a process unit. Visitor-visible copy:
+  - the Hangar's Desert description: "an airbase" → "a factory", "an air base" → "a manufacturing plant";
+  - the sim landing: "army base" → "manufacturing plant";
+  - the Desert map page: the "Airfield & factory" feature, a photo caption, and the Tunnel Run line "back round the factory" (also in the course registry).
+
+  Fact inventory: the maps row (descriptions). The www homepage's Desert band still says "army base": see [§7](#7-live-inconsistencies-to-fix-m2). No milestone moves.
 - **2026-10-07** · **Pending release (the WUDFLY Spectre, entry below), date not set.** fpvsim `codex/spectre-wing` c652793 (pushed; the designer's preview), merged with `main` locally at 27f0011 (not pushed). Added since 6 Oct, visible to visitors when it ships:
   - **Sim landing redesign:** the hero uses the Island art (a freight train through the fields), the first screen carries two map cards (the Island, and the Desert marked beta) linking to the map pages, the sections are tighter and show the Island and Desert art, the final launch band shows the Windmill Run start arches, and the FAQ gains "Where can I learn more?" (the guides and both map pages). The stat strip says "the desert (beta)". No URL changes.
   - **Island map page tour (main's M2 copy):** with the Spectre in the fleet, the gorge tip says the Spectre rolls fastest (344°/s against the Nanawing One's 241°/s), and the biplane line names the three wings that can keep up with it (the Spectre tops out at 100 km/h).
