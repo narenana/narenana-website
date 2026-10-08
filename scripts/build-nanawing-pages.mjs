@@ -15,7 +15,9 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const ext = 'target="_blank" rel="noopener"';
 const play = (id) => facts.playUrl.replace('{id}', id).replace(/&/g, '&amp;');
 const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const weight = (kg) => (kg < 1 ? `${fmt(kg * 1000)} g` : `${fmt(kg, 1)} kg`);
+const weight = (kg) => (kg < 1 ? `${fmt(kg * 1000)}&nbsp;g` : `${fmt(kg, 1)}&nbsp;kg`);
+// A number never wraps away from its unit; values break only at the ' · ' separators.
+const battery = (b) => esc(b).replace(/ (mAh|A)\b/g, '&nbsp;$1');
 const IMG = (id, w) => `/assets/nanawing/aircraft/${id}-${w}.webp`;
 
 // Real pixel sizes, so every <img> reserves its space (no layout shift).
@@ -41,14 +43,14 @@ function credit(a) {
 }
 
 const specRows = [
-  ['Top speed', (a) => `${fmt(a.topSpeedKmh)} km/h`],
-  ['Stall speed', (a) => `${fmt(a.stallSpeedKmh)} km/h`],
+  ['Top speed', (a) => `${fmt(a.topSpeedKmh)}&nbsp;km/h`],
+  ['Stall speed', (a) => `${fmt(a.stallSpeedKmh)}&nbsp;km/h`],
   ['Roll rate', (a) => `${fmt(a.rollRateDegS)}°/s`],
-  ['Climb rate', (a) => `${fmt(a.climbRateMs, 1)} m/s`],
-  ['Wingspan', (a) => `${fmt(a.spanM, 2)} m`],
+  ['Climb rate', (a) => `${fmt(a.climbRateMs, 1)}&nbsp;m/s`],
+  ['Wingspan', (a) => `${fmt(a.spanM, 2)}&nbsp;m`],
   ['Weight', (a) => weight(a.massKg)],
-  ['Thrust', (a) => `${fmt(a.thrustN)} N`],
-  ['Battery', (a) => esc(a.battery)],
+  ['Thrust', (a) => `${fmt(a.thrustN)}&nbsp;N`],
+  ['Battery', (a) => battery(a.battery)],
 ];
 
 const courseRows = facts.courses.map((c) =>
@@ -69,7 +71,7 @@ const wudfly = (w) => `<div class="ac-wudfly"><h3>${esc(w.h3)}</h3>${w.paragraph
 
 const sections = facts.aircraft.map((a, i) => {
   const c = copy.aircraft[a.id];
-  return `<section class="ac-craft" id="${a.id}" aria-labelledby="${a.id}-title">
+  return `<section class="ac-craft${i % 2 ? ' ac-craft--flip' : ''}" id="${a.id}" aria-labelledby="${a.id}-title">
 <figure class="ac-craft-img">${img(a, '(max-width:860px) 92vw, 520px')}</figure>
 <div class="ac-craft-body"><span class="eyebrow">${String(i + 1).padStart(2, '0')} / ${esc(c.role.toUpperCase())}</span><h2 id="${a.id}-title">${esc(a.name)}</h2>
 <p class="ac-credit">${credit(a)}</p>
@@ -120,7 +122,7 @@ writeFileSync(`site${path}index.html`, page({
   image: `${site}/nanawing/aircraft/og.jpg`,
   body,
   schema,
-  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=6a99e910fe">',
+  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=bdfe3c20e3">',
   scripts,
 }));
 

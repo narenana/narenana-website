@@ -97,8 +97,16 @@ main:has(.ac-page){max-width:1180px}
 }
 @media (min-width:860px){
   .ac-lineup{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+  /* Image and text share row 1, placed explicitly; the WUDFLY card takes row 2 across both columns.
+     (Reordering with order: put the Spectre image after the full-width card, below the text.) */
   .ac-craft{grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:40px;align-items:start}
-  .ac-craft:nth-of-type(odd) .ac-craft-img{order:2}
+  .ac-craft-img,.ac-craft-body{grid-row:1}
+  .ac-craft-img{grid-column:1}
+  .ac-craft-body{grid-column:2}
+  .ac-craft--flip{grid-template-columns:minmax(0,6fr) minmax(0,5fr)}
+  .ac-craft--flip .ac-craft-img{grid-column:2}
+  .ac-craft--flip .ac-craft-body{grid-column:1}
+  .ac-wudfly{grid-row:2}
   .ac-wudfly{padding:28px}
   .ac-videos{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
