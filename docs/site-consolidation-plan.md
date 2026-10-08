@@ -324,9 +324,13 @@ Found and not yet fixed (all already live):
 - Later milestones:
   - **M3:** structured-data `@id` conflicts across hosts (one scheme in `products.json`); map pages without the family header and footer; `/log-viewer/` listed in two sitemaps; GA4 missing on the sim guides.
   - **M5:** two hosts competing for "nanawing" with near-identical titles.
-  - **At the Spectre release (pending, date not set; see the Change log):**
-    - The www homepage names three Nanawing aircraft: the racing card's list ("Nanawing One, Sukhoi S-70 Okhotnik, Morok UAV") and the podium's aircraft `<select>` (three options), both in `site/index.html`. `site/assets/leaderboard.js` reads the `<select>`, so it needs no edit. Add the WUDFLY Spectre in the same release, once the production leaderboard worker accepts `spectre` (its `AIRCRAFT` set on fpvsim `main` has three).
-    - **Name: "WUDFLY Spectre"** (owner, 7 Oct). fpvsim's `spectre-release` branch names it three ways: "Spectre" in the Hangar, "Spectre · WUDFLY" on the leaderboard page and in guide tables, and "WUDFLY Spectre" on the map pages and in the aircraft guide. Before it ships, the Hangar, leaderboard page and guide tables change to "WUDFLY Spectre".
+  - **At the Spectre release (shipped 8 Oct; see the Change log):**
+    - [x] **www homepage:** the racing card's list and the podium's aircraft `<select>` now include the WUDFLY Spectre (`spectre`; the production leaderboard accepts it). The Desert line says "a manufacturing plant", not "army base", to match the civilian Desert.
+    - [ ] **Name: "WUDFLY Spectre"** (owner, 7 Oct). The release shipped it in full on the sim's landing, map pages and aircraft guide. Two places still use short forms:
+      - the in-game name, "Spectre" (fpvsim `src/aircraft/catalog.ts`, shown in the Hangar);
+      - "Spectre · WUDFLY" on the sim's leaderboard page.
+      
+      Both change to "WUDFLY Spectre". That's an fpvsim change, which needs a preview and the owner's OK to deploy.
 
 ## 8. Fact inventory
 
@@ -339,11 +343,11 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Header: product names, nav captions, URLs | website `scripts/brand-shell.mjs` | Pasted into fpvsim (index, 10 guides, leaderboard, 404) and nanawing2 (index, guide, 404, `build/`); a stale copy in the log viewer (`scripts/brand-shell.mjs`, `src/FamilyNav.jsx`, 10 generated pages) | `family/products.json` + `family:sync` + header test |
 | Footer tagline and links | website `familyFooter()` | Pasted in all app pages; the homepage has its own footer | Same |
 | Family assets (shell.css, fonts, share.js…) | website `site/assets/family/*` | Copied by hand into the three apps; already diverged | Family manifest + `family:sync` |
-| Nanawing maps (count, names, beta) | fpvsim `src/world/maps.ts` | fpvsim landing, guides, map pages, leaderboard page; www homepage (strip, Desert band, `<select>`, JSON-LD); nanawing2 landing | `product.json` → tokens and `data-fact` |
+| Nanawing maps (count, names, beta, what's on them). *8 Oct: the Desert's army base became a civilian manufacturing plant* | fpvsim `src/world/maps.ts` | fpvsim landing, guides, map pages, leaderboard page; www homepage (strip, Desert band, `<select>`, JSON-LD); nanawing2 landing | `product.json` → tokens and `data-fact` |
 | Race courses (ids, names, km, medals) | fpvsim `src/race/courses.ts`, `desertCourses.json` | fpvsim map pages, leaderboard page, guides; www homepage + `site/assets/leaderboard.js` | Same |
-| Nanawing aircraft (names, count, specs). *Pending release: 4 with the WUDFLY Spectre, new stall figures (Change log, 6 Oct)* | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing (stat strip, feature list, hero top-3 names), aircraft guide (specs typed by hand), other guides, map pages (wing count, wing tiles, `public/maps/maps.js`), leaderboard page; www homepage (racing card list, podium aircraft `<select>`) | Same |
+| Nanawing aircraft (names, count, specs). *4 since 8 Oct, with the WUDFLY Spectre; new stall figures (Change log, 8 Oct)* | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing (stat strip, feature list, hero top-3 names), aircraft guide (specs typed by hand), other guides, map pages (wing count, wing tiles, `public/maps/maps.js`), leaderboard page; www homepage (racing card list, podium aircraft `<select>`) | Same |
 | Nanawing 2 aircraft (selectable count, names) | nanawing2 `lib/aircraft-availability.ts` (8) | nanawing2 landing (says 5 and 8), guide (names 5), `build/`; www homepage ("5"), Wings practise links | Same |
-| Controls and keys. *Pending release: Spectre yaw stick, 8-step calibration (Change log, 6 Oct)* | fpvsim `src/hud/menuCopy.ts`, calibration steps in `src/hud/controlsUI.ts` (`src/hud/wizardMath.ts` from the Spectre release); nanawing2 `lib/keymap.ts` | fpvsim landing FAQ, 4 guides (the step count: how-to-play, the guides index, the no-controller guide and its FAQPage); nanawing2 guide; www homepage | Same |
+| Controls and keys. *Since 8 Oct: the Spectre's yaw stick and an 8-step calibration (Change log, 8 Oct)* | fpvsim `src/hud/menuCopy.ts`, calibration steps in `src/hud/controlsUI.ts` (`src/hud/wizardMath.ts` from the Spectre release); nanawing2 `lib/keymap.ts` | fpvsim landing FAQ, 4 guides (the step count: how-to-play, the guides index, the no-controller guide and its FAQPage); nanawing2 guide; www homepage | Same |
 | Log formats and firmware limits | log viewer `src/App.jsx` + parsers | Log viewer landing and 9 content pages, README; www homepage, `/videos/log-viewer-walkthrough/`, Wings practise links | `product.json` |
 | Claims: free, no install, no login, offline, phones | Behaviour in each app | www homepage, fpvsim landing, nanawing2 FAQ, log viewer pages ("nothing is uploaded") | `product.json` claims |
 | Wings prices, stock, sellers | Database (rendered per request) | Homepage fallback text (rewritten per request) | Unchanged + `/wings/facts.json` |
@@ -417,6 +421,15 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-08** · fpvsim's Spectre release is live (`11a48ae`, deployed 04:33 UTC). For visitors:
+  - **A fourth aircraft, the WUDFLY Spectre**, with yaw on a controller's rudder stick and an 8-step calibration.
+  - **New published stall speeds** for the other three wings.
+  - **A civilian Desert:** the army base is now a manufacturing plant, and nothing military remains.
+  - **A new Desert hero on the sim's landing.**
+  - **Website follow-up** (`fix/spectre-desert-home`): the homepage racing card and leaderboard dropdown add the WUDFLY Spectre, and the Desert line says "a manufacturing plant".
+  - **Still open:** the sim's in-game name "Spectre" and its leaderboard page's "Spectre · WUDFLY" against the owner's "WUDFLY Spectre" (§7).
+  - Nanawing 2 and the log viewer don't mention the aircraft or the army base, so no change is needed there.
 
 - **2026-10-07, 22:50 IST** · Nanawing 2's M2 is live.
   - PR #64 (`release/2026-10-07`) merged at 17:10 UTC as `7195988` and promoted as build `04d4c81e`.
