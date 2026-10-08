@@ -1,0 +1,100 @@
+{
+  "_about": "Snapshot of Nanawing (fpvsim) facts used by www pages. Source of truth is the fpvsim repo; M3 of docs/site-consolidation-plan.md replaces this hand-made snapshot with the product.json the fpvsim build publishes. Update it whenever these facts change in fpvsim.",
+  "source": {
+    "repo": "narenana/fpvsim",
+    "commit": "11a48ae",
+    "date": "2026-10-08",
+    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/race/courses.ts", "src/race/desertCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
+  },
+  "playUrl": "https://sim.narenana.com/?play&aircraft={id}",
+  "aircraft": [
+    {
+      "id": "desertwing",
+      "name": "Nanawing One",
+      "spanM": 0.95,
+      "massKg": 1,
+      "thrustN": 26,
+      "topSpeedKmh": 191,
+      "stallSpeedKmh": 24,
+      "stallWarningKmh": 27,
+      "rollRateDegS": 241,
+      "climbRateMs": 18.6,
+      "battery": "3S 5000 mAh · 40 A",
+      "short": "Docile, quick, forgiving.",
+      "credit": { "kind": "original", "text": "Original model by narenana" }
+    },
+    {
+      "id": "morok",
+      "name": "Morok UAV",
+      "spanM": 0.85,
+      "massKg": 1.4,
+      "thrustN": 44,
+      "topSpeedKmh": 249,
+      "stallSpeedKmh": 28,
+      "stallWarningKmh": 32,
+      "rollRateDegS": 201,
+      "climbRateMs": 24.6,
+      "battery": "4S 6500 mAh · 60 A",
+      "short": "Stable and patient. Rides gusts.",
+      "credit": {
+        "kind": "cc-by",
+        "title": "Morok UAV Drone 3D Model",
+        "author": "rombic992",
+        "source": "https://sketchfab.com/3d-models/morok-uav-drone-3d-model-3ae0e923b50f4885a2317eba199043cd",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "sukhoi",
+      "name": "Sukhoi S-70 Okhotnik",
+      "spanM": 1.05,
+      "massKg": 2,
+      "thrustN": 74,
+      "topSpeedKmh": 323,
+      "stallSpeedKmh": 34,
+      "stallWarningKmh": 39,
+      "rollRateDegS": 166,
+      "climbRateMs": 32.3,
+      "battery": "6S 8000 mAh · 90 A",
+      "short": "Heavy and fast. Carries speed.",
+      "credit": {
+        "kind": "cc-by",
+        "title": "Sukhoi S-70 Okhotnik",
+        "author": "Muhamad Mirza Arrafi",
+        "source": "https://sketchfab.com/3d-models/sukhoi-s-70-okhotnik-e646ec35becb401faa772070b9a18280",
+        "license": "CC BY 4.0",
+        "licenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      }
+    },
+    {
+      "id": "spectre",
+      "name": "WUDFLY Spectre",
+      "_name": "Owner decision 2026-10-07: 'WUDFLY Spectre' wherever a name is shown (fpvsim catalog.ts still says 'Spectre').",
+      "spanM": 0.6,
+      "massKg": 0.215,
+      "thrustN": 3,
+      "topSpeedKmh": 100,
+      "stallSpeedKmh": 25,
+      "stallWarningKmh": 31,
+      "rollRateDegS": 344,
+      "climbRateMs": 8.9,
+      "battery": "2S 1500 mAh · 12 A",
+      "short": "Light, agile. Made for close flying.",
+      "credit": {
+        "kind": "designer",
+        "designer": "WUDFLY",
+        "designerUrl": "https://wudfly.com/",
+        "buyUrl": "https://wudfly.com/store/spectre",
+        "youtube": "https://www.youtube.com/@WUDFLY",
+        "text": "Aircraft design by WUDFLY. The simulator model is an original recreation; handling is a simulator approximation, not a manufacturer-validated flight model."
+      }
+    }
+  ],
+  "courses": [
+    { "id": "windmill-run", "name": "Windmill Run", "map": "Island", "km": 4.3 },
+    { "id": "river-run", "name": "River Run", "map": "Island", "km": 8.1 },
+    { "id": "tunnel-run", "name": "Tunnel Run", "map": "Desert", "km": 5.1 },
+    { "id": "pyramid-run", "name": "Pyramid Run", "map": "Desert", "km": 5.7 }
+  ]
+}

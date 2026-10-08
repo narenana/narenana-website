@@ -39,9 +39,11 @@ const referrers = () => [
   ...walk(ASSETS, (p) => /\.(css|js|mjs)$/.test(p)),
   ...walk(join(ROOT, 'catalog', 'lib'), (p) => /\.mjs$/.test(p) && !p.endsWith('styles.mjs')),
   ...walk(join(ROOT, 'src'), (p) => /\.js$/.test(p) || (/\.mjs$/.test(p) && p !== MANIFEST)),
-  // Editorial page generator: its template must carry the same versions, or a
-  // re-run would regenerate the video/methodology pages with stale links.
+  // Editorial page generators and their shared shell: the templates must carry
+  // the same versions, or a re-run would regenerate the pages with stale links.
   join(ROOT, 'scripts', 'seo-content.mjs'),
+  join(ROOT, 'scripts', 'page-shell.mjs'),
+  join(ROOT, 'scripts', 'build-nanawing-pages.mjs'),
 ]
 
 // Absolute (/assets/x.css, https://www.narenana.com/assets/x.css) and, inside
