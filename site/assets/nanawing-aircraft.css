@@ -44,6 +44,14 @@ main:has(.ac-page){max-width:1180px}
 .ac-craft{margin-top:56px;padding-top:40px;border-top:1px solid var(--ac-line);display:grid;gap:22px;scroll-margin-top:20px}
 .ac-craft-img{margin:0;padding:18px;border-radius:8px;background:var(--ac-sky);border:1px solid var(--ac-line)}
 .ac-craft-img img{display:block;width:100%;height:auto}
+/* A real photo (the WUDFLY Spectre): full-bleed in its frame, no studio panel */
+.ac-craft-photo{padding:0;background:none;border:0}
+.ac-craft-photo img{aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid var(--ac-line)}
+.ac-craft-photo figcaption{font-size:12px;color:var(--ac-muted);margin-top:6px}
+.ac-gallery{list-style:none;margin:18px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.ac-gallery li:first-child{grid-column:1/-1}
+.ac-gallery img{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:cover;border-radius:6px;border:1px solid var(--ac-line)}
+.ac-gallery li:first-child img{aspect-ratio:16/10;object-position:50% 40%}
 .ac-craft-body h2{margin-top:8px}
 .ac-credit{font-size:13px;line-height:1.6;color:var(--ac-muted);margin:-4px 0 14px}
 .ac-specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:22px 0;border:1px solid var(--ac-line);border-radius:6px;overflow:hidden;background:var(--ac-line)}
@@ -94,6 +102,9 @@ main:has(.ac-page){max-width:1180px}
 @media (min-width:600px){
   .ac-specs{grid-template-columns:repeat(4,minmax(0,1fr))}
   .ac-videos{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ac-gallery{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ac-gallery li:first-child{grid-column:auto}
+  .ac-gallery li:first-child img{aspect-ratio:4/3}
 }
 @media (min-width:860px){
   .ac-lineup{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}

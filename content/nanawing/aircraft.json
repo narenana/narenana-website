@@ -41,7 +41,19 @@
         "WUDFLY's compact twin-motor FPV wing: 0.60 m and 215 g, built for low, close-range flying. In Nanawing it's the slowest at full throttle, 100 km/h, and the quickest to roll, 344°/s. That leaves more time to read a gap and gives a crisp response when you bank. Around 70 km/h at half throttle is a good cruise; try 45–60 km/h for tight turns.",
         "It's the only aircraft in the hangar that can yaw. Like the real one it has no rudder: a controller's yaw stick runs its two motors at different speeds, and the nose swings toward the stick. The effect is strongest when you fly slowly and stops below 10% throttle. There's no yaw key."
       ],
-      "note": "Our simulator model is an original recreation of WUDFLY's design, built from public product photos. Its handling is a simulator approximation, not a manufacturer-validated flight model."
+      "note": "Our simulator model is an original recreation of WUDFLY's design, built from public product photos. Its handling is a simulator approximation, not a manufacturer-validated flight model.",
+      "photo": {
+        "file": "spectre-photo",
+        "widths": [
+          600,
+          900,
+          1200
+        ],
+        "width": 1200,
+        "height": 900,
+        "alt": "The real WUDFLY Spectre on grass: a white 3D-printed twin-motor flying wing with yellow fins",
+        "credit": "The real Spectre. Photo: WUDFLY"
+      }
     }
   },
   "records": {
@@ -55,16 +67,67 @@
       "WUDFLY designs 3D-printable RC planes and FPV wings, flight-tests them, and sells the STL files with build guides and INAV setups. The Spectre grew out of WUDFLY's TWIST_DT platform: a sub-250 g wing with differential thrust instead of a rudder."
     ],
     "links": [
-      { "label": "Visit wudfly.com", "href": "https://wudfly.com/" },
-      { "label": "Buy the SPECTRE", "href": "https://wudfly.com/store/spectre" },
-      { "label": "WUDFLY on YouTube", "href": "https://www.youtube.com/@WUDFLY" }
+      {
+        "label": "Visit wudfly.com",
+        "href": "https://wudfly.com/"
+      },
+      {
+        "label": "Buy the SPECTRE",
+        "href": "https://wudfly.com/store/spectre"
+      },
+      {
+        "label": "WUDFLY on YouTube",
+        "href": "https://www.youtube.com/@WUDFLY"
+      }
     ],
     "videosH4": "The real Spectre, flown by WUDFLY",
     "videos": [
-      { "id": "MaVMHJFvd5g", "title": "Ride of the SPECTRE | Full FPV Flight" },
-      { "id": "UwFGTptRYRU", "title": "215g 3D-Printed FPV Wing Build Breakdown | WUDFLY SPECTRE" },
-      { "id": "vaqDeINMnJQ", "title": "215g 3D Printed FPV Wing | DJI O4 Wide – WUDFLY Spectre" }
-    ]
+      {
+        "id": "MaVMHJFvd5g",
+        "title": "Ride of the SPECTRE | Full FPV Flight"
+      },
+      {
+        "id": "UwFGTptRYRU",
+        "title": "215g 3D-Printed FPV Wing Build Breakdown | WUDFLY SPECTRE"
+      },
+      {
+        "id": "vaqDeINMnJQ",
+        "title": "215g 3D Printed FPV Wing | DJI O4 Wide – WUDFLY Spectre"
+      }
+    ],
+    "gallery": [
+      {
+        "file": "spectre-photo-4",
+        "widths": [
+          600,
+          900
+        ],
+        "width": 900,
+        "height": 1200,
+        "alt": "A pilot holding the WUDFLY Spectre by its fuselage in an open field, ready to launch"
+      },
+      {
+        "file": "spectre-photo-6",
+        "widths": [
+          600,
+          1200
+        ],
+        "width": 1200,
+        "height": 900,
+        "alt": "A grey WUDFLY Spectre on a workbench in front of the WUDFLY logo"
+      },
+      {
+        "file": "spectre-photo-8",
+        "widths": [
+          600,
+          1200
+        ],
+        "width": 1200,
+        "height": 900,
+        "alt": "Inside the WUDFLY Spectre: flight controller, receiver and wiring in the 3D-printed fuselage"
+      }
+    ],
+    "galleryCredit": "Photos: WUDFLY, from wudfly.com"
   },
   "method": {
     "h2": "Where the numbers come from",
@@ -74,10 +137,22 @@
     ]
   },
   "faq": [
-    { "q": "Which Nanawing aircraft should I fly first?", "a": "The Nanawing One. It has the lowest stall speed and a quick roll, so it forgives mistakes while you learn the controls. Move to the Morok when you want more speed, and to the Sukhoi when you can plan your turns." },
-    { "q": "Is the WUDFLY Spectre in Nanawing the real aircraft?", "a": "It's our recreation of WUDFLY's design, with the real wing's 600 mm span, twin motors and white-and-yellow livery. Its handling is a simulator approximation. The real Spectre is designed and sold by WUDFLY at wudfly.com." },
-    { "q": "Can every aircraft race every course?", "a": "Yes. Each of the four courses keeps a separate board for each aircraft, so you race pilots in the same plane. Only your best lap counts." },
-    { "q": "Do I need a controller?", "a": "No. All four fly on a keyboard, and a gamepad or a USB RC radio works too. The Spectre's yaw needs a controller's yaw stick." }
+    {
+      "q": "Which Nanawing aircraft should I fly first?",
+      "a": "The Nanawing One. It has the lowest stall speed and a quick roll, so it forgives mistakes while you learn the controls. Move to the Morok when you want more speed, and to the Sukhoi when you can plan your turns."
+    },
+    {
+      "q": "Is the WUDFLY Spectre in Nanawing the real aircraft?",
+      "a": "It's our recreation of WUDFLY's design, with the real wing's 600 mm span, twin motors and white-and-yellow livery. Its handling is a simulator approximation. The real Spectre is designed and sold by WUDFLY at wudfly.com."
+    },
+    {
+      "q": "Can every aircraft race every course?",
+      "a": "Yes. Each of the four courses keeps a separate board for each aircraft, so you race pilots in the same plane. Only your best lap counts."
+    },
+    {
+      "q": "Do I need a controller?",
+      "a": "No. All four fly on a keyboard, and a gamepad or a USB RC radio works too. The Spectre's yaw needs a controller's yaw stick."
+    }
   ],
   "final": {
     "h2": "All four are free to fly.",

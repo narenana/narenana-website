@@ -64,15 +64,27 @@ const compare = `<section class="ac-compare" id="compare" aria-labelledby="compa
 <tbody>${facts.aircraft.map((a) => `<tr><th scope="row"><a href="#${a.id}">${esc(a.name)}</a></th>${specRows.map(([, f]) => `<td>${f(a)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
 <p class="ac-swipe">Swipe the table sideways for all eight specs.</p><p class="ac-note">${esc(copy.compare.note)}</p></section>`;
 
+// A real photo (copy.aircraft.<id>.photo, e.g. the designer's own) in place of the render.
+const PHOTO = (file, w) => `/assets/nanawing/aircraft/${file}-${w}.webp`;
+const photo = (p, sizes) =>
+  `<img src="${PHOTO(p.file, p.widths[1] ?? p.widths[0])}" srcset="${p.widths.map((w) => `${PHOTO(p.file, w)} ${w}w`).join(', ')}" sizes="${sizes}" alt="${esc(p.alt)}" width="${p.width}" height="${p.height}" loading="lazy" decoding="async">`;
+const figure = (a, c) => c.photo
+  ? `<figure class="ac-craft-img ac-craft-photo">${photo(c.photo, '(max-width:860px) 92vw, 600px')}<figcaption>${esc(c.photo.credit)}</figcaption></figure>`
+  : `<figure class="ac-craft-img">${img(a, '(max-width:860px) 92vw, 520px')}</figure>`;
+const gallery = (w) => (w.gallery?.length
+  ? `<ul class="ac-gallery">${w.gallery.map((p) => `<li>${photo(p, '(max-width:600px) 46vw, 340px')}</li>`).join('')}</ul><p class="ac-note">${esc(w.galleryCredit)}</p>`
+  : '');
+
 const wudfly = (w) => `<div class="ac-wudfly"><h3>${esc(w.h3)}</h3>${w.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}
 <ul class="ac-wudfly-links">${w.links.map((l) => `<li><a href="${l.href}" ${ext}>${esc(l.label)} <span aria-hidden="true">↗</span></a></li>`).join('')}</ul>
+${gallery(w)}
 <h4>${esc(w.videosH4)}</h4><ul class="ac-videos">${w.videos.map((v) =>
   `<li><a class="ac-yt" href="https://www.youtube.com/watch?v=${v.id}" data-yt="${v.id}" ${ext}><img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" width="480" height="360" loading="lazy" decoding="async"><span class="ac-yt-play" aria-hidden="true">▶</span><span class="sr-only">Play: </span></a><p class="ac-yt-title">${esc(v.title)}</p></li>`).join('')}</ul></div>`;
 
 const sections = facts.aircraft.map((a, i) => {
   const c = copy.aircraft[a.id];
   return `<section class="ac-craft${i % 2 ? ' ac-craft--flip' : ''}" id="${a.id}" aria-labelledby="${a.id}-title">
-<figure class="ac-craft-img">${img(a, '(max-width:860px) 92vw, 520px')}</figure>
+${figure(a, c)}
 <div class="ac-craft-body"><span class="eyebrow">${String(i + 1).padStart(2, '0')} / ${esc(c.role.toUpperCase())}</span><h2 id="${a.id}-title">${esc(a.name)}</h2>
 <p class="ac-credit">${credit(a)}</p>
 ${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-note">${esc(c.note)}</p>` : ''}
@@ -106,7 +118,7 @@ const schema = {
   '@graph': [
     { '@type': 'WebPage', '@id': site + path, url: site + path, name: copy.title, description: copy.description, isPartOf: { '@id': site + '/#website' }, about: { '@id': 'https://sim.narenana.com/#app' } },
     { '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: site + '/' }, { '@type': 'ListItem', position: 2, name: 'Nanawing aircraft', item: site + path }] },
-    { '@type': 'ItemList', name: 'Nanawing aircraft', itemListElement: facts.aircraft.map((a, i) => ({ '@type': 'ListItem', position: i + 1, name: a.name, url: `${site}${path}#${a.id}`, image: `${site}${IMG(a.id, 1400)}` })) },
+    { '@type': 'ItemList', name: 'Nanawing aircraft', itemListElement: facts.aircraft.map((a, i) => ({ '@type': 'ListItem', position: i + 1, name: a.name, url: `${site}${path}#${a.id}`, image: copy.aircraft[a.id].photo ? `${site}${PHOTO(copy.aircraft[a.id].photo.file, 1200)}` : `${site}${IMG(a.id, 1400)}` })) },
     { '@type': 'FAQPage', mainEntity: copy.faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })) },
   ],
 };
@@ -122,7 +134,7 @@ writeFileSync(`site${path}index.html`, page({
   image: `${site}/nanawing/aircraft/og.jpg`,
   body,
   schema,
-  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=bdfe3c20e3">',
+  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=e9bcd54314">',
   scripts,
 }));
 
