@@ -48,7 +48,7 @@ export const ASSET_VERSIONS = {
   "/assets/leaderboard.js": "001827463a",
   "/assets/log-viewer-icon.svg": "a1506becd8",
   "/assets/motion.js": "88d54a9986",
-  "/assets/nanawing-aircraft.css": "e9bcd54314",
+  "/assets/nanawing-aircraft.css": "317e518063",
   "/assets/nanawing-desert-1024.webp": "0790c03f89",
   "/assets/nanawing-desert-768.webp": "c01e35d06e",
   "/assets/nanawing-desert.webp": "d3ac620b88",
