@@ -20,3 +20,5 @@
 .nn-header .nn-cta{display:inline-flex;align-items:center;gap:22px;padding:12px 18px;background:var(--nn-orange);border:1px solid var(--nn-orange);border-radius:3px;color:var(--nn-ink);font-size:12px;font-weight:700;white-space:nowrap;transition:background .2s}
 .nn-header .nn-cta:hover{color:var(--nn-ink);background:#ff9a2e}
 @media(max-width:760px){.nn-header .nn-cta{margin-left:auto;padding:10px 12px;gap:12px;font-size:11px}.nn-header .nn-bar:has(.nn-cta){gap:10px}}
+/* Tablet (761-1080px) with a CTA: the four product links plus the button ran 11px past a 768px screen. */
+@media(min-width:761px) and (max-width:1080px){.nn-header .nn-bar:has(.nn-cta){gap:16px;padding-left:20px;padding-right:20px}.nn-header .nn-cta{padding:10px 12px;gap:12px}}

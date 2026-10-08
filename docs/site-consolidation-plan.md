@@ -159,9 +159,19 @@ Exit: every item in §7 is either fixed or assigned to a later milestone, and th
 
 ### M3: One content home, facts files and checks (Fri 16 Oct)
 
+**Started early, 8 Oct: the first content page.** `/nanawing/aircraft/`, built in this repo (branch `feat/nanawing-aircraft-page`). It brings the first pieces of the content home:
+- [x] `content/_facts/nanawing.json`: a hand-made snapshot of fpvsim's aircraft, specs, courses and credits, until fpvsim publishes `product.json`.
+- [x] `content/nanawing/aircraft.json`: the page copy.
+- [x] `scripts/build-nanawing-pages.mjs`: the generator.
+- [x] `scripts/page-shell.mjs`: the editorial shell, moved out of `seo-content.mjs`. Both generators use it; the existing pages came out byte-identical.
+- [x] Live lap records filled in by the Worker (`src/aircraft-records.js`, through the FPVSIM_BOARD service binding), cached per release like the homepage.
+
+The old sim guide forwards to it (fpvsim `feat/aircraft-page-move`).
+
 Also in M3:
-- Fix the two www layout bugs found during M2: the 768px sideways scroll, and the Share button over "Back to the top".
-- Use one fact-token phrase for Nanawing's controls on www.
+- [x] The 768px sideways scroll, fixed 8 Oct: the header CTA, `family/shell.css` at 761–1080px.
+- [ ] The Share button over "Back to the top".
+- [ ] One fact-token phrase for Nanawing's controls on www.
 
 Website:
 - [ ] Create `family/products.json`, and move `brand-shell.mjs` and the family assets to `family/`. Publish a family manifest with a hash per file.
@@ -235,7 +245,7 @@ Frozen 6 Oct. Edit this table whenever a page is added, removed or renamed befor
 | `sim.narenana.com/guides/` | `www.narenana.com/nanawing/guides/` | M5 | |
 | `sim.narenana.com/guides/how-to-play` | `/nanawing/guides/how-to-play/` | M5 | |
 | `sim.narenana.com/guides/fpv-wings` | `/nanawing/guides/fpv-wings/` | M5 | |
-| `sim.narenana.com/guides/aircraft` | `/nanawing/guides/aircraft/` | M5 | |
+| `sim.narenana.com/guides/aircraft` | `www.narenana.com/nanawing/aircraft/` | **8 Oct** (early) | The aircraft page, built on www. Until M5 the old URL is a meta-refresh + canonical page, because the sim's service worker can't follow a cross-host 301; M5 makes it a 301 |
 | `sim.narenana.com/guides/leaderboard` | `/nanawing/guides/leaderboard/` | M5 | The guide; standings are `/nanawing/leaderboard/` |
 | `sim.narenana.com/guides/how-its-built` | `/nanawing/guides/how-its-built/` | M5 | |
 | `sim.narenana.com/guides/fpv-simulator-no-controller` | `/nanawing/guides/fpv-simulator-no-controller/` | M5 | |
@@ -286,7 +296,7 @@ Also found during M2 and fixed on the branches:
 
 Found and not yet fixed (all already live):
 - **Nanawing 2 landing:** the final "Ready?" heading and its buttons are nearly invisible on the dark background, because `simulator.css` sets `--tx` for `#landing`. **Scheduled for M4:** the landing is rebuilt on www as `/nanawing2/`, so fix it there rather than in the old page.
-- **www at 768px:** the page scrolls sideways by 11px (the `.nn-cta` header button and `.depth-image`). **Scheduled for M3.**
+- **www at 768px:** the page scrolls sideways by 11px (the `.nn-cta` header button and `.depth-image`). **Fixed 8 Oct:** the header's CTA button at 761–1080px. Checked at 761, 768, 800, 1024 and 1080px, with no sideways scroll.
 - **www at 1366px:** the floating Share button covers "Back to the top". **Scheduled for M3.**
 - **Nanawing's controls** are worded four ways on www. **Scheduled for M3**, with a fact token.
 
@@ -345,7 +355,7 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Family assets (shell.css, fonts, share.js…) | website `site/assets/family/*` | Copied by hand into the three apps; already diverged | Family manifest + `family:sync` |
 | Nanawing maps (count, names, beta, what's on them). *8 Oct: the Desert's army base became a civilian manufacturing plant* | fpvsim `src/world/maps.ts` | fpvsim landing, guides, map pages, leaderboard page; www homepage (strip, Desert band, `<select>`, JSON-LD); nanawing2 landing | `product.json` → tokens and `data-fact` |
 | Race courses (ids, names, km, medals) | fpvsim `src/race/courses.ts`, `desertCourses.json` | fpvsim map pages, leaderboard page, guides; www homepage + `site/assets/leaderboard.js` | Same |
-| Nanawing aircraft (names, count, specs). *4 since 8 Oct, with the WUDFLY Spectre; new stall figures (Change log, 8 Oct)* | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing (stat strip, feature list, hero top-3 names), aircraft guide (specs typed by hand), other guides, map pages (wing count, wing tiles, `public/maps/maps.js`), leaderboard page; www homepage (racing card list, podium aircraft `<select>`) | Same |
+| Nanawing aircraft (names, count, specs, credits). *4 since 8 Oct, with the WUDFLY Spectre; new stall figures (Change log, 8 Oct). www copy: `content/_facts/nanawing.json`, feeding `/nanawing/aircraft/`* | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing (stat strip, feature list, hero top-3 names), aircraft guide (specs typed by hand), other guides, map pages (wing count, wing tiles, `public/maps/maps.js`), leaderboard page; www homepage (racing card list, podium aircraft `<select>`) | Same |
 | Nanawing 2 aircraft (selectable count, names) | nanawing2 `lib/aircraft-availability.ts` (8) | nanawing2 landing (says 5 and 8), guide (names 5), `build/`; www homepage ("5"), Wings practise links | Same |
 | Controls and keys. *Since 8 Oct: the Spectre's yaw stick and an 8-step calibration (Change log, 8 Oct)* | fpvsim `src/hud/menuCopy.ts`, calibration steps in `src/hud/controlsUI.ts` (`src/hud/wizardMath.ts` from the Spectre release); nanawing2 `lib/keymap.ts` | fpvsim landing FAQ, 4 guides (the step count: how-to-play, the guides index, the no-controller guide and its FAQPage); nanawing2 guide; www homepage | Same |
 | Log formats and firmware limits | log viewer `src/App.jsx` + parsers | Log viewer landing and 9 content pages, README; www homepage, `/videos/log-viewer-walkthrough/`, Wings practise links | `product.json` |
@@ -421,6 +431,13 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-08** · New page: `www.narenana.com/nanawing/aircraft/`, the first M3 content page (website `feat/nanawing-aircraft-page`).
+  - **Content:** four sections with full-resolution renders from the sim's own models, measured specs, live lap records per course, and model credits (two CC BY 4.0 models).
+  - **WUDFLY Spectre section:** WUDFLY, links to wudfly.com and the store, and three of WUDFLY's Spectre videos.
+  - **Extras:** a visible FAQ with FAQPage markup, and a sitemap entry.
+  - **Old guide:** fpvsim `feat/aircraft-page-move` makes `sim.narenana.com/guides/aircraft` forward to the new page and repoints its 19 links.
+  - **Mobile:** checked at 360, 390, 768 and 1366px; the 768px header overflow is fixed site-wide.
 
 - **2026-10-08** · fpvsim's Spectre release is live (`11a48ae`, deployed 04:33 UTC). For visitors:
   - **A fourth aircraft, the WUDFLY Spectre**, with yaw on a controller's rudder stick and an 8-step calibration.
