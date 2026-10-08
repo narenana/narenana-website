@@ -342,7 +342,7 @@ Found and not yet fixed (all already live):
       - "Spectre · WUDFLY" on the sim's leaderboard page.
       
       Both change to "WUDFLY Spectre". That's an fpvsim change, which needs a preview and the owner's OK to deploy.
-      Done in the sim on fpvsim `post-release-fixes` (8 Oct, pending merge): the catalogue name, the leaderboard page and two guide tables.
+      Done in the sim (fpvsim `main` 4b40e09, 8 Oct): the catalogue name, the leaderboard page and two guide tables.
     - [ ] **The Sukhoi on www's aircraft page is a "stealth wing"** twice (the intro, "a 323 km/h stealth wing", and the image alt, "a grey stealth flying wing"). Under the no-military rule (owner, 7 Oct) the sim now says "the heavyweight flying wing"; www should match.
 
 ## 8. Fact inventory
@@ -435,9 +435,9 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
-- **2026-10-08** · **Pending merge** (fpvsim `post-release-fixes`, local): the sim names the new aircraft "WUDFLY Spectre" wherever a name is shown (the Hangar's tiles and detail panel, the leaderboard's wing dropdown and results card, the sim's leaderboard page, the guide tables in fpv-wings and fpv-simulator-chromebook; the compact board strips keep short names, as for the Sukhoi). The Sukhoi's descriptions drop combat words (Hangar: "heavy stealth UCAV" becomes "the heavyweight flying wing"; fpv-wings: "UCAV shape" and "stealth delta" become "flying wing" and "delta wing"). Also two fixes visitors can feel: a Launch press is no longer lost when the leaderboard answers mid-click or a typed pilot name commits, and on a slow connection the real launch thrower takes over from the stand-in once it loads.
+- **2026-10-08** · **Live** (fpvsim `main` 4b40e09, merged from `post-release-fixes`, deployed by CI): the sim names the new aircraft "WUDFLY Spectre" wherever a name is shown (the Hangar's tiles and detail panel, the leaderboard's wing dropdown and results card, the sim's leaderboard page, the guide tables in fpv-wings and fpv-simulator-chromebook; the compact board strips keep short names, as for the Sukhoi). The Sukhoi's descriptions drop combat words (Hangar: "heavy stealth UCAV" becomes "the heavyweight flying wing"; fpv-wings: "UCAV shape" and "stealth delta" become "flying wing" and "delta wing"). Also two fixes visitors can feel: a Launch press is no longer lost when the leaderboard answers mid-click or a typed pilot name commits, and on a slow connection the real launch thrower takes over from the stand-in once it loads.
 
-  Fact inventory: the aircraft row (names). §7: the "WUDFLY Spectre" item is done in the sim once this merges; a new item asks www to drop "stealth" from the Sukhoi on the aircraft page. No milestone moves.
+  Fact inventory: the aircraft row (names). §7: the "WUDFLY Spectre" item is done in the sim; a new item asks www to drop "stealth" from the Sukhoi on the aircraft page. No milestone moves.
 - **2026-10-08** · New page: `www.narenana.com/nanawing/aircraft/`, the first M3 content page (website `feat/nanawing-aircraft-page`).
   - **Content:** four sections with full-resolution renders from the sim's own models, measured specs, live lap records per course, and model credits (two CC BY 4.0 models).
   - **WUDFLY Spectre section:** WUDFLY, links to wudfly.com and the store, and three of WUDFLY's Spectre videos.
