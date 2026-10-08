@@ -432,6 +432,11 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-08** · Owner approved merging and deploying the aircraft-page revision (narenana-website `a9bc680` plus plan commits, branch `codex/spectre-aircraft-copy`; M3).
+  - **Release scope:** the whole-hangar/free-practice copy, Spectre-first aircraft ordering and share card, and aircraft requests through existing Instagram/LinkedIn profiles. No game, data-path, binding or schema changes; no migration is needed.
+  - **Preflight:** nine aircraft regressions, 22 non-HTTP SEO regressions, the 88-file asset-version gate and the Worker deploy dry run passed. The pre-release website source, live aircraft HTML/card and active Worker version were saved in ignored local backups. Production baseline: website `c2a3f64`, Worker version `814b3eff-6747-45dc-b120-93f05c775f91`.
+  - **Delivery:** owner-authorized release merge to website `master`, followed by Workers Builds and live page/card verification. Canonical URLs, aircraft facts and milestone scope are unchanged.
+
 - **2026-10-08** · Aircraft copy revised to the owner's whole-hangar brief (narenana-website `a9bc680`, branch `codex/spectre-aircraft-copy`; M3 content polish, not deployed).
   - **Positioning:** “Fly more aircraft. Build your skills for free.” The page now introduces lifelike aircraft from a trainer to WUDFLY's 3D-printed wing, explains the enjoyment and practice value of their different handling, and connects simulator practice to confidence at the RC field. It does not promise complete training or manufacturer-validated handling.
   - **Details:** each aircraft describes what to explore and practise. A new practice section and field-readiness FAQ support that message. Spectre remains first; measured specs, model/photo credits and record slots are unchanged.
