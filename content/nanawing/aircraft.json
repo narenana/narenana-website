@@ -1,60 +1,68 @@
 {
   "path": "/nanawing/aircraft/",
-  "title": "Fly the WUDFLY Spectre in Nanawing | Four wings to try",
-  "description": "Get closer to the scenery in Nanawing's recreation of the WUDFLY Spectre, then find your pace in three more FPV wings. Fly free in your browser. No install or login.",
+  "title": "Nanawing aircraft | Fly more. Build your skills for free.",
+  "description": "Explore four lifelike aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Get to know each wing and practise your RC flying, free in your browser.",
   "order": ["spectre", "desertwing", "morok", "sukhoi"],
   "social": {
-    "title": "Fly a little closer. Meet the WUDFLY Spectre.",
-    "description": "Small wing. Quick turns. A whole new way to explore Nanawing. Try our recreation of WUDFLY's twin-motor Spectre free in your browser. No install or login.",
+    "title": "Fly the WUDFLY Spectre free in Nanawing",
+    "description": "Get to know our recreation of WUDFLY's 3D-printed, twin-motor Spectre. Discover how it flies, then build your skills with three more aircraft. All free in your browser.",
     "image": "/nanawing/aircraft/spectre-share-v1.jpg",
-    "imageAlt": "WUDFLY Spectre simulator model, a white and yellow twin-motor flying wing. Fly a little closer in Nanawing, free in your browser.",
+    "imageAlt": "Fly the WUDFLY Spectre free in Nanawing: a simulator recreation of the white and yellow, 3D-printed twin-motor wing.",
     "card": {
-      "eyebrow": "NANAWING / MEET YOUR NEXT WING",
-      "headline": "Fly a little closer.",
+      "eyebrow": "NANAWING / REAL-WORLD DESIGNS. FREE TO FLY.",
+      "headline": "Fly the WUDFLY Spectre.",
       "aircraft": "WUDFLY SPECTRE",
+      "details": ["A 3D-printed design.", "A new way to practise."],
       "cta": "Fly free in your browser",
       "credit": "Aircraft design by WUDFLY · Simulator recreation by narenana"
     }
   },
   "hero": {
-    "eyebrow": "NANAWING / THE HANGAR",
-    "h1": "Fly a little closer.<br><span>Meet the WUDFLY Spectre.</span>",
-    "lede": "Skim the scenery. Bank into the next gap. Discover the joy of a small wing with a quick response in Nanawing's recreation of the WUDFLY Spectre. Then try three more wings, each with its own pace and feel. All four are free to fly in your browser.",
-    "cta": "Fly the Spectre",
+    "eyebrow": "NANAWING / YOUR RC HANGAR",
+    "h1": "Fly more aircraft.<br><span>Build your skills for free.</span>",
+    "lede": "Explore four lifelike aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Feel how each one flies, find out what makes it different, and build confidence for your next day at the RC field. Every aircraft is free to fly in your browser. No install. No login.",
+    "cta": "Start flying",
     "aircraft": "spectre",
-    "secondary": "Find your wing"
+    "secondary": "Get to know the aircraft"
+  },
+  "practice": {
+    "h2": "Different aircraft. More ways to grow.",
+    "paragraphs": [
+      "The pleasure of RC flying is getting to know the aircraft: how much input it needs, when to ease off the throttle, how early to start a turn. A trainer, a nimble twin-motor wing and a fast, heavier aircraft each give you something different to work on.",
+      "Try them all. Repeat a manoeuvre, explore a new route or put your control to the test on a race course. You can make mistakes, reset and go again without a repair bill. Connect a gamepad or USB RC radio to practise on sticks, or get started with a keyboard."
+    ]
   },
   "compare": {
-    "h2": "Four wings. Find your kind of flying.",
+    "h2": "Get to know your hangar",
     "note": "Performance measured in Nanawing, not real-world aircraft specifications. Stall speed is wings-level and unpowered; banked turns need more. Battery is the simulated pack and its full-throttle current."
   },
   "aircraft": {
     "desertwing": {
-      "role": "Find your confidence",
+      "role": "The trainer · Build the basics",
       "paragraphs": [
-        "Your first wing doesn't have to be one you outgrow. Learn to hold a line, link your turns and bring a lap together in Nanawing's own flying wing. The lowest stall speed in the hangar and a quick roll make the One a welcoming place to start.",
-        "When you're ready, open the throttle. A measured 191 km/h in the simulator leaves plenty of room to grow. Pick a course, set a time, then come back for one cleaner lap."
+        "There is nothing quite like the moment a turn starts to feel natural. The Nanawing One gives you a welcoming place to find that feeling. Our original trainer has the lowest stall speed in the hangar and a quick roll response, so you can get comfortable holding a line, making smooth banks and working pitch and throttle together.",
+        "Once the basics click, there is more aircraft to discover. With a measured 191 km/h top speed in the simulator, the One has plenty of pace for your first race laps and the practice that comes after them."
       ]
     },
     "morok": {
-      "role": "Find a faster rhythm",
+      "role": "The step up · Plan your turns",
       "paragraphs": [
-        "Know the course? Now feel it at a different pace. The Morok takes you up to a measured 249 km/h in Nanawing, turning a familiar lap into a fresh challenge. Look ahead, choose your line and let one turn lead into the next.",
-        "Its slower roll and higher stall speed than the One reward a little more planning. Try the same course in both: the gates haven't moved, but the way you approach them will."
+        "Fly a route you know in the One, then take the Morok around it. The scenery is the same, but your timing changes. A measured 249 km/h top speed and a slower roll response invite you to look further ahead and start setting up your turns sooner.",
+        "This is where you practise adapting to the aircraft instead of asking every aircraft to fly the same way. Manage your speed, leave room for the bank and see how smoothly you can join one turn to the next."
       ]
     },
     "sukhoi": {
-      "role": "Chase the rush",
+      "role": "The speed challenge · Think ahead",
       "paragraphs": [
-        "For the moment you want everything to arrive faster. At a measured 323 km/h in Nanawing, the Sukhoi is the fastest wing in the hangar, with the strongest climb to match. Open it up and watch the scenery rush past.",
-        "That speed asks something of you. The highest stall speed and slowest roll of the four mean you'll need to plan your banks and commit to your line. Find the rhythm, and every clean gate feels earned."
+        "Ready to feel what more speed does to a familiar flight? The Sukhoi is Nanawing's fastest aircraft, reaching a measured 323 km/h in the simulator, with the strongest climb of the four. It is a thrill to open up, and a very different aircraft to bring through a turn.",
+        "Its higher stall speed and slower roll ask you to manage speed and turning room with care. Practise anticipating the next move, rather than reacting at the last moment. Here, you can try again until your inputs and your flight line come together."
       ]
     },
     "spectre": {
-      "role": "Get closer to the scenery",
+      "role": "The 3D-printed wing · Fly with precision",
       "paragraphs": [
-        "Small wing. Quick turns. A new reason to take the scenic route. Our recreation of WUDFLY's 600 mm, 215 g twin-motor wing pairs the lowest top speed in the hangar with the quickest roll. Its measured 100 km/h top speed gives you more time to read the scenery; its crisp bank response invites you to get closer.",
-        "Bring a controller and discover its party trick: differential thrust. The yaw stick varies the two motors' speeds to swing the nose, giving the Spectre a move no other wing in the hangar has. It works best at lower speeds and needs more than 10% throttle. A keyboard still handles pitch, roll and throttle; yaw needs a controller."
+        "A plane you can 3D-print at home, recreated for you to fly here. WUDFLY's Spectre packs two motors into a 600 mm, 215 g wing. In Nanawing, its quick roll and lower top speed make it a delight to weave through a route while practising small, deliberate stick movements.",
+        "The Spectre also introduces a different way to steer: differential thrust. With a controller, the yaw stick varies the motors' speeds to swing the nose, alongside your pitch, roll and throttle inputs. Try it at a gentler pace and feel the difference. Yaw needs more than 10% throttle and a controller; keyboard flight still supports pitch, roll and throttle."
       ],
       "note": "Our simulator model is an original recreation of WUDFLY's design, built from public product photos. Its handling is a simulator approximation, not a manufacturer-validated flight model.",
       "photo": {
@@ -153,8 +161,12 @@
   },
   "faq": [
     {
+      "q": "How does this help me at the RC field?",
+      "a": "Use Nanawing to practise control inputs, throttle management and planning your turns, and to discover how different aircraft respond. A gamepad or USB RC radio lets you practise on sticks. Simulator time complements real flying; the handling is an approximation, not a substitute for instruction, aircraft checks or safe flying at the field."
+    },
+    {
       "q": "Which Nanawing aircraft should I fly first?",
-      "a": "Try the Spectre for a slower pace and quick banks close to the scenery. Brand new to flying? The Nanawing One is a welcoming starting point, with the lowest stall speed in the hangar. Choose the Morok for more speed, or the Sukhoi for the fastest flight of the four."
+      "a": "Start with the Nanawing One if you are learning the controls. Try the Spectre for quick banks and twin-motor yaw on a controller. Move to the Morok and Sukhoi to explore how more speed changes your timing and flight planning. Every aircraft is free, so you can try them all."
     },
     {
       "q": "Is the WUDFLY Spectre in Nanawing the real aircraft?",
@@ -170,9 +182,17 @@
     }
   ],
   "final": {
-    "h2": "Your next favourite wing is one flight away.",
-    "lede": "Start with the Spectre. Stay for one more lap. Fly all four free on your laptop or desktop, right in your browser. No install. No login.",
-    "cta": "Take the Spectre for a flight",
+    "h2": "Make your next flight a practice flight.",
+    "lede": "Pick an aircraft, get comfortable on the controls and enjoy finding out what it can do. Your whole Nanawing hangar is free, right in your browser on a laptop or desktop.",
+    "cta": "Start flying for free",
     "aircraft": "spectre"
+  },
+  "request": {
+    "h2": "What should we add to the hangar?",
+    "lede": "Have a favourite RC plane, or a design you've always wanted to try? Send narenana its name and a photo or link, along with what you'd love to practise with it.",
+    "links": [
+      { "label": "Request an aircraft on Instagram", "href": "https://www.instagram.com/narenana" },
+      { "label": "Request an aircraft on LinkedIn", "href": "https://www.linkedin.com/in/siddharthanihalani/" }
+    ]
   }
 }

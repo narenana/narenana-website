@@ -13,11 +13,11 @@ const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1
   <path d="M700 0H1200V580H360Z" fill="#ffffff" opacity=".04"/>
   <path d="M850 0H1200V580H530Z" fill="#ffffff" opacity=".04"/>
   <text x="62" y="65" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="3">${text(card.eyebrow)}</text>
-  <text x="58" y="155" fill="#fff" font-family="Arial,sans-serif" font-size="74" font-weight="700" letter-spacing="-3">${text(card.headline)}</text>
+  <text x="58" y="155" fill="#fff" font-family="Arial,sans-serif" font-size="68" font-weight="700" letter-spacing="-3">${text(card.headline)}</text>
   <rect x="62" y="195" width="60" height="5" fill="#f2c200"/>
   <text x="62" y="255" fill="#fff" font-family="Arial,sans-serif" font-size="33" font-weight="700">${text(card.aircraft)}</text>
-  <text x="62" y="325" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">Small wing.</text>
-  <text x="62" y="362" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">Quick turns.</text>
+  <text x="62" y="325" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">${text(card.details[0])}</text>
+  <text x="62" y="362" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">${text(card.details[1])}</text>
   <rect x="62" y="416" width="340" height="58" rx="4" fill="#ff8500"/>
   <text x="85" y="453" fill="#15191c" font-family="Arial,sans-serif" font-size="24" font-weight="700">${text(card.cta)}</text>
 </svg>`);

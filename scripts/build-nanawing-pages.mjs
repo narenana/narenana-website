@@ -107,19 +107,23 @@ ${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-
 }).join('\n');
 
 const method = `<section class="ac-method" aria-labelledby="method-title"><h2 id="method-title">${esc(copy.method.h2)}</h2>${copy.method.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</section>`;
+const practice = `<section class="ac-practice" aria-labelledby="practice-title"><h2 id="practice-title">${esc(copy.practice.h2)}</h2>${copy.practice.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</section>`;
 const faq = `<section class="ac-faq" aria-labelledby="faq-title"><h2 id="faq-title">Questions</h2>${copy.faq.map((f) => `<details><summary>${esc(f.q)}</summary><p>${esc(f.a)}</p></details>`).join('')}</section>`;
 const final = `<section class="ac-final"><h2>${esc(copy.final.h2)}</h2><p>${esc(copy.final.lede)}</p><a class="ac-btn" href="${play(copy.final.aircraft)}" ${ext}>${esc(copy.final.cta)} <span aria-hidden="true">↗</span></a></section>`;
+const request = `<section class="ac-request" id="request-aircraft" aria-labelledby="request-title"><h2 id="request-title">${esc(copy.request.h2)}</h2><p>${esc(copy.request.lede)}</p><ul>${copy.request.links.map((link) => `<li><a href="${esc(link.href)}" ${ext}>${esc(link.label)} <span aria-hidden="true">↗</span></a></li>`).join('')}</ul></section>`;
 
 const body = `<div class="ac-page">
 <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / Nanawing aircraft</nav>
 <div class="ac-hero"><span class="eyebrow">${esc(copy.hero.eyebrow)}</span><h1>${copy.hero.h1}</h1><p class="lede">${esc(copy.hero.lede)}</p>
 <div class="ac-actions"><a class="ac-btn" href="${play(copy.hero.aircraft)}" ${ext}>${esc(copy.hero.cta)} <span aria-hidden="true">↗</span></a><a class="ac-link" href="#compare">${esc(copy.hero.secondary)} <span aria-hidden="true">↓</span></a></div>
 ${lineup}</div>
+${practice}
 ${compare}
 ${sections}
 ${method}
 ${faq}
 ${final}
+${request}
 </div>`;
 
 const path = copy.path;
@@ -145,7 +149,7 @@ writeFileSync(`site${path}index.html`, page({
   social: copy.social,
   body,
   schema,
-  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=e9bcd54314">',
+  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=317e518063">',
   scripts,
 }));
 

@@ -80,6 +80,37 @@ test('hero and final calls to action start a WUDFLY Spectre flight', () => {
   }
 });
 
+test('the bottom aircraft-request section uses the existing Instagram and LinkedIn contacts', async () => {
+  const expectedLinks = ['https://www.instagram.com/narenana', 'https://www.linkedin.com/in/siddharthanihalani/'];
+  const requestPattern = /<section class="ac-request" id="request-aircraft"[^>]*>([\s\S]*?)<\/section>/;
+  const request = match(html, requestPattern, 'aircraft request section exists');
+  assert.equal([...html.matchAll(/\bid="request-aircraft"/g)].length, 1, 'request section has one unique anchor');
+  const final = html.match(/<section class="ac-final">[\s\S]*?<\/section>/);
+  assert.ok(final, 'final flight action exists');
+  assert.ok(html.search(requestPattern) >= final.index + final[0].length, 'request section follows the final flight action');
+  assert.ok(copy.request.h2 && copy.request.lede, 'request copy includes a heading and explanation');
+  assert.equal(text(match(request, /<h2\b[^>]*>([\s\S]*?)<\/h2>/, 'request heading exists')), copy.request.h2);
+  assert.ok(text(request).includes(copy.request.lede), 'request explanation is visible');
+  assert.deepEqual(copy.request.links.map((link) => link.href), expectedLinks);
+
+  const anchors = [...request.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].map(([, attrs, label]) => ({ ...attributes(attrs), label: text(label) }));
+  assert.equal(anchors.length, 2, 'request section has only the two requested contact links');
+  assert.deepEqual(anchors.map((anchor) => anchor.href), expectedLinks);
+  const home = await readFile(file('site/index.html'), 'utf8');
+  const homepageAnchors = [...home.matchAll(/<a\b[^>]*>/g)].map(([tag]) => attributes(tag));
+  for (const [index, anchor] of anchors.entries()) {
+    assert.equal(anchor.target, '_blank');
+    assert.ok((anchor.rel || '').split(/\s+/).includes('noopener'), 'new tabs do not expose their opener');
+    assert.ok(copy.request.links[index].label && anchor.label.includes(copy.request.links[index].label), 'configured link label is visible');
+    assert.ok(homepageAnchors.some((existing) => existing.href === anchor.href), `${anchor.href} exactly matches an existing homepage contact`);
+  }
+});
+
+test('the page and social copy do not retain the superseded closer-flying campaign', () => {
+  assert.doesNotMatch(text(html), /fly a little closer/i);
+  assert.doesNotMatch(JSON.stringify(copy), /fly a little closer/i);
+});
+
 test('aircraft shares use Spectre-specific metadata without changing the canonical page', () => {
   const canonical = decode(match(html, /<link rel="canonical" href="([^"]+)"/, 'canonical exists'));
   assert.equal(canonical, `${site}/nanawing/aircraft/`);
