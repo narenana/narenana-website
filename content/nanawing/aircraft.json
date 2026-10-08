@@ -1,45 +1,60 @@
 {
   "path": "/nanawing/aircraft/",
-  "title": "Nanawing aircraft: four FPV flying wings, specs and lap records",
-  "description": "Meet Nanawing's four flying wings: the Nanawing One, Morok UAV, Sukhoi S-70 Okhotnik and WUDFLY Spectre. Measured specs, live lap records and videos.",
+  "title": "Fly the WUDFLY Spectre in Nanawing | Four wings to try",
+  "description": "Get closer to the scenery in Nanawing's recreation of the WUDFLY Spectre, then find your pace in three more FPV wings. Fly free in your browser. No install or login.",
+  "order": ["spectre", "desertwing", "morok", "sukhoi"],
+  "social": {
+    "title": "Fly a little closer. Meet the WUDFLY Spectre.",
+    "description": "Small wing. Quick turns. A whole new way to explore Nanawing. Try our recreation of WUDFLY's twin-motor Spectre free in your browser. No install or login.",
+    "image": "/nanawing/aircraft/spectre-share-v1.jpg",
+    "imageAlt": "WUDFLY Spectre simulator model, a white and yellow twin-motor flying wing. Fly a little closer in Nanawing, free in your browser.",
+    "card": {
+      "eyebrow": "NANAWING / MEET YOUR NEXT WING",
+      "headline": "Fly a little closer.",
+      "aircraft": "WUDFLY SPECTRE",
+      "cta": "Fly free in your browser",
+      "credit": "Aircraft design by WUDFLY · Simulator recreation by narenana"
+    }
+  },
   "hero": {
     "eyebrow": "NANAWING / THE HANGAR",
-    "h1": "Four flying wings,<br><span>measured on the simulator.</span>",
-    "lede": "Nanawing has four aircraft, from a forgiving trainer to a 323 km/h stealth wing. A test bot flies each one on the same flight model you play with and measures its top speed, stall, roll and climb. Pick one here, then fly it free in your browser.",
-    "cta": "Fly Nanawing",
-    "secondary": "Compare the four"
+    "h1": "Fly a little closer.<br><span>Meet the WUDFLY Spectre.</span>",
+    "lede": "Skim the scenery. Bank into the next gap. Discover the joy of a small wing with a quick response in Nanawing's recreation of the WUDFLY Spectre. Then try three more wings, each with its own pace and feel. All four are free to fly in your browser.",
+    "cta": "Fly the Spectre",
+    "aircraft": "spectre",
+    "secondary": "Find your wing"
   },
   "compare": {
-    "h2": "The four at a glance",
-    "note": "Stall speed is wings-level and unpowered; banked turns need more. Battery is the simulated pack and its full-throttle current."
+    "h2": "Four wings. Find your kind of flying.",
+    "note": "Performance measured in Nanawing, not real-world aircraft specifications. Stall speed is wings-level and unpowered; banked turns need more. Battery is the simulated pack and its full-throttle current."
   },
   "aircraft": {
     "desertwing": {
-      "role": "The trainer",
+      "role": "Find your confidence",
       "paragraphs": [
-        "The house flying wing, and the one to learn on. It has the lowest stall speed in the hangar, 24 km/h, and rolls at 241°/s, so a bank arrives the moment you ask for it. Mistakes are survivable, and 191 km/h flat out is still quick enough for a respectable lap.",
-        "26 N of thrust against 1.0 kg is about 2.7:1 thrust to weight. That's why it climbs out of trouble at 18.6 m/s: point it up, hold the power, and it goes."
+        "Your first wing doesn't have to be one you outgrow. Learn to hold a line, link your turns and bring a lap together in Nanawing's own flying wing. The lowest stall speed in the hangar and a quick roll make the One a welcoming place to start.",
+        "When you're ready, open the throttle. A measured 191 km/h in the simulator leaves plenty of room to grow. Pick a course, set a time, then come back for one cleaner lap."
       ]
     },
     "morok": {
-      "role": "The cruiser",
+      "role": "Find a faster rhythm",
       "paragraphs": [
-        "A long-range surveyor. It's smaller than the One at 0.85 m but 40% heavier, and that wing loading changes how it flies: it punches through bumps instead of riding them, holds a line and carries speed through turns. About 3.2:1 thrust to weight, and 249 km/h flat out.",
-        "The trade is at the slow end. It stalls at 28 km/h and rolls at 201°/s, so it wants a pilot who plans half a turn ahead. It's the right second aircraft."
+        "Know the course? Now feel it at a different pace. The Morok takes you up to a measured 249 km/h in Nanawing, turning a familiar lap into a fresh challenge. Look ahead, choose your line and let one turn lead into the next.",
+        "Its slower roll and higher stall speed than the One reward a little more planning. Try the same course in both: the gates haven't moved, but the way you approach them will."
       ]
     },
     "sukhoi": {
-      "role": "The fast one",
+      "role": "Chase the rush",
       "paragraphs": [
-        "The heavy stealth wing: 2 kg, a 6S pack and 74 N of thrust, nearly 3.8:1. It's the fastest in the hangar at 323 km/h and climbs at 32.3 m/s.",
-        "It also stalls highest, at 34 km/h, and rolls slowest, at 166°/s. You can't flick it round a gate, so carry speed in, start the bank early and let the mass carve the turn. Get that right and it is very quick round a course."
+        "For the moment you want everything to arrive faster. At a measured 323 km/h in Nanawing, the Sukhoi is the fastest wing in the hangar, with the strongest climb to match. Open it up and watch the scenery rush past.",
+        "That speed asks something of you. The highest stall speed and slowest roll of the four mean you'll need to plan your banks and commit to your line. Find the rhythm, and every clean gate feels earned."
       ]
     },
     "spectre": {
-      "role": "The close-flying wing",
+      "role": "Get closer to the scenery",
       "paragraphs": [
-        "WUDFLY's compact twin-motor FPV wing: 0.60 m and 215 g, built for low, close-range flying. In Nanawing it's the slowest at full throttle, 100 km/h, and the quickest to roll, 344°/s. That leaves more time to read a gap and gives a crisp response when you bank. Around 70 km/h at half throttle is a good cruise; try 45–60 km/h for tight turns.",
-        "It's the only aircraft in the hangar that can yaw. Like the real one it has no rudder: a controller's yaw stick runs its two motors at different speeds, and the nose swings toward the stick. The effect is strongest when you fly slowly and stops below 10% throttle. There's no yaw key."
+        "Small wing. Quick turns. A new reason to take the scenic route. Our recreation of WUDFLY's 600 mm, 215 g twin-motor wing pairs the lowest top speed in the hangar with the quickest roll. Its measured 100 km/h top speed gives you more time to read the scenery; its crisp bank response invites you to get closer.",
+        "Bring a controller and discover its party trick: differential thrust. The yaw stick varies the two motors' speeds to swing the nose, giving the Spectre a move no other wing in the hangar has. It works best at lower speeds and needs more than 10% throttle. A keyboard still handles pitch, roll and throttle; yaw needs a controller."
       ],
       "note": "Our simulator model is an original recreation of WUDFLY's design, built from public product photos. Its handling is a simulator approximation, not a manufacturer-validated flight model.",
       "photo": {
@@ -62,9 +77,9 @@
     "empty": "No lap yet. Set the first one."
   },
   "wudfly": {
-    "h3": "About WUDFLY",
+    "h3": "Love the flight? Meet the real wing.",
     "paragraphs": [
-      "WUDFLY designs 3D-printable RC planes and FPV wings, flight-tests them, and sells the STL files with build guides and INAV setups. The Spectre grew out of WUDFLY's TWIST_DT platform: a sub-250 g wing with differential thrust instead of a rudder."
+      "The Spectre starts with WUDFLY: a designer of 3D-printable RC planes and FPV wings. Watch the real aircraft fly, explore the build, or visit WUDFLY for the STL files, build guides and INAV setups to make your own."
     ],
     "links": [
       {
@@ -72,7 +87,7 @@
         "href": "https://wudfly.com/"
       },
       {
-        "label": "Buy the SPECTRE",
+        "label": "Explore the Spectre build",
         "href": "https://wudfly.com/store/spectre"
       },
       {
@@ -139,7 +154,7 @@
   "faq": [
     {
       "q": "Which Nanawing aircraft should I fly first?",
-      "a": "The Nanawing One. It has the lowest stall speed and a quick roll, so it forgives mistakes while you learn the controls. Move to the Morok when you want more speed, and to the Sukhoi when you can plan your turns."
+      "a": "Try the Spectre for a slower pace and quick banks close to the scenery. Brand new to flying? The Nanawing One is a welcoming starting point, with the lowest stall speed in the hangar. Choose the Morok for more speed, or the Sukhoi for the fastest flight of the four."
     },
     {
       "q": "Is the WUDFLY Spectre in Nanawing the real aircraft?",
@@ -155,8 +170,9 @@
     }
   ],
   "final": {
-    "h2": "All four are free to fly.",
-    "lede": "Nanawing runs in your browser on a laptop or desktop, with no install or login.",
-    "cta": "Fly Nanawing"
+    "h2": "Your next favourite wing is one flight away.",
+    "lede": "Start with the Spectre. Stay for one more lap. Fly all four free on your laptop or desktop, right in your browser. No install. No login.",
+    "cta": "Take the Spectre for a flight",
+    "aircraft": "spectre"
   }
 }
