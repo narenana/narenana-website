@@ -1,5 +1,5 @@
 // Generated from catalog/catalog.css — edit that, then: npm run catalog:css
-export const CSS_VER = 'fd26b006'
+export const CSS_VER = 'e09dce5f'
 export const CSS = `/* narenana catalog — approved blue/orange homepage identity. */
 :root {
   --paper: #f4f8fc;
@@ -348,28 +348,59 @@ a.filt-b { text-decoration: none; }
 .badge-sm { font-size: 9px; padding: 2px 8px; margin-left: 7px; vertical-align: 1px; }
 
 /* --- master (product) page ---------------------------------------------- */
-.kit-key {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 28px;
-  align-items: center;
+/* Summary panel: the image beside the price, its seller button and the
+   specs; one column on phones. One border, not a box inside a box. */
+.pd-key {
+  display: grid;
+  grid-template-columns: minmax(200px, 300px) 1fr;
   background: var(--card);
-  border: 2px solid var(--ink);
+  border: 1px solid var(--faint);
   border-radius: 10px;
-  padding: 22px 24px;
-  margin-bottom: 22px;
-}
-.kit-img {
-  width: min(240px, 100%);
-  aspect-ratio: 4 / 3;
-  position: relative;
-  background: #fff;
-  border: 2px solid var(--ink);
-  border-radius: 8px;
   overflow: hidden;
-  flex: 0 0 auto;
+  margin-top: 6px;
 }
-.kit-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.pd-img { position: relative; aspect-ratio: 4 / 3; background: #fff; border-right: 1px solid var(--faint); }
+.pd-img img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.pd-key-body { display: flex; flex-direction: column; justify-content: center; gap: 18px; padding: 22px 26px; min-width: 0; }
+.pd-price .price-context { margin: 2px 0 0; color: var(--muted); font-size: 0.9rem; }
+.pd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin-top: 14px; }
+.pd-cta { padding: 12px 20px; }
+.pd-jump { font-weight: 700; color: var(--orange-deep); text-decoration: none; white-space: nowrap; }
+.pd-jump:hover { text-decoration: underline; }
+.pd-key .spec { padding-top: 16px; border-top: 1px solid var(--faint); gap: 14px 28px; }
+.pd .lede { margin: 18px 0 0; font-size: 0.98rem; }
+
+/* Sections: a rule, a display heading and one factual line under it, so the
+   price table, the videos and the similar models read as separate blocks. */
+.pd-sec { margin-top: 40px; padding-top: 26px; border-top: 1px solid var(--faint); }
+.pd-head { margin: 0 0 16px; }
+.pd-h { font-size: clamp(1.5rem, 2.8vw, 1.85rem); line-height: 1.05; text-transform: uppercase; letter-spacing: -0.01em; }
+.pd-sub { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; }
+.pd-offers .vars-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; background: var(--card); border: 1px solid var(--faint); border-radius: 10px; padding: 6px 18px 2px; }
+.pd-offers .vars { margin-top: 0; }
+.pd-offers .vars th { padding-top: 10px; border-bottom-width: 1px; }
+.o-review { color: var(--muted); font-weight: 600; }
+.cta.is-off { background: transparent; border-color: var(--faint); color: var(--muted); }
+.cta.is-off:hover { background: transparent; border-color: var(--ink); color: var(--ink); }
+
+/* Videos: a dark band of click-to-play cards (the player loads on tap). */
+.pd-videos { margin: 40px -24px 0; padding: 26px 24px 24px; border-top: 0; border-radius: 10px; background: #15191c; color: #fff; }
+.pd-videos .pd-h { color: #fff; }
+.pd-videos .pd-sub { color: #b9c6d0; }
+.ytv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+.ytv-card { display: flex; flex-direction: column; gap: 8px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left; font-family: inherit; color: inherit; }
+.ytv-thumb { position: relative; display: block; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #0F2C39; }
+.ytv-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform 0.25s; }
+.ytv-card:hover .ytv-thumb img { transform: scale(1.04); }
+.ytv-play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; }
+.ytv-play svg { width: 46px; height: 46px; padding: 12px; background: rgba(15, 44, 57, 0.72); border-radius: 999px; transition: background 0.2s; }
+.ytv-card:hover .ytv-play svg { background: var(--orange); }
+.ytv-frame { aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; }
+.ytv-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.ytv-title { display: block; font-weight: 600; font-size: 14px; line-height: 1.3; color: #fff; }
+.ytv-sub { display: block; font-size: 12px; color: #b9c6d0; margin-top: 2px; }
+
+.pd-similar .prods { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
 
 .spec { display: flex; flex-wrap: wrap; gap: 24px; margin: 0; }
 .spec dt {
@@ -429,7 +460,39 @@ a.filt-b { text-decoration: none; }
 .cta-buy { padding: 12px 24px; font-size: 0.95rem; }
 @media (max-width: 640px) {
   .vars { font-size: 0.85rem; }
-  .cta-buy { display: block; text-align: center; padding: 13px 10px; }
+  .pd { padding: 20px 16px 48px; }
+  /* Breadcrumb: just the parent link, as a back link. The full trail stays
+     in the markup and the BreadcrumbList. */
+  nav.crumb > :not(a:nth-last-child(3)) { display: none; }
+  nav.crumb > a:nth-last-child(3)::before { content: '‹ '; }
+  .pd-key { grid-template-columns: 1fr; }
+  .pd-img { border-right: 0; border-bottom: 1px solid var(--faint); }
+  .pd-key-body { padding: 18px 16px 20px; gap: 16px; }
+  .pd-cta { flex: 1 1 100%; text-align: center; }
+  .pd-key .spec { gap: 12px 24px; }
+  .pd-sec { margin-top: 32px; padding-top: 22px; }
+  /* Offers: each row is a card. Seller and price on the first line, the
+     configuration and stock on the next, the seller's button last. */
+  .pd-offers .vars-scroll { overflow: visible; padding: 0 14px; }
+  .offers thead { display: none; }
+  .offers, .offers tbody { display: block; }
+  .offers tr { display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'seller price' 'config price' 'stock buy'; gap: 2px 14px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--faint); }
+  .offers tbody tr:last-child { border-bottom: 0; }
+  .offers td { display: block; padding: 0; border: 0; }
+  .offers .o-seller { grid-area: seller; }
+  .offers .o-config { grid-area: config; color: var(--muted); font-size: 0.85rem; padding-top: 2px; }
+  .offers .o-price { grid-area: price; text-align: right; font-weight: 700; font-size: 1rem; }
+  .offers .o-stock { grid-area: stock; align-self: end; padding-bottom: 8px; }
+  .offers .o-buy { grid-area: buy; justify-self: end; margin-top: 6px; }
+  .offers .badge-sm { margin-left: 0; }
+  .offers .cta-buy { display: inline-block; padding: 10px 18px; }
+  .offer-seller { padding: 4px 0; }
+  /* Videos and similar models scroll sideways, a card at a time. */
+  .pd-videos { margin: 32px -16px 0; padding: 22px 16px 20px; border-radius: 0; }
+  .ytv-grid, .pd-similar .prods { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px 10px; }
+  .ytv-grid::-webkit-scrollbar, .pd-similar .prods::-webkit-scrollbar { display: none; }
+  .ytv-card { flex: 0 0 82%; scroll-snap-align: start; }
+  .pd-similar .prod { flex: 0 0 68%; max-width: 250px; scroll-snap-align: start; }
   /* Compact the shop header so a product card is visible in the first fold. */
   .shop-head-in { padding: 16px 16px 14px; }
   .shop-kicker { margin-bottom: 5px; }
@@ -504,7 +567,7 @@ a.filt-b { text-decoration: none; }
 .prod{border:1px solid var(--faint);border-radius:4px;box-shadow:none;transition:transform .2s,border-color .2s}.prod:hover{border-color:var(--orange);transform:translateY(-3px);box-shadow:0 10px 30px #15191c0b}.prod-img{background:white}.prod-name{font-family:'DM Sans',sans-serif;font-size:17px;font-weight:700}.prod-cta{border-top:1px solid var(--faint);border-radius:0;background:var(--orange);color:var(--ink)}.prod:hover .prod-cta{background:#e87800;color:var(--ink)}.cta{border-radius:3px}.foot{padding-bottom:25px}.foot .wordmark{font-weight:700}.nn-header{position:relative}
 @media(prefers-reduced-motion:reduce){.prod{transition:none}.prod:hover{transform:none}}
 
-.manufacturer-reference{margin:34px 0;padding:24px;background:#fff;border:1px solid var(--faint);border-radius:4px}.manufacturer-reference p{color:var(--muted);font-size:14px}.manufacturer-reference .source{font-size:12px}.prod-tag{position:absolute;top:8px;left:8px;font:700 10px/1.5 "DM Sans",sans-serif;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:3px;padding:2px 7px}
+.manufacturer-reference .source{margin:14px 0 0;color:var(--muted);font-size:12px}.prod-tag{position:absolute;top:8px;left:8px;font:700 10px/1.5 "DM Sans",sans-serif;letter-spacing:.04em;color:#7a4a00;background:#f7e2b8;border-radius:3px;padding:2px 7px}
 
 .bz-land a,.bz-list a,.fx-crumbs a{color:#0669a6}
 

@@ -400,7 +400,6 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
     }
   })()
 
-  const configs = [...new Set(offers.map((o) => o.config))]
   const {seed: headlineOffer} = comparableOffers(offers)
   // Stock and price are separate questions. A listing flagged for review still
   // proves the model is in stock (same rule as the grid); only its PRICE is
@@ -416,13 +415,18 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   // priced ones of the same availability, so a withheld low price can't top it.
   const offerOrder = (list) => list.map((o, i) => [o, i]).sort(([a, i], [b, j]) =>
     (a.dead - b.dead) || (b.in_stock - a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
+  // Every cell is classed so a phone can lay the row out as a card (CSS grid
+  // on the <tr>, see .offers in catalog.css); wide screens keep the table.
+  // Only an in-stock listing gets a Buy button; an out-of-stock one links as
+  // "View", so the orange buttons on the page are the ones that can be bought.
+  const checkedAt = (o) => o.last_checked ?? o.last_seen
   const offerRow = (o) => `
-    <tr class="${o.dead || !o.in_stock ? 'is-dim' : ''}">
-      <td>${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
-      <td>${esc(configLabel(o, 'Not stated'))}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}${o.variant ? `<span class="rp-note">${esc(o.variant)}</span>` : ''}</td>
-      <td>${o.flagged ? '<span style="color:var(--muted);font-weight:600">Price under review</span>' : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}<span class="rp-note">as of ${dateOf(o.last_checked ?? o.last_seen)}</span></td>
-      <td>${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
-      <td>${o.dead ? '' : `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;→</a>`}</td>
+    <tr class="${o.dead ? 'is-dim is-gone' : o.in_stock ? 'is-live' : 'is-dim is-oos'}">
+      <td class="o-seller">${o.dead ? esc(o.source_name) : `<a class="offer-seller" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">${esc(o.source_name)} ↗</a>`}${o.grey_import ? ' <span class="badge warn badge-sm">import</span>' : ''}${o.made_in_india ? ' <span class="badge made badge-sm">Made in India</span>' : ''}${conditionOf(o.title) === 'used' ? ' <span class="badge warn badge-sm">pre-owned</span>' : ''}</td>
+      <td class="o-config">${esc(configLabel(o, 'Not stated'))}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}${o.variant ? `<span class="rp-note">${esc(o.variant)}</span>` : ''}</td>
+      <td class="o-price">${o.flagged ? '<span class="o-review">Price under review</span>' : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'}${checkedAt(o) ? `<span class="rp-note">checked ${dayOf(checkedAt(o))}</span>` : ''}</td>
+      <td class="o-stock">${o.dead ? '<span class="badge bad badge-sm">gone</span>' : o.in_stock ? '<span class="badge ok badge-sm">In stock</span>' : '<span class="badge bad badge-sm">Out of stock</span>'}</td>
+      <td class="o-buy">${o.dead ? '' : o.in_stock ? `<a class="cta cta-buy" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">Buy&nbsp;↗</a>` : `<a class="cta cta-buy is-off" href="${esc(o.url_canonical)}" target="_blank" rel="noopener nofollow">View&nbsp;↗</a>`}</td>
     </tr>`
 
   // Preserve the Product entity for unavailable models, with honest availability.
@@ -477,28 +481,17 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   // real player (~1 MB+ of YouTube JS) loads on demand, in place, autoplaying —
   // playback stays ON THIS PAGE (privacy-enhanced youtube-nocookie host).
   const fmtV = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : n ? String(n) : '')
+  // Section chrome shared by the page's blocks: a display heading and one
+  // factual line under it, so each block reads as its own thing on a phone.
+  const secHead = (id, title, sub) => `<div class="pd-head"><h2 class="pd-h" id="${id}">${title}</h2><p class="pd-sub">${sub}</p></div>`
   const videoSection = vids.length ? `
-    <section class="ytv" style="margin-top:44px"><h2 class="sec">Watch it fly</h2>
+    <section class="pd-sec pd-videos" aria-labelledby="pd-videos-h">${secHead('pd-videos-h', 'Watch it fly', `${vids.length === 1 ? 'A flight or review' : 'Flights and reviews'} of this model on YouTube. Tap a video to play it here.`)}
     <div class="ytv-grid">${vids.map((v) => `
       <button class="ytv-card" data-yt="${v.video_id}" aria-label="Play video: ${esc((v.title || '').slice(0,80))} ${esc(v.channel || 'YouTube')}${v.views ? ' · '+fmtV(v.views)+' views' : ''}">
         <span class="ytv-thumb"><img src="https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg" alt="${esc(v.title || 'video thumbnail')}" loading="lazy" width="480" height="360" /><span class="ytv-play" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5-11-6.5z"/></svg></span></span>
         <span class="ytv-meta"><span class="ytv-title">${esc((v.title || '').slice(0, 80))}</span><span class="ytv-sub">${esc(v.channel || 'YouTube')}${v.views ? ' · ' + fmtV(v.views) + ' views' : ''}</span></span>
       </button>`).join('')}
     </div>
-    <style>
-    .ytv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-    .ytv-card{display:flex;flex-direction:column;gap:8px;padding:0;border:0;background:none;cursor:pointer;text-align:left;font-family:inherit}
-    .ytv-thumb{position:relative;display:block;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#0F2C39}
-    .ytv-thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}
-    .ytv-card:hover .ytv-thumb img{transform:scale(1.04)}
-    .ytv-play{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#FCF9F1}
-    .ytv-play svg{width:46px;height:46px;padding:12px;background:rgba(15,44,57,.72);border-radius:999px;transition:background .2s}
-    .ytv-card:hover .ytv-play svg{background:#EF7A25}
-    .ytv-frame{aspect-ratio:16/9;border-radius:10px;overflow:hidden}
-    .ytv-frame iframe{width:100%;height:100%;border:0;display:block}
-    .ytv-title{display:block;font-weight:600;font-size:14px;line-height:1.3;color:var(--ink,#0F2C39)}
-    .ytv-sub{display:block;font-size:12px;color:var(--muted,#5c6b6b);margin-top:2px}
-    </style>
     <script>document.querySelectorAll('.ytv-card').forEach(function(b){b.addEventListener('click',function(){
       var id=b.dataset.yt;if(!/^[A-Za-z0-9_-]{6,15}$/.test(id))return;
       // Replace the whole BUTTON with a plain container — an iframe inside a
@@ -518,33 +511,56 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   // 'More trainer RC planes in India →' ('FPV & flying-wing' keeps its capitals).
   const moreRole = role ? `<p class="similar-more"><a href="${esc(role.href)}">More ${esc(lowerFirst(role.crumb))} in India →</a></p>` : ''
 
+  // The summary panel's actions: the headline price buys at its seller, and a
+  // jump to the table when there is more than one seller to compare.
+  const sellersIn = (list) => new Set(list.map((o) => o.source_name).filter(Boolean)).size
+  const checkedSellers = sellersIn(offers.filter((o) => !o.dead))
+  const liveSellers = sellersIn(offers.filter((o) => !o.dead && o.in_stock))
+  const jump = (text) => `<a class="pd-jump" href="#where-to-buy">${text} ↓</a>`
+  const actions = liveMin
+    ? `<a class="cta pd-cta" href="${esc(headlineOffer.url_canonical)}" target="_blank" rel="noopener nofollow">Buy at ${esc(headlineOffer.source_name)} ↗</a>${checkedSellers > 1 ? jump(`Compare ${checkedSellers} sellers`) : ''}`
+    : checkedSellers ? jump(checkedSellers === 1 ? 'See the listing' : `See all ${checkedSellers} sellers`) : ''
+  // One line under "Where to buy": how many sellers, how many have it, and
+  // when the newest check was. The dates in the rows are each seller's own.
+  const lastChecked = Math.max(0, ...offers.filter((o) => !o.dead).map((o) => checkedAt(o) || 0))
+  const nSellers = (n) => `${n} Indian seller${n === 1 ? '' : 's'}`
+  const offersSub = checkedSellers
+    ? `${nSellers(checkedSellers)}, ${!liveSellers ? 'none in stock' : liveSellers === checkedSellers ? (checkedSellers === 1 ? 'in stock' : 'all in stock') : `${liveSellers} in stock`}${lastChecked ? ` · last checked ${dayOf(lastChecked)}` : ''}`
+    : 'No Indian seller we check lists it right now.'
+
   const body = `
-  <main class="wrap">
+  <main class="wrap pd">
     <nav class="crumb" aria-label="Breadcrumb">${crumbs.map((c) => (c.href ? `<a href="${esc(c.href)}">${esc(c.label)}</a>` : `<span aria-current="page">${esc(c.label)}</span>`)).join(' <i>›</i> ')}</nav>
     <h1 class="kit-h">${esc(name)}</h1>
+    <section class="pd-key" aria-label="Price and specifications">
+      ${hasImg ? `<div class="pd-img"><img src="/img/master/${m.id}" alt="${esc(name)}" width="800" height="600" /></div>` : ''}
+      <div class="pd-key-body">
+        <div class="pd-price">
+          ${liveMin
+            ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
+            : priceUnderReview
+              ? `<div class="price price-lg is-muted" style="white-space:normal"><span class="price-pre">in stock</span> price under review</div>`
+              : seenMin
+                ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
+                : ''}
+          ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(configLabel(headlineOffer))} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
+          ${actions ? `<div class="pd-actions">${actions}</div>` : ''}
+        </div>
+        <dl class="spec">
+          ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}${landingRows}
+        </dl>
+      </div>
+    </section>
     <p class="lede">${esc(overview)}</p>
-    <div class="kit-key">
-      ${m.hero_image || offers.some((o) => o.image_url) ? `<div class="kit-img"><img src="/img/master/${m.id}" alt="${esc(name)}" width="800" height="600" /></div>` : ''}
-      ${liveMin
-        ? `<div class="price price-lg"><span class="price-pre">from</span> ${inr(liveMin)}</div>`
-        : priceUnderReview
-          ? `<div class="price price-lg is-muted" style="white-space:normal"><span class="price-pre">in stock</span> price under review</div>`
-          : seenMin
-            ? `<div class="price price-lg is-muted"><span class="price-pre">last seen</span> ${inr(seenMin)}</div>`
-            : ''}
-      ${headlineOffer && !priceUnderReview ? `<p class="price-context">${esc(configLabel(headlineOffer))} · ${headlineOffer.pack_qty > 0 ? headlineOffer.pack_qty+' unit(s)' : 'Quantity not specified'} · ${conditionOf(headlineOffer.title)==='used'?'Pre-owned':'New'}</p>` : ''}
-      <dl class="spec">
-        ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}${landingRows}
-      </dl>
-    </div>
-    <h2 class="sec">Where to buy${configs.length > 1 ? ' <span class="count">by configuration</span>' : ''}</h2>
-    <div class="vars-scroll" style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-    <table class="vars"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
+    <section class="pd-sec pd-offers" id="where-to-buy" aria-labelledby="pd-offers-h">${secHead('pd-offers-h', 'Where to buy', esc(offersSub))}
+    <div class="vars-scroll">
+    <table class="vars offers"><thead><tr><th>Seller</th><th>Config</th><th>Price</th><th>Stock</th><th></th></tr></thead>
       <tbody>${offerOrder(offers).map(offerRow).join('')}</tbody></table></div>
     ${offers.some((o) => o.tax_included === 0) ? '<p class="tax">Some sellers list prices <strong>excluding tax/duty</strong> — checkout totals will be higher.</p>' : ''}
-    ${manufacturer?.properties.length ? `<section class="manufacturer-reference"><h2 class="sec">Manufacturer reference</h2><p>Specifications from the accepted manufacturer listing. Seller packages can differ.</p><dl class="spec">${manufacturer.properties.map(p=>`<div><dt>${esc(p.name)}</dt><dd>${esc(String(p.value))}${p.unit?' '+esc(p.unit):''}</dd></div>`).join('')}</dl><p class="source"><a href="${esc(manufacturer.url)}" target="_blank" rel="noopener">View the manufacturer's listing ↗</a>${manufacturer.checked?' · Retrieved '+dateOf(manufacturer.checked):''}</p></section>` : ''}
+    </section>
+    ${manufacturer?.properties.length ? `<section class="pd-sec manufacturer-reference" aria-labelledby="pd-mfr-h">${secHead('pd-mfr-h', 'Manufacturer reference', 'Specifications from the accepted manufacturer listing. Seller packages can differ.')}<dl class="spec">${manufacturer.properties.map(p=>`<div><dt>${esc(p.name)}</dt><dd>${esc(String(p.value))}${p.unit?' '+esc(p.unit):''}</dd></div>`).join('')}</dl><p class="source"><a href="${esc(manufacturer.url)}" target="_blank" rel="noopener">View the manufacturer's listing ↗</a>${manufacturer.checked?' · Retrieved '+dateOf(manufacturer.checked):''}</p></section>` : ''}
     ${videoSection}
-    ${similar.length ? `<section class="similar" style="margin-top:44px"><h2 class="sec">Similar models</h2><ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul>${moreRole}</section>` : moreRole}
+    ${similar.length ? `<section class="pd-sec pd-similar" aria-labelledby="pd-similar-h">${secHead('pd-similar-h', 'Similar models', 'Same type, in stock at Indian sellers, nearest wingspan first.')}<ul class="prods">${similar.map((s) => masterCard(s, cat.path_prefix)).join('')}</ul>${moreRole}</section>` : moreRole}
   </main>`
   const { title, desc } = productSnippet(m, offers, specs, { headlineOffer, liveMin, priceUnderReview, seenMin })
   return page({
