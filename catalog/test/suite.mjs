@@ -1117,7 +1117,7 @@ test('hub and landings: own ₹ figures that match the product pages, computed s
     const html = await (await get(`/wings/${slug}/`)).text()
     const best = {}
     for (const [, row] of html.matchAll(/<tr class="[^"]*">([\s\S]*?)<\/tr>/g)) {
-      const td = [...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map((x) => x[1])
+      const td = [...row.matchAll(/<td class="o-[a-z]+">([\s\S]*?)<\/td>/g)].map((x) => x[1])
       const price = Number(td[2]?.match(/^₹([\d,]+)/)?.[1].replace(/,/g, '')) || 0
       if (!price || !td[3]?.includes('In stock') || td[0].includes('pre-owned') || td[1].includes('×')) continue
       best[td[1].trim()] = Math.min(best[td[1].trim()] ?? Infinity, price)
