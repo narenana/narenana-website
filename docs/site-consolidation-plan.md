@@ -323,7 +323,7 @@ Found and not yet fixed (all already live):
   - The log viewer's "no FAQPage" rule (`scripts/gen-content.mjs` comment, growth plan) is retired; its pages get the markup when their sources move here in M3.
   - Since Aug 2023, Google shows FAQ rich results only for well-known government and health sites, so the markup mainly helps other search engines and AI assistants read the answers.
 - [ ] **Nanawing 2's "Source & feedback" link points at a private GitHub repo**, which returns 404 for visitors. Replace it with the contact link.
-- [ ] **The log viewer's copy hasn't caught up with what it now does** (log viewer session). The AI Flight Debrief isn't mentioned anywhere. "Nothing is uploaded" sits next to consent-gated findings sent to `/api/debrief`, usage counts to `/api/usage` and anonymous Sentry error reports. The log file itself never leaves the browser; say exactly what does.
+- [ ] **The log viewer's copy hasn't caught up with what it now does** (log viewer session). The AI Flight Debrief isn't mentioned anywhere. "Nothing is uploaded" sits next to consent-gated findings sent to `/api/debrief`, usage counts to `/api/usage` and anonymous Sentry error reports. The log file itself never leaves the browser; say exactly what does. *(2026-10-12: the `/api/usage` counts now also carry anonymous flight attributes — firmware family, airframe type and a crash-grade flight outcome — derived in the browser; still no coordinates, filename or log content. See the Change log.)*
 - [ ] **Stale internal notes:**
   - `docs/post-release-todo.md` says the log viewer has no GA or Sentry ID; both are set now.
   - The `forward()` comment in `src/index.js` mentions a share widget the Worker no longer injects.
@@ -431,6 +431,12 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-12** · Anonymous flight-attribute usage counters (edgetx-log-parser client + narenana-website `feat/usage-flight-attrs`, `usage/lib/worker.mjs`; touches the M3 log-viewer privacy-copy item in §7).
+  - **What the browser now sends to `/api/usage`, on top of the existing format / gps-presence / outcome / narration counts:** firmware family (`fw_family`: betaflight · inav · emuflight — blackbox logs only), airframe type (`craft`: quad · wing · unknown — best-effort from firmware, board target and flight dynamics), and a finer flight outcome (`debrief_shown` gains `critical` = crash-grade: in-air power or link loss). Each is one low-cardinality allowlisted bucket; the `ALLOW` map and `usageSummary()` in `usage/lib/worker.mjs` were extended to match.
+  - **Still never sent:** GPS coordinates, filename, or any log content. The craft classifier reads altitude only relative to the flight's own minimum and uses speed/attitude magnitudes — no position.
+  - **Privacy copy:** on-page claims ("the CSV … never leaves your computer", "nothing uploaded") stay accurate and are unchanged; the §7 item above now also covers naming these dims when that copy is rewritten.
+  - **Deploy:** owner approved on 2026-10-12; server shipped by fast-forwarding `master` (Workers Builds), client via the log-viewer Pages build.
 
 - **2026-10-12** · narenana-website `d0885ef`, released as `f974d2f` (deployed): Wings product pages laid out for phones. One summary panel (image, headline price, "Buy at <seller> ↗", "Compare N sellers ↓", specs); "Where to buy", "Watch it fly" and "Similar models" are labelled sections with a one-line summary each; on phones the seller table becomes cards and the videos and similar models scroll sideways. Wording: "Buy ↗" only on in-stock listings ("View ↗" otherwise); row dates read "checked 28 Sep 2026". No facts, prices, titles, URLs or structured data changed. Milestone: none.
 - **2026-10-08** · Owner approved merging and deploying the aircraft-page revision (narenana-website `a9bc680` plus plan commits, branch `codex/spectre-aircraft-copy`; M3).

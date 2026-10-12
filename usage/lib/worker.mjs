@@ -18,10 +18,14 @@ const ALLOW = {
   log_loaded: ['', 'blackbox', 'edgetx-csv', 'sample'],
   log_summary: ['', 'gps', 'nogps'],
   parse_failed: ['', 'unsupported_type', 'empty', 'no_header', 'corrupt', 'other'],
-  debrief_shown: ['', 'clean', 'warning'],
+  debrief_shown: ['', 'clean', 'warning', 'critical'], // 'critical' = crash-grade (in-air power/link loss)
   narration_requested: [''],
   narration_completed: ['', 'cached', 'fresh'],
   share_opened: [''],
+  // Anonymous fleet dimensions derived from the log in the browser — no
+  // position, no filename, no content; only one low-cardinality bucket.
+  fw_family: ['', 'betaflight', 'inav', 'emuflight'], // flight-controller firmware (blackbox logs)
+  craft: ['', 'quad', 'wing', 'unknown'], // best-effort airframe type
 }
 
 const CORS = /^https:\/\/(www|latest)\.narenana\.com$|^https:\/\/([a-z0-9-]+\.)?edgetx-log-parser\.pages\.dev$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/
@@ -97,5 +101,10 @@ export async function usageSummary(env, days = 30) {
     summaries: sum('log_summary', null),
     debriefShown: sum('debrief_shown', null),
     narrations: sum('narration_completed', null),
+    // Anonymous fleet view.
+    byOutcome: byDim('debrief_shown'), // clean / warning / critical
+    crashes: sum('debrief_shown', 'critical'),
+    byFwFamily: byDim('fw_family'), // betaflight / inav / emuflight
+    byCraft: byDim('craft'), // quad / wing / unknown
   }
 }
