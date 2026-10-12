@@ -6,7 +6,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage } from '../lib/adapters.mjs'
+import { extractSpanMM, detectConfig, cartSignals, isChallenge, checkWooProduct, magentoPage, parseJsonLd, parseProductPage } from '../lib/adapters.mjs'
 import { compare, findDuplicates, bestSurvivor } from '../lib/dedup.mjs'
 import { powerType, conditionOf, roleTags } from '../lib/public.mjs'
 import { popScores, availabilityFactor } from '../lib/popularity.mjs'
@@ -1618,4 +1618,43 @@ test('lifecycle: approve→draft→publish-gate→ready→public→unapprove', {
   // reject + restore round trip
   assert.equal((await api('decide', { skuId: cand.id, action: 'reject', reason: 'junk' })).status, 200)
   assert.equal((await api('decide', { skuId: cand.id, action: 'restore' })).status, 200)
+})
+
+// Shopify's current themes wrap a multi-variant product in a schema.org
+// ProductGroup with one Product+Offer per variant and no offer on the group.
+// The verifier used to see no Product at the top level, return "quote only"
+// and hold the listing as missing ("page no longer shows a price") even
+// though every variant was priced and in stock. Same shape as the live
+// aeromodellingtutor Ultra Z Astro page that was held on 2 Oct 2026.
+const SHOPIFY_GROUP = (variants) => '<html><head><script type="application/ld+json">' + JSON.stringify({
+  '@context': 'http://schema.org/', '@type': 'ProductGroup', name: 'Ultra Z Astro 810mm EPO RC Jet',
+  hasVariant: variants.map(([label, price, stock]) => ({
+    '@type': 'Product', name: 'Ultra Z Astro 810mm EPO RC Jet - ' + label, sku: label.replace(/\W+/g, '-'),
+    offers: { '@type': 'Offer', availability: 'http://schema.org/' + stock, price, priceCurrency: 'INR' },
+  })),
+}) + '</script><title>Ultra Z Astro 810mm EPO RC Jet – aeromodellingtutor</title></head><body></body></html>'
+
+test('parseJsonLd: Shopify ProductGroup → cheapest in-stock variant, in stock if any is', () => {
+  const r = parseJsonLd(SHOPIFY_GROUP([['Kit Only', '6543.21', 'InStock'], ['PNP – Tail Pusher', '8765.43', 'InStock'], ['PNP – 64mm EDF', '11234.56', 'InStock']]))
+  assert.equal(r.priceINR, 6543)
+  assert.equal(r.inStock, true)
+  assert.deepEqual(r.variants.map((v) => [v.label, v.priceINR, v.inStock]), [['Kit Only', 6543, true], ['PNP – Tail Pusher', 8765, true], ['PNP – 64mm EDF', 11235, true]])
+  // Cheapest variant sold out: the price is the cheapest one still buyable.
+  const partial = parseJsonLd(SHOPIFY_GROUP([['Kit Only', '6543.21', 'OutOfStock'], ['PNP – Tail Pusher', '8765.43', 'InStock']]))
+  assert.deepEqual([partial.priceINR, partial.inStock], [8765, true])
+  // Every variant sold out: still a priced listing, just out of stock.
+  const out = parseJsonLd(SHOPIFY_GROUP([['Kit Only', '6543.21', 'OutOfStock'], ['PNP – Tail Pusher', '8765.43', 'OutOfStock']]))
+  assert.deepEqual([out.priceINR, out.inStock], [6543, false])
+  // Foreign-currency group is ignored, exactly like a foreign-currency Product.
+  const usd = SHOPIFY_GROUP([['Kit Only', '79', 'InStock']]).replace('"priceCurrency":"INR"', '"priceCurrency":"USD"')
+  assert.equal(parseJsonLd(usd), null)
+})
+
+test('parseProductPage: a Shopify ProductGroup page is a priced listing, never quote-only', () => {
+  const r = parseProductPage(SHOPIFY_GROUP([['Kit Only', '6543.21', 'InStock'], ['PNP – 64mm EDF', '11234.56', 'InStock']]), { platform: 'shopify' }, 'https://aeromodellingtutor.in/products/ultra-z-astro-810mm-rc-jet')
+  assert.equal(r.quoteOnly, false)
+  assert.deepEqual([r.priceINR, r.inStock, r.variants.length], [6543, true, 2])
+  // The plain single-variant Product shape still works as before.
+  const single = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'Product', name: 'SIG Astro Hog', offers: { '@type': 'Offer', price: '100000', priceCurrency: 'INR', availability: 'http://schema.org/OutOfStock' } }) + '</script>'
+  assert.deepEqual(parseJsonLd(single), { priceINR: 100000, inStock: false })
 })

@@ -299,6 +299,22 @@ export async function wixPage(source, listUrl, cursor) {
 }
 
 // --- single-page enrichment / verification --------------------------------
+// One schema.org Product node → its publishable offer, or null. Wix emits
+// "Offers"/"Availability" (capitalised); schema.org standard is lowercase —
+// accept either. Guard on currency so a source rendered in a foreign base
+// currency (Wix without ?currency=INR) can't store USD as INR.
+function offerOf(n) {
+  const offerRaw = n?.offers ?? n?.Offers
+  const offer = Array.isArray(offerRaw) ? offerRaw[0] : offerRaw
+  const price = Number(offer?.price ?? offer?.lowPrice)
+  if (!price) return null
+  const cur = String(offer?.priceCurrency ?? '').toUpperCase()
+  if (cur && cur !== 'INR') return null
+  return { priceINR: Math.round(price), inStock: /InStock/i.test(String(offer?.availability ?? offer?.Availability ?? '')) }
+}
+
+const isType = (n, t) => !!n && (n['@type'] === t || (Array.isArray(n['@type']) && n['@type'].includes(t)))
+
 export function parseJsonLd(html) {
   for (const b of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
     let data
@@ -309,18 +325,30 @@ export function parseJsonLd(html) {
     }
     const nodes = Array.isArray(data) ? data : data['@graph'] ? data['@graph'] : [data]
     for (const n of nodes) {
-      const isP = n && (n['@type'] === 'Product' || (Array.isArray(n['@type']) && n['@type'].includes('Product')))
-      if (!isP) continue
-      // Wix emits "Offers"/"Availability" (capitalised); schema.org standard is
-      // lowercase — accept either. Guard on currency so a source rendered in a
-      // foreign base currency (Wix without ?currency=INR) can't store USD as INR.
-      const offerRaw = n.offers ?? n.Offers
-      const offer = Array.isArray(offerRaw) ? offerRaw[0] : offerRaw
-      const price = Number(offer?.price ?? offer?.lowPrice)
-      if (!price) continue
-      const cur = String(offer?.priceCurrency ?? '').toUpperCase()
-      if (cur && cur !== 'INR') continue
-      return { priceINR: Math.round(price), inStock: /InStock/i.test(String(offer?.availability ?? offer?.Availability ?? '')) }
+      // Shopify's current themes describe a multi-variant product as a
+      // ProductGroup whose hasVariant[] carries one Product+Offer per variant;
+      // the group itself has no offer. Treat it like a Woo variable product:
+      // the listing's price is its cheapest in-stock variant, and it is in
+      // stock when any variant is. (Single-variant pages still emit a plain
+      // Product, handled below.)
+      if (isType(n, 'ProductGroup') && Array.isArray(n.hasVariant)) {
+        const vars = n.hasVariant.map((v, i) => {
+          const o = offerOf(v)
+          if (!o) return null
+          const full = String(v.name ?? '')
+          const label = (full.startsWith(String(n.name ?? '')) ? full.slice(String(n.name ?? '').length).replace(/^\s*[-–—]\s*/, '') : full).trim() || 'Standard'
+          const vid = String(v.offers?.url ?? v.offers?.['@id'] ?? v.url ?? '').match(/variant=(\d+)/)?.[1]
+          return { vkey: String(v.sku || v.productID || vid || i), label, ...o }
+        }).filter(Boolean)
+        if (!vars.length) continue
+        const live = vars.filter((v) => v.inStock)
+        const pool = live.length ? live : vars
+        return { priceINR: Math.min(...pool.map((v) => v.priceINR)), inStock: live.length > 0, variants: vars }
+      }
+      if (!isType(n, 'Product')) continue
+      const o = offerOf(n)
+      if (!o) continue
+      return o
     }
   }
   return null
