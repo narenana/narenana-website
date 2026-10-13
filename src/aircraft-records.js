@@ -23,9 +23,14 @@ async function board(env, url) {
   return fetch(url)
 }
 
-/** { rows: { <aircraftId>: [{ course, ok, best, total }] }, degraded } — degraded if any board failed. */
+/** May this aircraft race this course? A course's `aircraft` list is its allow-list (Parkland's Estate Run:
+ *  the Spectre only); no list = every aircraft. Same rule as scripts/build-nanawing-pages.mjs. */
+export const courseAllows = (course, aircraftId) => !Array.isArray(course.aircraft) || course.aircraft.includes(aircraftId)
+
+/** { rows: { <aircraftId>: [{ course, ok, best, total }] }, degraded } — degraded if any board failed.
+ *  A board is only read for the aircraft its course allows, so no row ever waits for laps it can't get. */
 export async function aircraftRecords(env) {
-  const jobs = facts.aircraft.flatMap((a) => facts.courses.map((course) => ({ aircraft: a.id, course })))
+  const jobs = facts.aircraft.flatMap((a) => facts.courses.filter((course) => courseAllows(course, a.id)).map((course) => ({ aircraft: a.id, course })))
   const results = await Promise.all(jobs.map(async ({ aircraft, course }) => {
     try {
       const params = new URLSearchParams({ course: course.id, aircraft, limit: '1' })

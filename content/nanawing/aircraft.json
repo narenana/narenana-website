@@ -62,7 +62,8 @@
       "role": "The 3D-printed wing · Fly with precision",
       "paragraphs": [
         "A plane you can 3D-print at home, recreated for you to fly here. WUDFLY's Spectre packs two motors into a 600 mm, 215 g wing. In Nanawing, its quick roll and lower top speed make it a delight to weave through a route while practising small, deliberate stick movements.",
-        "The Spectre also introduces a different way to steer: differential thrust. With a controller, the yaw stick varies the motors' speeds to swing the nose, alongside your pitch, roll and throttle inputs. Try it at a gentler pace and feel the difference. Yaw needs more than 10% throttle and a controller; keyboard flight still supports pitch, roll and throttle."
+        "The Spectre also introduces a different way to steer: differential thrust. With a controller, the yaw stick varies the motors' speeds to swing the nose, alongside your pitch, roll and throttle inputs. Try it at a gentler pace and feel the difference. Yaw needs more than 10% throttle and a controller; keyboard flight still supports pitch, roll and throttle.",
+        "For now, the Spectre is also the only aircraft on Parkland's Estate Run: from the green START arch, 14 light frames through two cruck-frame bays, a colonnade, the fork windows of giant trees, a barn's drive-through and the arch of an estate bridge. Its quick roll and modest top speed suit the tight gaps."
       ],
       "note": "Our simulator model is an original recreation of WUDFLY's design, built from public product photos. Its handling is a simulator approximation, not a manufacturer-validated flight model.",
       "photo": {
@@ -174,7 +175,7 @@
     },
     {
       "q": "Can every aircraft race every course?",
-      "a": "Yes. Each of the four courses keeps a separate board for each aircraft, so you race pilots in the same plane. Only your best lap counts."
+      "a": "Every aircraft can race the four courses on the Island and in the Desert. Parkland's Estate Run is for the WUDFLY Spectre only, for now. Each course keeps a separate board for each aircraft that can race it, so you race pilots in the same plane. Only your best lap counts."
     },
     {
       "q": "Do I need a controller?",

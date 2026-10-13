@@ -4,7 +4,8 @@
     "repo": "narenana/fpvsim",
     "commit": "11a48ae",
     "date": "2026-10-08",
-    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/race/courses.ts", "src/race/desertCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
+    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/race/courses.ts", "src/race/desertCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"],
+    "pending": { "branch": "parkland", "commit": "d73bd93", "date": "2026-10-13", "files": ["src/race/courses.ts", "src/world/parkland/parklandCourses.json"], "what": "Estate Run (Parkland), not released yet" }
   },
   "playUrl": "https://sim.narenana.com/?play&aircraft={id}",
   "aircraft": [
@@ -95,6 +96,8 @@
     { "id": "windmill-run", "name": "Windmill Run", "map": "Island", "km": 4.3 },
     { "id": "river-run", "name": "River Run", "map": "Island", "km": 8.1 },
     { "id": "tunnel-run", "name": "Tunnel Run", "map": "Desert", "km": 5.1 },
-    { "id": "pyramid-run", "name": "Pyramid Run", "map": "Desert", "km": 5.7 }
-  ]
+    { "id": "pyramid-run", "name": "Pyramid Run", "map": "Desert", "km": 5.7 },
+    { "id": "parkland-estate-run", "name": "Estate Run", "map": "Parkland", "km": 2.8, "aircraft": ["spectre"] }
+  ],
+  "_courses": "aircraft = the course's allow-list (fpvsim RaceCourseDef.aircraft; courseAllowsAircraft in src/race/courses.ts); absent = every aircraft. Estate Run (Parkland, beta) comes from fpvsim branch parkland d73bd93 (src/world/parkland/parklandCourses.json: 14 gates + the START arch, lapKm 2.8). It is NOT on fpvsim main yet: it ships with the Parkland production release, after the production leaderboard worker accepts parkland-estate-run."
 }
