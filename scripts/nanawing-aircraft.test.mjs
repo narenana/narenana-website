@@ -1,4 +1,5 @@
-// File-only aircraft-page regressions. No server, browser, or service requests.
+// Aircraft-page regressions. No server, browser, or real service requests.
+// The records test uses a fake service binding and disables global fetch.
 // Build first: node scripts/build-nanawing-pages.mjs
 // Run: node --test scripts/nanawing-aircraft.test.mjs
 import { test } from 'node:test';
@@ -11,7 +12,8 @@ const file = (path) => new URL(`../${path}`, import.meta.url);
 const facts = JSON.parse(await readFile(file('content/_facts/nanawing.json'), 'utf8'));
 const copy = JSON.parse(await readFile(file('content/nanawing/aircraft.json'), 'utf8'));
 const html = await readFile(file('site/nanawing/aircraft/index.html'), 'utf8');
-const expectedOrder = ['spectre', 'desertwing', 'morok', 'sukhoi'];
+const allAircraft = [...facts.aircraft, ...facts.previewAircraft];
+const expectedOrder = ['spectre', 'chupito', 'desertwing', 'morok', 'sukhoi'];
 const decode = (value) => value.replace(/&(?:amp|quot|apos|lt|gt|nbsp);|&#(?:\d+|x[\da-f]+);/gi, (entity) => {
   const named = { '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>', '&nbsp;': ' ' };
   if (entity.startsWith('&#')) return String.fromCodePoint(entity[2].toLowerCase() === 'x' ? parseInt(entity.slice(3, -1), 16) : Number(entity.slice(2, -1)));
@@ -39,14 +41,15 @@ const specs = (aircraft) => [
   `${fmt(aircraft.climbRateMs, 1)} m/s`,
   `${fmt(aircraft.spanM, 2)} m`,
   aircraft.massKg < 1 ? `${fmt(aircraft.massKg * 1000)} g` : `${fmt(aircraft.massKg, 1)} kg`,
-  `${fmt(aircraft.thrustN)} N`,
+  `${fmt(aircraft.thrustN, Number.isInteger(aircraft.thrustN) ? 0 : 2)} N`,
   aircraft.battery,
 ];
 
 test('Spectre leads every presentation surface without reordering the facts snapshot', () => {
   assert.deepEqual(copy.order, expectedOrder);
   assert.deepEqual(facts.aircraft.map((aircraft) => aircraft.id), ['desertwing', 'morok', 'sukhoi', 'spectre']);
-  assert.deepEqual([...new Set(copy.order)].sort(), facts.aircraft.map((aircraft) => aircraft.id).sort());
+  assert.deepEqual(facts.previewAircraft.map((aircraft) => aircraft.id), ['chupito']);
+  assert.deepEqual([...new Set(copy.order)].sort(), allAircraft.map((aircraft) => aircraft.id).sort());
 
   const lineup = match(html, /<ul class="ac-lineup"[^>]*>([\s\S]*?)<\/ul>/, 'lineup exists');
   assert.deepEqual([...lineup.matchAll(/<li><a href="#([^"]+)"/g)].map(([, id]) => id), expectedOrder, 'lineup order');
@@ -57,9 +60,9 @@ test('Spectre leads every presentation surface without reordering the facts snap
   const list = graph.find((entry) => entry['@type'] === 'ItemList');
   assert.ok(list, 'aircraft ItemList exists');
   assert.deepEqual(list.itemListElement.map((entry) => new URL(entry.url).hash.slice(1)), expectedOrder, 'structured-data order');
-  assert.deepEqual(list.itemListElement.map((entry) => entry.position), [1, 2, 3, 4]);
+  assert.deepEqual(list.itemListElement.map((entry) => entry.position), [1, 2, 3, 4, 5]);
   for (const entry of list.itemListElement) {
-    const aircraft = facts.aircraft.find((item) => `#${item.id}` === new URL(entry.url).hash);
+    const aircraft = allAircraft.find((item) => `#${item.id}` === new URL(entry.url).hash);
     assert.equal(entry.name, aircraft.name);
     assert.equal(entry.url, `${site}${copy.path}#${aircraft.id}`);
   }
@@ -147,10 +150,10 @@ test('the Spectre social card is a complete 1200 by 630 JPEG', async () => {
   assert.equal(info.height, 630);
 });
 
-test('all four aircraft retain their measured specs, flight links and empty record slots', () => {
+test('all four released aircraft retain their measured specs, flight links and empty record slots', () => {
   const comparison = section('compare');
   const rows = [...match(comparison, /<tbody>([\s\S]*?)<\/tbody>/, 'comparison body exists').matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map(([, row]) => row);
-  assert.equal(rows.length, facts.aircraft.length);
+  assert.equal(rows.length, allAircraft.length);
   assert.equal([...html.matchAll(/<tbody data-records="[^"]+">/g)].length, facts.aircraft.length);
   for (const aircraft of facts.aircraft) {
     const row = rows.find((value) => value.includes(`href="#${aircraft.id}"`));
@@ -167,6 +170,102 @@ test('all four aircraft retain their measured specs, flight links and empty reco
     assert.equal([...records.matchAll(/<td class="ac-time">—<\/td>/g)].length, facts.courses.length, 'build does not freeze live lap times');
     assert.equal([...records.matchAll(/<td class="ac-pilot">—<\/td>/g)].length, facts.courses.length, 'build does not freeze pilot names');
   }
+});
+
+test('Chupito has accurate preview specs and never a production flight link or record slot', () => {
+  const aircraft = facts.previewAircraft[0];
+  assert.equal(aircraft.status, 'preview');
+  assert.equal(aircraft.rollRateDegS, 360);
+  assert.equal(aircraft.pitchRateDegS, 380);
+  assert.equal(aircraft.turnCoordination, 0.6);
+  assert.equal(aircraft.thrustN, 14.71);
+  assert.equal(aircraft.spanM, 0.8);
+  assert.equal(aircraft.massKg, 0.7);
+  assert.equal(aircraft.battery, '6S 1500 mAh · 30 A');
+  const row = match(section('compare'), /<tr><th scope="row"><a href="#chupito">([\s\S]*?)<\/tr>/, 'Chupito comparison row exists');
+  assert.deepEqual([...row.matchAll(/<td>([\s\S]*?)<\/td>/g)].map(([, value]) => text(value)), specs(aircraft));
+  const body = section('chupito');
+  const dl = match(body, /<dl class="ac-specs">([\s\S]*?)<\/dl>/, 'Chupito detail specs exist');
+  assert.deepEqual([...dl.matchAll(/<dd>([\s\S]*?)<\/dd>/g)].map(([, value]) => text(value)), specs(aircraft));
+  const visible = text(body);
+  assert.match(visible, /360°\/s roll ceiling/);
+  assert.match(visible, /380°\/s pitch-command ceiling/);
+  assert.match(visible, /0\.60 turn assistance/);
+  assert.match(visible, /not guaranteed rates at every speed/);
+  assert.match(visible, /provisional 700 g flying weight/);
+  assert.match(visible, /not a TBS collaboration, endorsement or manufacturer-validated flight model/);
+  assert.match(visible, /no online Chupito leaderboards or flight-trajectory uploads yet/);
+  assert.ok(visible.includes(copy.aircraft.chupito.previewNote));
+  assert.doesNotMatch(body, /data-records|class="ac-records"/);
+  assert.doesNotMatch(html, /data-records="chupito"/);
+  const anchor = attributes(match(body, /(<a class="ac-btn"[^>]+>)/, 'Chupito preview CTA exists'));
+  assert.equal(anchor.href, aircraft.playUrl);
+  const url = new URL(anchor.href);
+  assert.equal(url.protocol, 'https:');
+  assert.equal(url.hostname, 'codex-tbs-chupito.fpvsim.pages.dev');
+  assert.ok(url.searchParams.has('play'));
+  assert.equal(url.searchParams.get('aircraft'), 'chupito');
+  assert.equal(anchor.target, '_blank');
+  assert.ok(anchor.rel.split(/\s+/).includes('noopener'));
+  assert.doesNotMatch(html, /https:\/\/sim\.narenana\.com\/\?[^"\s]*aircraft=chupito/);
+  assert.match(body, /href="https:\/\/www\.team-blacksheep\.com\/products\/prod:tbs_chupito_kit"/);
+});
+
+test('preview labels are visible in the lineup, comparison and detail heading', () => {
+  assert.match(html, /aria-label="4 released aircraft and 1 preview aircraft"/);
+  const lineup = match(html, /<ul class="ac-lineup"[^>]*>([\s\S]*?)<\/ul>/, 'lineup exists');
+  const tile = match(lineup, /<a href="#chupito">([\s\S]*?)<\/a>/, 'Chupito tile exists');
+  const row = match(section('compare'), /<tr><th scope="row"><a href="#chupito">([\s\S]*?)<\/tr>/, 'Chupito comparison exists');
+  const heading = match(section('chupito'), /<h2 id="chupito-title">([\s\S]*?)<\/h2>/, 'Chupito heading exists');
+  for (const surface of [tile, row, heading]) assert.match(surface, /<small class="ac-preview-badge">Preview<\/small>/);
+  assert.match(copy.hero.lede, /four released aircraft and our new TBS Chupito preview/);
+  assert.match(copy.description, /four free-to-fly aircraft and the TBS Chupito preview/);
+});
+
+test('Chupito images are responsive, locally served and dimensioned', async () => {
+  const images = [...html.matchAll(/<img\b[^>]*>/g)].map(([tag]) => attributes(tag))
+    .filter((image) => new URL(image.src, site).pathname.includes('/chupito-'));
+  assert.equal(images.length, 2, 'one lineup render and one detail render');
+  for (const image of images) {
+    assert.match(image.alt, /TBS Chupito preview/);
+    assert.match(image.alt, /bright red propeller/);
+    assert.match(image.alt, /rendered from the simulator model/);
+    assert.ok(image.sizes && Number(image.width) > 0 && Number(image.height) > 0);
+    assert.equal(new URL(image.src, site).pathname, '/assets/nanawing/aircraft/chupito-900.webp');
+    const sources = image.srcset.split(',').map((source) => source.trim().split(/\s+/));
+    assert.deepEqual(sources.map(([, width]) => width), ['560w', '900w', '1400w']);
+    for (const [path, width] of sources) {
+      assert.ok(path.startsWith('/assets/nanawing/aircraft/chupito-'), 'image stays first-party');
+      const data = await readFile(file(`site${new URL(path, site).pathname}`));
+      const metadata = await sharp(data).metadata();
+      assert.equal(metadata.format, 'webp');
+      assert.equal(metadata.width, Number(width.slice(0, -1)));
+      assert.ok(metadata.height > 0);
+      if (metadata.width === 900) {
+        assert.equal(Number(image.width), metadata.width);
+        assert.equal(Number(image.height), metadata.height);
+      }
+    }
+  }
+});
+
+test('live records fetch only the sixteen released boards through a mocked binding', async (t) => {
+  const network = t.mock.method(globalThis, 'fetch', () => { throw new Error('Real network is disabled in this test'); });
+  const calls = [];
+  const { aircraftRecords } = await import('../src/aircraft-records.js');
+  const records = await aircraftRecords({ FPVSIM_BOARD: { fetch: async (input) => {
+    calls.push(new URL(input));
+    return new Response(JSON.stringify({ entries: [], total: 0 }), { status: 200 });
+  } } });
+  assert.equal(network.mock.callCount(), 0, 'no global fetch or fallback');
+  assert.equal(calls.length, 16);
+  assert.deepEqual(new Set(calls.map((url) => url.searchParams.get('aircraft'))), new Set(facts.aircraft.map((aircraft) => aircraft.id)));
+  for (const aircraft of facts.aircraft) {
+    assert.deepEqual(new Set(calls.filter((url) => url.searchParams.get('aircraft') === aircraft.id).map((url) => url.searchParams.get('course'))), new Set(facts.courses.map((course) => course.id)));
+    assert.equal(records.rows[aircraft.id].length, 4);
+  }
+  assert.equal(records.rows.chupito, undefined);
+  assert.equal(records.degraded, false);
 });
 
 test('simulator caveats, designer attribution and visible FAQ match the structured answers', () => {
@@ -186,6 +285,11 @@ test('simulator caveats, designer attribution and visible FAQ match the structur
     assert.ok(text(visibleFaq).includes(entry.q));
     assert.ok(text(visibleFaq).includes(entry.a));
   }
+  const chupitoFaq = copy.faq.find((entry) => entry.q === 'Where can I fly the TBS Chupito?');
+  assert.ok(chupitoFaq, 'Chupito has a discoverable FAQ');
+  assert.match(chupitoFaq.a, /not in the production hangar yet/);
+  assert.match(chupitoFaq.a, /independent simulator recreation/);
+  assert.match(copy.faq.find((entry) => entry.q === 'Can every aircraft race every course?').a, /Chupito preview.*do not enter online boards/);
 });
 
 test('the shared page shell keeps original metadata defaults for other editorial pages', () => {

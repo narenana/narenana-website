@@ -1,11 +1,11 @@
 {
   "path": "/nanawing/aircraft/",
   "title": "Nanawing aircraft | Fly more. Build your skills for free.",
-  "description": "Explore four lifelike aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Get to know each wing and practise your RC flying, free in your browser.",
-  "order": ["spectre", "desertwing", "morok", "sukhoi"],
+  "description": "Meet Nanawing's four free-to-fly aircraft and the TBS Chupito preview. Compare simulator specs, discover each wing and practise your RC flying in your browser.",
+  "order": ["spectre", "chupito", "desertwing", "morok", "sukhoi"],
   "social": {
     "title": "Fly the WUDFLY Spectre free in Nanawing",
-    "description": "Get to know our recreation of WUDFLY's 3D-printed, twin-motor Spectre. Discover how it flies, then build your skills with three more aircraft. All free in your browser.",
+    "description": "Fly WUDFLY's 3D-printed, twin-motor Spectre recreation free in Nanawing. Explore three more released aircraft and meet the new TBS Chupito preview.",
     "image": "/nanawing/aircraft/spectre-share-v1.jpg",
     "imageAlt": "Fly the WUDFLY Spectre free in Nanawing: a simulator recreation of the white and yellow, 3D-printed twin-motor wing.",
     "card": {
@@ -20,7 +20,7 @@
   "hero": {
     "eyebrow": "NANAWING / YOUR RC HANGAR",
     "h1": "Fly more aircraft.<br><span>Build your skills for free.</span>",
-    "lede": "Explore four lifelike aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Feel how each one flies, find out what makes it different, and build confidence for your next day at the RC field. Every aircraft is free to fly in your browser. No install. No login.",
+    "lede": "From your first smooth turn in a trainer to quick banks in WUDFLY's 3D-printed Spectre, get to know how different RC aircraft fly. Explore four released aircraft and our new TBS Chupito preview, and build confidence for your next day at the field. Free in your browser. No install. No login.",
     "cta": "Start flying",
     "aircraft": "spectre",
     "secondary": "Get to know the aircraft"
@@ -34,9 +34,19 @@
   },
   "compare": {
     "h2": "Get to know your hangar",
-    "note": "Performance measured in Nanawing, not real-world aircraft specifications. Stall speed is wings-level and unpowered; banked turns need more. Battery is the simulated pack and its full-throttle current."
+    "note": "Performance measured in Nanawing, not real-world aircraft specifications. Stall speed is wings-level and unpowered; banked turns need more. Battery is the simulated pack and its full-throttle current. Chupito is a separate, experimental preview: its 700 g all-up mass and 6S setup are provisional simulator settings."
   },
   "aircraft": {
+    "chupito": {
+      "role": "The agile pusher · Preview",
+      "paragraphs": [
+        "A compact wing that invites you to keep moving. Our recreation of Team BlackSheep's 800 mm Chupito pairs crisp rolls with responsive pitch, so you can practise quick changes of direction and work on joining your turns into one flowing line.",
+        "This preview uses a 6S 1500 mAh pack, a provisional 700 g flying weight and a 1.5 kgf thrust target. The current simulator tune gives it a 360°/s roll ceiling, a 380°/s pitch-command ceiling and 0.60 turn assistance. Those control ceilings are not guaranteed rates at every speed: lift, airspeed and the angle-of-attack limiter still matter."
+      ],
+      "note": "An independent recreation from public reference photos, with pilot-feedback tuning. This is not a TBS collaboration, endorsement or manufacturer-validated flight model.",
+      "previewNote": "Preview only — open the separate test build to fly Chupito. Practice laps stay on that device; there are no online Chupito leaderboards or flight-trajectory uploads yet.",
+      "cta": "Fly the Chupito preview"
+    },
     "desertwing": {
       "role": "The trainer · Build the basics",
       "paragraphs": [
@@ -54,7 +64,7 @@
     "sukhoi": {
       "role": "The speed challenge · Think ahead",
       "paragraphs": [
-        "Ready to feel what more speed does to a familiar flight? The Sukhoi is Nanawing's fastest aircraft, reaching a measured 323 km/h in the simulator, with the strongest climb of the four. It is a thrill to open up, and a very different aircraft to bring through a turn.",
+        "Ready to feel what more speed does to a familiar flight? The Sukhoi is Nanawing's fastest aircraft, reaching a measured 323 km/h in the simulator, with the strongest climb in the hangar. It is a thrill to open up, and a very different aircraft to bring through a turn.",
         "Its higher stall speed and slower roll ask you to manage speed and turning room with care. Practise anticipating the next move, rather than reacting at the last moment. Here, you can try again until your inputs and your flight line come together."
       ]
     },
@@ -156,7 +166,7 @@
     "h2": "Where the numbers come from",
     "paragraphs": [
       "A test bot flies each aircraft on the same flight model you play with. A settled full-throttle level run gives top speed, a full-stick roll gives roll rate, and a 20° full-power climb gives climb rate.",
-      "Stall speed is the unpowered, wings-level 1 g lift limit from each wing's aerodynamic curve. The in-game stall warning comes earlier, at 27, 32, 39 and 31 km/h for the One, Morok, Sukhoi and Spectre, and banked turns need more speed. The bench is rerun after any tuning, so these numbers match what you fly."
+      "Stall speed is the unpowered, wings-level 1 g lift limit from each wing's aerodynamic curve. The in-game stall warning comes earlier: 27 km/h for the One, 32 for Morok, 39 for Sukhoi, 31 for Spectre and 44 for the Chupito preview. Banked turns need more speed. Preview tuning may change as pilots give feedback."
     ]
   },
   "faq": [
@@ -174,11 +184,15 @@
     },
     {
       "q": "Can every aircraft race every course?",
-      "a": "Yes. Each of the four courses keeps a separate board for each aircraft, so you race pilots in the same plane. Only your best lap counts."
+      "a": "The four released aircraft have separate online boards on each of the four courses, so you race pilots in the same plane. Only your best lap counts. The Chupito preview can fly practice laps, but its times stay on your device and do not enter online boards."
+    },
+    {
+      "q": "Where can I fly the TBS Chupito?",
+      "a": "Use the Chupito preview link on this page to open its separate test build. Chupito is not in the production hangar yet. It is an independent simulator recreation of Team BlackSheep's 800 mm airframe, with provisional handling and a simulated 6S 1500 mAh setup."
     },
     {
       "q": "Do I need a controller?",
-      "a": "No. All four fly on a keyboard, and a gamepad or a USB RC radio works too. The Spectre's yaw needs a controller's yaw stick."
+      "a": "No. The four released aircraft and the Chupito preview fly on a keyboard, and a gamepad or a USB RC radio works too. The Spectre's differential-thrust yaw needs a controller's yaw stick; Chupito has one pusher motor and no yaw control."
     }
   ],
   "final": {

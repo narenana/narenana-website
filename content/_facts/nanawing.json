@@ -91,6 +91,33 @@
       }
     }
   ],
+  "previewAircraft": [
+    {
+      "id": "chupito",
+      "name": "TBS Chupito",
+      "status": "preview",
+      "source": { "repo": "narenana/fpvsim", "commit": "c84ac703e046446558decf57fd3b54f368ce45d7", "date": "2026-10-13" },
+      "playUrl": "https://codex-tbs-chupito.fpvsim.pages.dev/?play&aircraft=chupito",
+      "spanM": 0.8,
+      "massKg": 0.7,
+      "thrustN": 14.71,
+      "topSpeedKmh": 140,
+      "stallSpeedKmh": 35,
+      "stallWarningKmh": 44,
+      "rollRateDegS": 360,
+      "pitchRateDegS": 380,
+      "turnCoordination": 0.6,
+      "climbRateMs": 12.8,
+      "battery": "6S 1500 mAh · 30 A",
+      "short": "Preview · compact, quick and agile.",
+      "credit": {
+        "kind": "designer",
+        "designer": "Team BlackSheep",
+        "designerUrl": "https://www.team-blacksheep.com/products/prod:tbs_chupito_kit",
+        "text": "Independent simulator recreation of Team BlackSheep's airframe; not TBS-endorsed or manufacturer-validated flight data."
+      }
+    }
+  ],
   "courses": [
     { "id": "windmill-run", "name": "Windmill Run", "map": "Island", "km": 4.3 },
     { "id": "river-run", "name": "River Run", "map": "Island", "km": 8.1 },

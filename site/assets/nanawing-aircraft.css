@@ -13,6 +13,8 @@ main:has(.ac-page){max-width:1180px}
 .ac-page a{color:var(--ac-blue)}
 .ac-page a:focus-visible,.ac-page summary:focus-visible,.ac-table-wrap:focus-visible{outline:3px solid var(--ac-orange);outline-offset:3px}
 .ac-note{font-size:13px;line-height:1.6;color:var(--ac-muted)}
+.ac-preview-badge{display:inline-block;vertical-align:middle;font:600 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.05em;text-transform:uppercase;background:#fff0d6;color:#7b4100;border:1px solid #e4bb75;border-radius:4px;padding:2px 6px}
+.ac-preview-note{padding:14px 16px;background:#fff7e8;border-left:3px solid var(--ac-orange);font-size:14px;line-height:1.6}
 
 /* Hero */
 .ac-hero{padding:8px 0 10px}
@@ -109,7 +111,7 @@ main:has(.ac-page){max-width:1180px}
   .ac-gallery li:first-child img{aspect-ratio:4/3}
 }
 @media (min-width:860px){
-  .ac-lineup{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+  .ac-lineup{grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
   /* Image and text share row 1, placed explicitly; the WUDFLY card takes row 2 across both columns.
      (Reordering with order: put the Spectre image after the full-width card, below the text.) */
   .ac-craft{grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:40px;align-items:start}
