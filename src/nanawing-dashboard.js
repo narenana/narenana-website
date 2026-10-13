@@ -1,8 +1,10 @@
-// VENDORED from fpvsim-stats-work/stats-worker/src/dashboard.js (origin/main, 2026-10-13) to unify
+// VENDORED from fpvsim stats-worker/src/dashboard.js (branch parkland 794c959, the Parkland release that reaches
+// fpvsim main on 2026-10-14; names Parkland and Estate Run) to unify
 // stats at www.narenana.com/stats/nanawing. Served by this worker (gated, src/stats.js); the public
-// workers.dev home redirects here. ONLY change vs upstream: simQ() prepends the absolute fpvsim-stats
-// API base so the client fetches cross-origin (CORS *) instead of same-origin, plus a "← Portfolio"
-// link. Re-sync by re-copying `git show origin/main:stats-worker/src/dashboard.js` and re-applying
+// workers.dev home redirects here. ONLY changes vs upstream: simQ() prepends the absolute fpvsim-stats
+// API base so the client fetches cross-origin (CORS *) instead of same-origin, a "← Portfolio" link
+// (#pf-back), and the ?embed=1 script after the header (hides #pf-back, posts the page height to /stats).
+// Re-sync by re-copying `git show origin/main:stats-worker/src/dashboard.js` and re-applying
 // those edits. (Upstream is 281 commits ahead of the local checkout — always vendor from origin/main.)
 //
 // The stats dashboard page (its own module since 2026-09 so routes and page change independently).
@@ -410,8 +412,8 @@ async function loadPulse(){
 }
 
 // ---- racing (leaderboard /summary) ----------------------------------------------------------------
-var CCOL={"windmill-run":"#3eb5e8","river-run":"#b58cf5","tunnel-run":"#e3a83a","pyramid-run":"#f0616d"};
-function cname(c){return c==="windmill-run"?"Windmill Run":c==="river-run"?"River Run":c==="tunnel-run"?"Tunnel Run":c==="pyramid-run"?"Pyramid Run":c;}
+var CCOL={"windmill-run":"#3eb5e8","river-run":"#b58cf5","tunnel-run":"#e3a83a","pyramid-run":"#f0616d","parkland-estate-run":"#7ccf6a"};
+function cname(c){return c==="windmill-run"?"Windmill Run":c==="river-run"?"River Run":c==="tunnel-run"?"Tunnel Run":c==="pyramid-run"?"Pyramid Run":c==="parkland-estate-run"?"Estate Run":c;}
 function renderSummary(){
   var d=S.summary,b=d.boards||[];
   if(!b.length){ok("chBoards",'<div class="empty">No laps on the boards yet.</div>');ok("chLaps",'<div class="empty">No laps yet.</div>');renderTiles();renderInsights();return;}
@@ -419,7 +421,7 @@ function renderSummary(){
   h+='<div class="perfwrap"><table class="perf"><tr><th>Track</th><th>Wing</th><th class="n">Pilots</th><th class="n">Laps</th><th class="n">Best</th><th class="n">Median PB</th><th class="n">P90 PB</th><th class="n">Active 7 d</th><th class="n">New PBs 7 d</th><th class="n">Laps 30 d</th></tr>';
   for(var i=0;i<b.length;i++){var x=b[i];
     h+='<tr><td class="hd">'+esc(cname(x.course))+'</td><td>'+esc(x.aircraft)+'</td><td class="n">'+fmtN(x.pilots)+'</td><td class="n">'+fmtN(x.laps_submitted)+'</td><td class="n fps-good">'+esc(fmtMs(x.best_ms))+'</td><td class="n">'+esc(fmtMs(x.median_pb_ms))+'</td><td class="n">'+esc(fmtMs(x.p90_pb_ms))+'</td><td class="n">'+fmtN(x.active_7d)+'</td><td class="n">'+fmtN(x.pb_7d)+'</td><td class="n">'+fmtN(x.laps_30d)+'</td></tr>';}
-  h+='</table></div><div class="callout"><b>'+fmtN(d.totals.pilots)+'</b> pilots on the boards · <b>'+fmtN(d.totals.multi_board)+'</b> on more than one board · <b>'+fmtN(d.totals.multi_course)+'</b> raced both tracks';
+  h+='</table></div><div class="callout"><b>'+fmtN(d.totals.pilots)+'</b> pilots on the boards · <b>'+fmtN(d.totals.multi_board)+'</b> on more than one board · <b>'+fmtN(d.totals.multi_course)+'</b> raced more than one track';
   for(var j=0;j<(d.by_course||[]).length;j++){var c=d.by_course[j];h+=' · '+esc(cname(c.course))+': <b>'+fmtN(c.pilots)+'</b> pilots, best <b>'+esc(fmtMs(c.best_ms))+'</b>';}
   h+='</div>';
   ok("chBoards",h);
@@ -442,8 +444,8 @@ async function loadSummary(){
 }
 
 // ---- maps -----------------------------------------------------------------------------------------
-var MCOL={"island":"#59d98a","desert-airfield":"#e3a83a","unknown":"#4b5563"};
-function mname(m){return m==="island"?"Island":m==="desert-airfield"?"Desert":m==="unknown"?"Unknown (older client)":m;}
+var MCOL={"island":"#59d98a","desert-airfield":"#e3a83a","parkland":"#2fb5a0","unknown":"#4b5563"};
+function mname(m){return m==="island"?"Island":m==="desert-airfield"?"Desert":m==="parkland"?"Parkland":m==="unknown"?"Unknown (older client)":m;}
 function dayAfter(day){return new Date(Date.parse(day+"T00:00:00Z")+864e5).toISOString().slice(0,10);}
 function renderMaps(){
   var d=S.maps,a=d.by_map||[];
