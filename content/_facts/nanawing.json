@@ -2,9 +2,10 @@
   "_about": "Snapshot of Nanawing (fpvsim) facts used by www pages. Source of truth is the fpvsim repo; M3 of docs/site-consolidation-plan.md replaces this hand-made snapshot with the product.json the fpvsim build publishes. Update it whenever these facts change in fpvsim.",
   "source": {
     "repo": "narenana/fpvsim",
-    "commit": "11a48ae",
-    "date": "2026-10-08",
-    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/race/courses.ts", "src/race/desertCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
+    "commit": "244670f",
+    "date": "2026-10-14",
+    "release": "Parkland: fpvsim main 244670f (branch parkland 794c959), 2026-10-14",
+    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/race/courses.ts", "src/race/desertCourses.json", "src/world/parkland/parklandCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
   },
   "playUrl": "https://sim.narenana.com/?play&aircraft={id}",
   "aircraft": [
@@ -95,6 +96,8 @@
     { "id": "windmill-run", "name": "Windmill Run", "map": "Island", "km": 4.3 },
     { "id": "river-run", "name": "River Run", "map": "Island", "km": 8.1 },
     { "id": "tunnel-run", "name": "Tunnel Run", "map": "Desert", "km": 5.1 },
-    { "id": "pyramid-run", "name": "Pyramid Run", "map": "Desert", "km": 5.7 }
-  ]
+    { "id": "pyramid-run", "name": "Pyramid Run", "map": "Desert", "km": 5.7 },
+    { "id": "parkland-estate-run", "name": "Estate Run", "map": "Parkland", "km": 2.8, "aircraft": ["spectre"] }
+  ],
+  "_courses": "aircraft = the course's allow-list (fpvsim RaceCourseDef.aircraft; courseAllowsAircraft in src/race/courses.ts); absent = every aircraft. Estate Run (Parkland, beta) comes from src/world/parkland/parklandCourses.json (14 gates + the START arch, lapKm 2.8), released to fpvsim main with Parkland on 2026-10-14; the production leaderboard worker accepts parkland-estate-run for the Spectre only."
 }

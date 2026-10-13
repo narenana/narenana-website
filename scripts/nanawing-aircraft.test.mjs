@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { page, site } from './page-shell.mjs';
+import { courseAllows } from '../src/aircraft-records.js';
 
 const file = (path) => new URL(`../${path}`, import.meta.url);
 const facts = JSON.parse(await readFile(file('content/_facts/nanawing.json'), 'utf8'));
@@ -162,11 +163,26 @@ test('all four aircraft retain their measured specs, flight links and empty reco
     const flight = decode(match(body, /<a class="ac-btn" href="([^"]+)"/, `${aircraft.id} flight link exists`));
     assert.equal(flight, facts.playUrl.replace('{id}', aircraft.id));
     const records = match(body, new RegExp(`<tbody data-records="${aircraft.id}">([\\s\\S]*?)<\\/tbody>`), `${aircraft.id} record slot exists`);
-    assert.equal([...records.matchAll(/<tr>/g)].length, facts.courses.length);
-    for (const course of facts.courses) assert.ok(text(records).includes(course.name), `${aircraft.id} retains ${course.name}`);
-    assert.equal([...records.matchAll(/<td class="ac-time">—<\/td>/g)].length, facts.courses.length, 'build does not freeze live lap times');
-    assert.equal([...records.matchAll(/<td class="ac-pilot">—<\/td>/g)].length, facts.courses.length, 'build does not freeze pilot names');
+    // A course's aircraft list is its allow-list (Parkland's Estate Run: the Spectre only); no list = every aircraft.
+    const allowed = facts.courses.filter((course) => courseAllows(course, aircraft.id));
+    assert.equal([...records.matchAll(/<tr>/g)].length, allowed.length);
+    for (const course of facts.courses) assert.equal(text(records).includes(course.name), allowed.includes(course), `${aircraft.id} ${allowed.includes(course) ? 'retains' : 'omits'} ${course.name}`);
+    assert.equal([...records.matchAll(/<td class="ac-time">—<\/td>/g)].length, allowed.length, 'build does not freeze live lap times');
+    assert.equal([...records.matchAll(/<td class="ac-pilot">—<\/td>/g)].length, allowed.length, 'build does not freeze pilot names');
   }
+});
+
+test('a course with an aircraft allow-list gets records only for those aircraft, on the page and in the Worker', () => {
+  const restricted = facts.courses.filter((course) => Array.isArray(course.aircraft));
+  assert.deepEqual(restricted.map((course) => [course.id, course.aircraft]), [['parkland-estate-run', ['spectre']]], 'Estate Run is the Spectre-only course');
+  for (const course of facts.courses) for (const id of course.aircraft ?? []) assert.ok(facts.aircraft.some((a) => a.id === id), `${course.id} allows a known aircraft (${id})`);
+  // The Worker's job list (src/aircraft-records.js) reads a board only for an aircraft its course allows.
+  assert.equal(courseAllows(restricted[0], 'spectre'), true);
+  for (const id of ['desertwing', 'morok', 'sukhoi']) assert.equal(courseAllows(restricted[0], id), false, `${id} cannot race Estate Run`);
+  assert.equal(courseAllows(facts.courses[0], 'sukhoi'), true, 'a course without a list allows every aircraft');
+  assert.ok(text(section('spectre')).includes('Estate Run'), 'the Spectre section names its Parkland race');
+  const faq = copy.faq.find((entry) => entry.q === 'Can every aircraft race every course?');
+  assert.ok(faq && /Estate Run is for the WUDFLY Spectre only/.test(faq.a), 'the FAQ says who can race Estate Run');
 });
 
 test('simulator caveats, designer attribution and visible FAQ match the structured answers', () => {

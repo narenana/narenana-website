@@ -63,7 +63,10 @@ const specRows = [
   ['Battery', (a) => battery(a.battery)],
 ];
 
-const courseRows = facts.courses.map((c) =>
+// A course with an aircraft allow-list (facts: course.aircraft; e.g. Parkland's Estate Run, Spectre only) only
+// gets a record row in the sections of the aircraft that may race it. No list = every aircraft.
+const coursesFor = (id) => facts.courses.filter((c) => !Array.isArray(c.aircraft) || c.aircraft.includes(id));
+const courseRows = (id) => coursesFor(id).map((c) =>
   `<tr><th scope="row">${esc(c.name)}<small>${esc(c.map)} · ${fmt(c.km, 1)} km</small></th><td class="ac-time">—</td><td class="ac-pilot">—</td></tr>`).join('');
 
 const lineup = `<ul class="ac-lineup" aria-label="The four aircraft">${displayAircraft.map((a, i) =>
@@ -100,7 +103,7 @@ ${figure(a, c)}
 ${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-note">${esc(c.note)}</p>` : ''}
 <dl class="ac-specs">${specRows.map(([label, f]) => `<div><dt>${label}</dt><dd>${f(a)}</dd></div>`).join('')}</dl>
 <div class="ac-records"><h3>${esc(copy.records.h3)} <span>in the ${esc(a.name)}</span></h3>
-<table><thead><tr><th scope="col">Course</th><th scope="col">Best lap</th><th scope="col">Pilot</th></tr></thead><tbody data-records="${a.id}">${courseRows}</tbody></table>
+<table><thead><tr><th scope="col">Course</th><th scope="col">Best lap</th><th scope="col">Pilot</th></tr></thead><tbody data-records="${a.id}">${courseRows(a.id)}</tbody></table>
 <p class="ac-note">${esc(copy.records.note)}</p></div>
 <a class="ac-btn" href="${play(a.id)}" ${ext}>Fly the ${esc(a.name)} <span aria-hidden="true">↗</span></a>
 </div>${a.id === 'spectre' ? wudfly(copy.wudfly) : ''}</section>`;

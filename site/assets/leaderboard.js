@@ -32,6 +32,20 @@
     card.append(identity, plinth);
     return card;
   }
+  // A course may be open to some aircraft only: its <option data-aircraft="id …"> (Parkland's Estate Run: the
+  // WUDFLY Spectre, as the sim's course allow-list). The other aircraft are disabled while it is picked, and a pick
+  // it can't take moves to the first allowed aircraft, so the board never asks for laps nobody can fly.
+  const DEFAULT_CHALLENGE = "Pick a course and an aircraft, then fly through the green start arch to begin your lap.";
+  function applyCourseRule() {
+    const allowed = (course.selectedOptions[0]?.dataset.aircraft || '').split(/\s+/).filter(Boolean);
+    const known = allowed.filter((id) => [...aircraft.options].some((option) => option.value === id));
+    for (const option of aircraft.options) option.disabled = known.length > 0 && !known.includes(option.value);
+    if (known.length && !known.includes(aircraft.value)) aircraft.value = known[0];
+    if (!known.length) return { challenge: DEFAULT_CHALLENGE, only: '' };
+    const names = [...aircraft.options].filter((option) => known.includes(option.value)).map((option) => option.textContent);
+    return { challenge: `${course.selectedOptions[0].textContent} is raced in the ${names.join(' or the ')} only, for now. Fly through its green start arch to begin your lap.`, only: ` · ${names.join(' or ')} only` };
+  }
+  let rule = applyCourseRule();
   let generation = 0;
   let controller;
   refresh.hidden = false;
@@ -45,7 +59,7 @@
     rows.replaceChildren();
     podium.hidden = true;
     podium.replaceChildren();
-    challenge.textContent = "Pick a course and an aircraft, then fly through the green start arch to begin your lap.";
+    challenge.textContent = rule.challenge;
     status.textContent = 'Loading current standings…';
     refresh.disabled = true;
     try {
@@ -70,7 +84,7 @@
         rows.append(row);
       }
       table.hidden = entries.length <= 3;
-      status.textContent = entries.length ? `Checked ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · ${Number.isInteger(data.total) ? data.total + ' pilots on this board' : 'Current standings'}` : 'No laps yet for this course and aircraft. Set the first time.';
+      status.textContent = entries.length ? `Checked ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} · ${Number.isInteger(data.total) ? data.total + ' pilots on this board' : 'Current standings'}${rule.only}` : 'No laps yet for this course and aircraft. Set the first time.';
     } catch {
       if (current !== generation) return;
       status.textContent = 'Standings are unavailable right now. Try Refresh or open the full leaderboard.';
@@ -79,7 +93,7 @@
       if (current === generation) refresh.disabled = false;
     }
   }
-  course.addEventListener('change', load);
+  course.addEventListener('change', () => { rule = applyCourseRule(); load(); });
   aircraft.addEventListener('change', load);
   refresh.addEventListener('click', load);
   // Fetch the standings only when the section is about to scroll into view, not
