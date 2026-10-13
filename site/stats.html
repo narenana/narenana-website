@@ -71,6 +71,16 @@
 
     .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+    /* One-page tabs: summary (tiles + projects) stays above; detail lives here. */
+    .tabs { display: flex; gap: 2px; flex-wrap: wrap; margin: 42px 0 20px; border-bottom: 1px solid var(--border); }
+    .tabs button { background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font: inherit; font-size: 0.95rem; font-weight: 600; padding: 9px 16px; margin-bottom: -1px; cursor: pointer; }
+    .tabs button:hover { color: var(--fg); }
+    .tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent-bright); }
+    .tabpanel[hidden] { display: none; }
+    .tabh { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 26px 0 12px; }
+    .tabh:first-child { margin-top: 4px; }
+    #nwframe { width: 100%; min-height: 70vh; border: 0; border-radius: 14px; background: var(--card); display: block; }
     .panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px; }
     .panel .title { font-weight: 700; margin-bottom: 6px; }
     .panel svg.line { display: block; width: 100%; height: 60px; margin: 4px 0 10px; }
@@ -97,30 +107,42 @@
   <div class="wrap">
     <header class="top">
       <h1>Portfolio <span class="accent">stats</span></h1>
-      <span class="meta"><a href="/stats/nanawing">Nanawing sim →</a></span>
       <span class="meta" id="generated"></span>
       <span class="meta"><button id="refresh">refresh</button></span>
     </header>
 
     <div id="err"></div>
 
+    <!-- Summary — always on top -->
     <h2>Last 7 days · vs previous 7</h2>
     <div class="tiles" id="tiles"></div>
 
     <h2>Projects · 28-day sessions</h2>
     <div class="cards" id="projects"></div>
 
-    <h2>Search — google, whole portfolio</h2>
-    <div class="cols" id="search"></div>
+    <!-- Detail — one page, tabbed -->
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Stats detail">
+      <button role="tab" data-tab="nanawing">Nanawing sim</button>
+      <button role="tab" data-tab="logviewer">Log Viewer</button>
+      <button role="tab" data-tab="sites">Sites &amp; search</button>
+      <button role="tab" data-tab="lastcall">Last Call</button>
+    </nav>
 
-    <h2>Play funnels</h2>
-    <div class="cols" id="funnels"></div>
-
-    <h2>Log Viewer — flights analysed</h2>
-    <div class="cols" id="logviewer"></div>
-
-    <h2>YouTube — narenana channel</h2>
-    <div id="youtube"></div>
+    <section class="tabpanel" data-panel="nanawing">
+      <iframe id="nwframe" data-src="/stats/nanawing?embed=1" title="Nanawing flight stats" loading="eager"></iframe>
+    </section>
+    <section class="tabpanel" data-panel="logviewer" hidden>
+      <div class="cols" id="logviewer"></div>
+    </section>
+    <section class="tabpanel" data-panel="sites" hidden>
+      <h3 class="tabh">Search — google, whole portfolio</h3>
+      <div class="cols" id="search"></div>
+      <h3 class="tabh">YouTube — narenana channel</h3>
+      <div id="youtube"></div>
+    </section>
+    <section class="tabpanel" data-panel="lastcall" hidden>
+      <div class="cols" id="funnels"></div>
+    </section>
 
     <h2>Data sources</h2>
     <div class="chips" id="sources"></div>
@@ -349,16 +371,9 @@
           <div class="tbl"><table><thead><tr><th>map</th><th class="num">starts</th><th class="num">players</th><th class="num">finishes</th><th class="num">wins</th></tr></thead><tbody>${maps}</tbody></table></div></div>`
       })() : `<div class="panel empty">Last Call: ${esc((data.lastcall && data.lastcall.error) || 'no data')}</div>`
 
-      const nwHtml = ok(data.nanawing) ? (() => {
-        const t = data.nanawing.totals
-        return `<div class="panel"><div class="title">Nanawing — flights/day ${deltaChip(nwFlights)}</div>
-          ${spark(nwFlights, 500, 60)}
-          <div class="facts" style="color:var(--muted);font-size:0.8rem">
-            all-time: flights <b style="color:var(--fg)">${fmt(t.flights)}</b> · air-hours <b style="color:var(--fg)">${fmt(t.air_seconds / 3600)}</b> ·
-            landings <b style="color:var(--fg)">${fmt(t.landings)}</b> · crashes <b style="color:var(--fg)">${fmt(t.crashes)}</b> ·
-            stalls <b style="color:var(--fg)">${fmt(t.stalls)}</b>${data.nanawing.racers !== null ? ` · racers <b style="color:var(--fg)">${fmt(data.nanawing.racers)}</b>` : ''}</div></div>`
-      })() : `<div class="panel empty">Nanawing: ${esc((data.nanawing && data.nanawing.error) || 'no data')}</div>`
-      $('funnels').innerHTML = lcHtml + nwHtml
+      // Nanawing's full dashboard is its own tab (the embedded iframe), so the
+      // Last Call funnel is all that remains in this panel.
+      $('funnels').innerHTML = lcHtml
 
       /* ---- Log Viewer — first-party usage counters (D1): funnel + fleet ---- */
       if (ok(data.logviewer)) {
@@ -400,7 +415,7 @@
       if (ok(data.ga) && data.ga.wwwPages.length) {
         const rows = data.ga.wwwPages.slice(0, 12).map((r) =>
           `<tr><td class="trunc" title="${esc(r[0])}">${esc(r[0])}</td><td class="num">${fmt(r[1])}</td><td class="num">${fmt(r[2])}</td></tr>`).join('')
-        $('funnels').innerHTML += `<div class="panel"><div class="title">www.narenana.com — page split (wings catalog / log viewer / home)</div>
+        $('search').innerHTML += `<div class="panel"><div class="title">www.narenana.com — page split (wings catalog / log viewer / home)</div>
           <div class="tbl"><table><thead><tr><th>path</th><th class="num">views 28d</th><th class="num">users</th></tr></thead><tbody>${rows}</tbody></table></div></div>`
       }
 
@@ -459,6 +474,27 @@
         $('err').style.display = 'block'
       }
     }
+    /* ---- one-page tabs + the Nanawing iframe (lazy-loaded, auto-resized) ---- */
+    (function () {
+      const tabs = $('tabs')
+      const frame = $('nwframe')
+      function activate(name) {
+        tabs.querySelectorAll('button').forEach((b) => b.setAttribute('aria-selected', b.dataset.tab === name ? 'true' : 'false'))
+        document.querySelectorAll('.tabpanel').forEach((p) => (p.hidden = p.dataset.panel !== name))
+        // Load the iframe only when its tab is first shown, so its charts size to full width.
+        if (name === 'nanawing' && frame && !frame.src && frame.dataset.src) frame.src = frame.dataset.src
+        try { localStorage.setItem('statsTab', name) } catch {}
+      }
+      tabs.addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) activate(b.dataset.tab) })
+      let initial = 'nanawing'
+      try { const l = localStorage.getItem('statsTab'); if (l && tabs.querySelector('button[data-tab="' + l + '"]')) initial = l } catch {}
+      activate(initial)
+      // The embedded dashboard posts its content height; match the iframe so there's no inner scrollbar.
+      addEventListener('message', (e) => {
+        if (e.data && e.data.t === 'nwh' && typeof e.data.h === 'number' && e.data.h > 200 && frame) frame.style.height = e.data.h + 'px'
+      })
+    })()
+
     $('refresh').addEventListener('click', () => load(true))
     load(false)
   </script>

@@ -124,7 +124,7 @@ export async function handleStats(request, env, ctx, url) {
         'x-robots-tag': 'noindex',
         'referrer-policy': 'no-referrer',
         'content-security-policy':
-          "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://fpvsim-stats.narenana.workers.dev https://fpvsim-leaderboard.narenana.workers.dev; img-src data:; base-uri 'none'; form-action 'none'",
+          "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://fpvsim-stats.narenana.workers.dev https://fpvsim-leaderboard.narenana.workers.dev; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'",
       },
     })
   }

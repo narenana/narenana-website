@@ -108,9 +108,10 @@ ul.ins li .go:hover{text-decoration:underline}
 <div class="head">
   <svg width="40" height="40" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#0e1117"/><path d="M32 14 L56 42 L36 38 L32 45 L28 38 L8 42 Z" fill="#1f9bd9" stroke="#5fc4ef" stroke-width="1.5" stroke-linejoin="round"/><path d="M32 16 L32 43" stroke="#0a4a6a" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="32" cy="22" r="2.4" fill="#06222e" stroke="#cdeeff" stroke-width="1"/></svg>
   <div><div class="name">Nanawing</div><div class="sub">Flight stats</div></div>
-  <a href="/stats" style="margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--mut);text-decoration:none">← Portfolio stats</a>
+  <a id="pf-back" href="/stats" style="margin-left:auto;font-size:12px;font-weight:700;letter-spacing:.04em;color:var(--mut);text-decoration:none">← Portfolio stats</a>
   <span class="live" style="margin-left:14px">● Live</span>
 </div>
+<script>(function(){if(!new URLSearchParams(location.search).get("embed"))return;var b=document.getElementById("pf-back");if(b)b.style.display="none";var w=document.querySelector(".wrap");if(w)w.style.paddingTop="16px";function ph(){try{parent.postMessage({t:"nwh",h:document.documentElement.scrollHeight},"*")}catch(e){}}addEventListener("load",ph);var n=0,iv=setInterval(function(){ph();if(++n>15)clearInterval(iv)},800);try{new ResizeObserver(ph).observe(document.body)}catch(e){}})();</script>
 <h1>Every flight, counted.</h1>
 <nav class="sims" role="tablist" aria-label="Product">
   <button role="tab" data-sim="nanawing1">Nanawing 1 <span>FPV</span></button><button role="tab" data-sim="nanawing2">Nanawing 2 <span>line of sight</span></button>
