@@ -432,6 +432,9 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-13** · nanawing2 `991f979`, draft [PR 71](https://github.com/narenana/nanawing2/pull/71), dependent on PR 70: first field/aircraft visual pass adds turf photography, original oak/hedge assets, revised Sky Surfer materials/geometry and local static shading. CREDITS.md and shipped LICENSES.txt add the Poly Haven Grass Ground CC0 attribution and original-asset authoring record. This is a feature preview, not merged or production-deployed. M3 fact-drift tracking only: aircraft count/specifications, controls, privacy/feature claims, URLs and milestone dates/scope are unchanged; no URL-map or Fact-inventory row needs revision.
+
+
 - **2026-10-12** · Anonymous flight-attribute usage counters (edgetx-log-parser client + narenana-website `feat/usage-flight-attrs`, `usage/lib/worker.mjs`; touches the M3 log-viewer privacy-copy item in §7).
   - **What the browser now sends to `/api/usage`, on top of the existing format / gps-presence / outcome / narration counts:** firmware family (`fw_family`: betaflight · inav · emuflight — blackbox logs only), airframe type (`craft`: quad · wing · unknown — best-effort from firmware, board target and flight dynamics), and a finer flight outcome (`debrief_shown` gains `critical` = crash-grade: in-air power or link loss). Each is one low-cardinality allowlisted bucket; the `ALLOW` map and `usageSummary()` in `usage/lib/worker.mjs` were extended to match.
   - **Still never sent:** GPS coordinates, filename, or any log content. The craft classifier reads altitude only relative to the flight's own minimum and uses speed/attitude magnitudes — no position.
