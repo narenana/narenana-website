@@ -342,6 +342,8 @@ Found and not yet fixed (all already live):
       
       Both change to "WUDFLY Spectre". That's an fpvsim change, which needs a preview and the owner's OK to deploy.
 
+- [ ] **At Nanawing 2 PR 73 release:** carry the keyboard-specific rate wording into any www Nanawing 2 controls copy and the M3 fact source. Held keys reach the selected travel, not always full travel; Sky Surfer defaults are 35% launch power, 45% pitch and 35% roll. The local Nanawing 2 guide/menu are already updated on the preview branch. Do not apply these defaults to Nanawing 1 or radio users, or describe them as live before release.
+
 ## 8. Fact inventory
 
 <a id="fact-inventory"></a>
@@ -357,7 +359,7 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Race courses (ids, names, km, medals) | fpvsim `src/race/courses.ts`, `desertCourses.json` | fpvsim map pages, leaderboard page, guides; www homepage + `site/assets/leaderboard.js` | Same |
 | Nanawing aircraft (names, count, specs, credits). *4 since 8 Oct, with the WUDFLY Spectre; new stall figures (Change log, 8 Oct). www facts: `content/_facts/nanawing.json`, feeding `/nanawing/aircraft/`. Page copy and editorial order: `content/nanawing/aircraft.json`; whole-hangar/free RC-practice positioning in website `a9bc680`, with Spectre-first lineup and sharing, without changing measured specs or the facts snapshot order.* | fpvsim `src/aircraft/catalog.ts`, `src/config/aircraftSpecs.ts` | fpvsim landing (stat strip, feature list, hero top-3 names), aircraft guide (specs typed by hand), other guides, map pages (wing count, wing tiles, `public/maps/maps.js`), leaderboard page; www homepage (racing card list, podium aircraft `<select>`); www aircraft page (free practice, aircraft differences, field-confidence context, Spectre social preview and requests via existing Instagram/LinkedIn profiles; other surfaces keep their own editorial order) | Same |
 | Nanawing 2 aircraft (selectable count, names) | nanawing2 `lib/aircraft-availability.ts` (8) | nanawing2 landing (says 5 and 8), guide (names 5), `build/`; www homepage ("5"), Wings practise links | Same |
-| Controls and keys. *Since 8 Oct: the Spectre's yaw stick and an 8-step calibration (Change log, 8 Oct)* | fpvsim `src/hud/menuCopy.ts`, calibration steps in `src/hud/controlsUI.ts` (`src/hud/wizardMath.ts` from the Spectre release); nanawing2 `lib/keymap.ts` | fpvsim landing FAQ, 4 guides (the step count: how-to-play, the guides index, the no-controller guide and its FAQPage); nanawing2 guide; www homepage | Same |
+| Controls and keys. *Since 8 Oct: the Spectre's yaw stick and an 8-step calibration (Change log, 8 Oct). Pending Nanawing 2 PR 73: Sky Surfer keyboard launch power 35%, pitch travel 45%, roll travel 35%, with adjustable per-aircraft rates; radios retain transmitter rates/expo/trim. This preset is a preview, not live.* | fpvsim `src/hud/menuCopy.ts`, calibration steps in `src/hud/controlsUI.ts` (`src/hud/wizardMath.ts` from the Spectre release); nanawing2 `lib/keymap.ts`, `lib/control-tuning.ts`, `lib/pilot-controls.ts` | fpvsim landing FAQ, 4 guides (the step count: how-to-play, the guides index, the no-controller guide and its FAQPage); nanawing2 guide and Controls menu (updated in PR 73); www homepage; future www Nanawing 2 controls copy (release follow-up in M2 list) | Same |
 | Log formats and firmware limits | log viewer `src/App.jsx` + parsers | Log viewer landing and 9 content pages, README; www homepage, `/videos/log-viewer-walkthrough/`, Wings practise links | `product.json` |
 | Claims: free, no install, no login, offline, phones | Behaviour in each app | www homepage, fpvsim landing, nanawing2 FAQ, log viewer pages ("nothing is uploaded") | `product.json` claims |
 | Wings prices, stock, sellers | Database (rendered per request) | Homepage fallback text (rewritten per request) | Unchanged + `/wings/facts.json` |
@@ -431,6 +433,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-13** · nanawing2 `91f4bbd` and `ebe7d4d`, draft [PR 73](https://github.com/narenana/nanawing2/pull/73), dependent on PR 72: gentler, adjustable Sky Surfer keyboard rates and 35% launch power; guide/menu clarify selected travel and transmitter-owned radio settings. Ready-field scenery now animates before launch; review links select Ultra. M2 copy follow-up and M3 controls-fact tracking updated; no aircraft specifications, privacy claims, page/URL or milestone date/scope change. This is a feature preview, not merged or production-deployed.
 
 - **2026-10-13** · nanawing2 `0fcdc0c`, draft [PR 72](https://github.com/narenana/nanawing2/pull/72), dependent on PR 71: field-life preview adds adapted Poly Haven syringa/jacaranda credits, a prefiltered CC0 environment, revised CC BY-NC hand derivatives and original preparation props/animation. CREDITS.md and shipped LICENSES.txt retain the separate terms. M3 attribution tracking only; this is not merged or production-deployed. No aircraft count/specification, control/privacy claim, page/URL, Fact-inventory row or milestone date/scope changes. KTX2 remains an offline authoring trial.
 
