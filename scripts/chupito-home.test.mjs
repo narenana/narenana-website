@@ -14,7 +14,8 @@ test('the pilot paths introduce Chupito as a distinct experimental simulator pre
   const pilots = block(/<section class="pilot-paths\b[^>]*>([\s\S]*?)<\/section>/, 'pilot paths exist');
   assert.match(pilots, /href="\/nanawing\/aircraft\/#chupito">TBS Chupito · Experimental preview<\/a>/);
   assert.match(pilots, /Agile 800 mm wing with a 6S setup/);
-  assert.match(pilots, /not yet on the live leaderboards/);
+  assert.match(pilots, /test leaderboard is separate from the production boards/);
+  assert.doesNotMatch(pilots, /not yet on the live leaderboards/);
   assert.doesNotMatch(home, /https:\/\/sim\.narenana\.com\/\?[^"]*aircraft=chupito/);
 });
 

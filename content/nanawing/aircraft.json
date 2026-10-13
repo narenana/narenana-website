@@ -44,8 +44,9 @@
         "This preview uses a 6S 1500 mAh pack, a provisional 700 g flying weight and a 1.5 kgf thrust target. The current simulator tune gives it a 360°/s roll ceiling, a 380°/s pitch-command ceiling and 0.60 turn assistance. Those control ceilings are not guaranteed rates at every speed: lift, airspeed and the angle-of-attack limiter still matter."
       ],
       "note": "An independent recreation from public reference photos, with pilot-feedback tuning. This is not a TBS collaboration, endorsement or manufacturer-validated flight model.",
-      "previewNote": "Preview only — open the separate test build to fly Chupito. Practice laps stay on that device; there are no online Chupito leaderboards or flight-trajectory uploads yet.",
-      "cta": "Fly the Chupito preview"
+      "previewNote": "Preview only — open the separate test build to fly Chupito. Its test standings use a separate database and never appear on the production leaderboards. Flight-trajectory uploads remain disabled.",
+      "cta": "Fly the Chupito preview",
+      "leaderboardCta": "See Chupito test standings"
     },
     "desertwing": {
       "role": "The trainer · Build the basics",
@@ -184,7 +185,7 @@
     },
     {
       "q": "Can every aircraft race every course?",
-      "a": "The four released aircraft have separate online boards on each of the four courses, so you race pilots in the same plane. Only your best lap counts. The Chupito preview can fly practice laps, but its times stay on your device and do not enter online boards."
+      "a": "The four released aircraft have separate online boards on each of the four courses, so you race pilots in the same plane. Only your best lap counts. The Chupito preview has its own test standings in a separate database; those laps never enter production leaderboards. Flight-trajectory uploads remain disabled for Chupito."
     },
     {
       "q": "Where can I fly the TBS Chupito?",

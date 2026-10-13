@@ -22,6 +22,11 @@ for (const a of facts.previewAircraft || []) {
       url.username || url.password || url.port || url.pathname !== '/' || !url.searchParams.has('play') || url.searchParams.get('aircraft') !== a.id) {
     throw new Error(`Invalid preview flight destination: ${a.id}`);
   }
+  const boardUrl = new URL(a.leaderboardUrl);
+  if (boardUrl.protocol !== 'https:' || boardUrl.hostname !== url.hostname || boardUrl.username || boardUrl.password || boardUrl.port ||
+      boardUrl.pathname !== '/leaderboard/' || boardUrl.searchParams.get('aircraft') !== a.id) {
+    throw new Error(`Invalid preview leaderboard destination: ${a.id}`);
+  }
 }
 if (!Array.isArray(copy.order) || copy.order.length !== byId.size ||
     new Set(copy.order).size !== byId.size || copy.order.some((id) => !byId.has(id))) {
@@ -106,6 +111,10 @@ ${gallery(w)}
 
 const sections = displayAircraft.map((a, i) => {
   const c = copy.aircraft[a.id];
+  const flightAction = `<a class="ac-btn" href="${play(a.id)}" ${ext}>${esc(c.cta || `Fly the ${a.name}`)} <span aria-hidden="true">↗</span></a>`;
+  const actions = preview(a)
+    ? `<div class="ac-actions">${flightAction}<a class="ac-link" href="${esc(a.leaderboardUrl)}" ${ext}>${esc(c.leaderboardCta)} <span aria-hidden="true">↗</span></a></div>`
+    : flightAction;
   return `<section class="ac-craft${i % 2 ? ' ac-craft--flip' : ''}" id="${a.id}" aria-labelledby="${a.id}-title">
 ${figure(a, c)}
 <div class="ac-craft-body"><span class="eyebrow">${String(i + 1).padStart(2, '0')} / ${esc(c.role.toUpperCase())}</span><h2 id="${a.id}-title">${esc(a.name)} ${badge(a)}</h2>
@@ -115,7 +124,7 @@ ${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-
 ${preview(a) ? `<p class="ac-preview-note">${esc(c.previewNote)}</p>` : `<div class="ac-records"><h3>${esc(copy.records.h3)} <span>in the ${esc(a.name)}</span></h3>
 <table><thead><tr><th scope="col">Course</th><th scope="col">Best lap</th><th scope="col">Pilot</th></tr></thead><tbody data-records="${a.id}">${courseRows}</tbody></table>
 <p class="ac-note">${esc(copy.records.note)}</p></div>`}
-<a class="ac-btn" href="${play(a.id)}" ${ext}>${esc(c.cta || `Fly the ${a.name}`)} <span aria-hidden="true">↗</span></a>
+${actions}
 </div>${a.id === 'spectre' ? wudfly(copy.wudfly) : ''}</section>`;
 }).join('\n');
 

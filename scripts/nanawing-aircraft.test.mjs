@@ -194,7 +194,9 @@ test('Chupito has accurate preview specs and never a production flight link or r
   assert.match(visible, /not guaranteed rates at every speed/);
   assert.match(visible, /provisional 700 g flying weight/);
   assert.match(visible, /not a TBS collaboration, endorsement or manufacturer-validated flight model/);
-  assert.match(visible, /no online Chupito leaderboards or flight-trajectory uploads yet/);
+  assert.match(visible, /test standings use a separate database and never appear on the production leaderboards/);
+  assert.match(visible, /Flight-trajectory uploads remain disabled/);
+  assert.doesNotMatch(visible, /no online Chupito leaderboards|Practice laps stay on that device/);
   assert.ok(visible.includes(copy.aircraft.chupito.previewNote));
   assert.doesNotMatch(body, /data-records|class="ac-records"/);
   assert.doesNotMatch(html, /data-records="chupito"/);
@@ -209,6 +211,19 @@ test('Chupito has accurate preview specs and never a production flight link or r
   assert.ok(anchor.rel.split(/\s+/).includes('noopener'));
   assert.doesNotMatch(html, /https:\/\/sim\.narenana\.com\/\?[^"\s]*aircraft=chupito/);
   assert.match(body, /href="https:\/\/www\.team-blacksheep\.com\/products\/prod:tbs_chupito_kit"/);
+});
+
+test('Chupito test standings link only to its isolated preview board', () => {
+  const aircraft = facts.previewAircraft[0];
+  const body = section('chupito');
+  const anchor = attributes(match(body, /(<a class="ac-link"[^>]+>)/, 'Chupito test standings CTA exists'));
+  assert.equal(anchor.href, aircraft.leaderboardUrl);
+  assert.equal(anchor.href, 'https://codex-tbs-chupito.fpvsim.pages.dev/leaderboard/?aircraft=chupito');
+  assert.equal(anchor.target, '_blank');
+  assert.ok(anchor.rel.split(/\s+/).includes('noopener'));
+  assert.ok(text(body).includes(copy.aircraft.chupito.leaderboardCta));
+  assert.doesNotMatch(html, /https:\/\/(?:sim\.narenana\.com|fpvsim\.pages\.dev)\/leaderboard\/\?[^"\s]*aircraft=chupito/);
+  assert.doesNotMatch(body, /data-records/);
 });
 
 test('preview labels are visible in the lineup, comparison and detail heading', () => {
@@ -289,7 +304,10 @@ test('simulator caveats, designer attribution and visible FAQ match the structur
   assert.ok(chupitoFaq, 'Chupito has a discoverable FAQ');
   assert.match(chupitoFaq.a, /not in the production hangar yet/);
   assert.match(chupitoFaq.a, /independent simulator recreation/);
-  assert.match(copy.faq.find((entry) => entry.q === 'Can every aircraft race every course?').a, /Chupito preview.*do not enter online boards/);
+  const raceAnswer = copy.faq.find((entry) => entry.q === 'Can every aircraft race every course?').a;
+  assert.match(raceAnswer, /Chupito preview has its own test standings in a separate database/);
+  assert.match(raceAnswer, /never enter production leaderboards/);
+  assert.match(raceAnswer, /Flight-trajectory uploads remain disabled for Chupito/);
 });
 
 test('the shared page shell keeps original metadata defaults for other editorial pages', () => {

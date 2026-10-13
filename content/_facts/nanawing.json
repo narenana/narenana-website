@@ -98,6 +98,7 @@
       "status": "preview",
       "source": { "repo": "narenana/fpvsim", "commit": "c84ac703e046446558decf57fd3b54f368ce45d7", "date": "2026-10-13" },
       "playUrl": "https://codex-tbs-chupito.fpvsim.pages.dev/?play&aircraft=chupito",
+      "leaderboardUrl": "https://codex-tbs-chupito.fpvsim.pages.dev/leaderboard/?aircraft=chupito",
       "spanM": 0.8,
       "massKg": 0.7,
       "thrustN": 14.71,
