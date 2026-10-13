@@ -450,6 +450,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-14** · **Pending release, date not set: the Desert page is no longer "the new map".** fpvsim `794c959` on `parkland` (local; live with the Parkland release, when Parkland becomes the newest map). `sim.narenana.com/maps/desert/`: title "Desert — fly an FPV wing through a mountain in Nanawing, the free FPV wing simulator" (was "Desert — the new map in Nanawing, …"), eyebrow "The desert map in Nanawing", share/og/twitter copy without "new", share creatives' badge "Mesas & pyramids" (og/square/story re-rendered). URL unchanged; the URL map row is unchanged; if a www copy of the Desert page is written before M5 it takes the new title. No milestone moves.
+
 - **2026-10-13** · **Pending release, date not set: Parkland, review fixes.** fpvsim `695c843` on `parkland` (local, not pushed or deployed; live with the Parkland release, not before). What visitors will read:
   - **Phones (Claims row):** the landing's touch note and every map page's phone note (`tools/buildMapPages.mjs`, so `/maps/island/`, `/maps/desert/` and `/maps/parkland/`) said "touch controls aren't here yet". They now say a phone flies with the on-screen twin sticks, held sideways, and a computer with a keyboard, gamepad or RC radio. The www copies in §7 are unchanged.
   - **Cameras (Controls row; the fact is unchanged, one copy was wrong):** the no-controller guide counted the presses from FPV. The sim starts in chase: the first C gives FPV, the second Real FPV, the third chase again. That is what the guide now says, the same as the Chromebook and practice guides.
