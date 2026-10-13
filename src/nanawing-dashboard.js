@@ -1,8 +1,9 @@
-// VENDORED from fpvsim-stats-work/stats-worker/src/dashboard.js (2026-10-13) to unify stats at
-// www.narenana.com/stats/nanawing. Served by this worker (gated, src/stats.js); its public
-// workers.dev home redirects here. ONLY change vs upstream: simQ() prepends the absolute
-// fpvsim-stats API base so the client fetches cross-origin (CORS *) instead of same-origin.
-// Re-sync from upstream by re-copying and re-applying that one-line simQ edit.
+// VENDORED from fpvsim-stats-work/stats-worker/src/dashboard.js (origin/main, 2026-10-13) to unify
+// stats at www.narenana.com/stats/nanawing. Served by this worker (gated, src/stats.js); the public
+// workers.dev home redirects here. ONLY change vs upstream: simQ() prepends the absolute fpvsim-stats
+// API base so the client fetches cross-origin (CORS *) instead of same-origin, plus a "← Portfolio"
+// link. Re-sync by re-copying `git show origin/main:stats-worker/src/dashboard.js` and re-applying
+// those edits. (Upstream is 281 commits ahead of the local checkout — always vendor from origin/main.)
 //
 // The stats dashboard page (its own module since 2026-09 so routes and page change independently).
 // One page, no framework, no CDN, strict CSP (inline style + script only), inline SVG charts.
@@ -118,7 +119,7 @@ ul.ins li .go:hover{text-decoration:underline}
 <div class="grid" id="grid"><div class="tile"><div class="k">Loading…</div></div></div>
 
 <nav class="tabs" role="tablist" aria-label="Sections">
-  <button role="tab" data-tab="summary">Summary</button><button role="tab" data-tab="activity">Activity</button><button role="tab" data-tab="racing">Racing</button><button role="tab" data-tab="wings">Wings</button><button role="tab" data-tab="hardware">Hardware</button><button role="tab" data-tab="audience">Audience</button>
+  <button role="tab" data-tab="summary">Summary</button><button role="tab" data-tab="activity">Activity</button><button role="tab" data-tab="maps">Maps</button><button role="tab" data-tab="racing">Racing</button><button role="tab" data-tab="wings">Wings</button><button role="tab" data-tab="hardware">Hardware</button><button role="tab" data-tab="audience">Audience</button>
 </nav>
 
 <section class="tab" id="tab-summary" role="tabpanel">
@@ -148,6 +149,15 @@ ul.ins li .go:hover{text-decoration:underline}
 <div class="charts" style="margin-top:20px">
   <div class="panel"><div class="ptitle">Laps completed, by track and wing <span class="psub">one row per pilot per board · laps = every submission · medians over personal bests</span></div><div id="chBoards"><div class="chload">Loading…</div></div></div>
   <div class="panel"><div class="ptitle">Laps per day <span class="psub" id="subLaps">last 30 days · qualifying laps uploaded · lower bound</span></div><div class="legend" id="lapLegend"></div><div class="chart" id="chLaps"><div class="chload">Loading…</div></div></div>
+</div>
+</section>
+
+<section class="tab" id="tab-maps" role="tabpanel" hidden>
+<div id="ins-maps"></div>
+<div class="chips sm" id="mapChips" role="group" aria-label="Window" style="margin-top:16px"><button data-d="14">14 d</button><button data-d="30">30 d</button><button data-d="90">90 d</button></div>
+<div class="charts">
+  <div class="panel"><div class="ptitle">Which map people fly <span class="psub" id="subMaps">real players · every launch</span></div><div id="chMaps"><div class="chload">Loading…</div></div></div>
+  <div class="panel"><div class="ptitle">Flights per day by map <span class="psub">stacked · today is partial</span></div><div class="legend" id="mapLegend"></div><div class="chart" id="chMapDays"><div class="chload">Loading…</div></div></div>
 </div>
 </section>
 
@@ -310,10 +320,10 @@ function miniHist(bins,color){
 }
 
 // ---- state --------------------------------------------------------------------------------------
-var S={stats:null,activity:null,pulse:null,summary:null,wings:null,hardware:null,audience:null};
+var S={stats:null,activity:null,pulse:null,summary:null,maps:null,wings:null,hardware:null,audience:null};
 var range=(function(){var r=load("nw.stats.range");return ["30","90","180","365","all"].indexOf(r)>=0?r:"30";})();
-var wingsDays=30,hwDays=14,audDays=30;
-function chips(id,attr,cur,onPick){var host=el(id),bs=host.querySelectorAll("button");for(var i=0;i<bs.length;i++){(function(b){b.setAttribute("aria-pressed",b.getAttribute(attr)===String(cur)?"true":"false");b.onclick=function(){onPick(b.getAttribute(attr));var all=host.querySelectorAll("button");for(var j=0;j<all.length;j++)all[j].setAttribute("aria-pressed",all[j]===b?"true":"false");};})(bs[i]);}}
+var wingsDays=30,hwDays=14,audDays=30,mapsDays=30;
+function chips(id,attr,cur,onPick){var host=el(id);if(!host)return;var bs=host.querySelectorAll("button");for(var i=0;i<bs.length;i++){(function(b){b.setAttribute("aria-pressed",b.getAttribute(attr)===String(cur)?"true":"false");b.onclick=function(){onPick(b.getAttribute(attr));var all=host.querySelectorAll("button");for(var j=0;j<all.length;j++)all[j].setAttribute("aria-pressed",all[j]===b?"true":"false");};})(bs[i]);}}
 
 // ---- totals --------------------------------------------------------------------------------------
 function renderTiles(){
@@ -325,10 +335,12 @@ function renderTiles(){
   if(wk){var delta=wk.prev_pilots?Math.round((wk.pilots-wk.prev_pilots)/wk.prev_pilots*100):null;
     wkHtml=tile("Pilots last week",fmtN(wk.pilots),"exact unique · wk of "+esc(lbl(wk.week))+(delta==null?"":" · "+(delta>=0?"+":"")+delta+"% vs prior")+" · "+fmtN(wk.pilots_returning)+" returning","good");}
   else wkHtml=tile("Pilots last week","—","no closed week yet");
+  var at=S.activity&&S.activity.all_time,atHtml=at?tile("Unique pilots",fmtN(at.pilots),"all-time real players"+(at.since?" · since "+esc(lbl(at.since)):""),"good"):tile("Unique pilots","—","all-time");
   // The leaderboard is Nanawing 1's, and its worker has no product dimension: this tile is racing
   // data and must never appear under another product, the way the Racing tab does not.
   var sm=S.summary&&S.summary.totals,smHtml=RACING?(sm?tile("Laps on the boards",fmtN(sm.laps_submitted),"all-time · "+fmtN(sm.pilots)+" pilots on "+fmtN(sm.board_rows>0?(S.summary.boards||[]).length:0)+" boards","blue"):tile("Laps on the boards","—","leaderboard unavailable")):"";
   el("grid").innerHTML=
+    atHtml+
     tile("Flights flown",fmtN(flights),raw,"blue")+
     tile("Total air-time",fmtT(air),raw)+
     tile("Avg flight",fmtT(avg),"per ended flight · resets and tab-closes included")+
@@ -397,8 +409,8 @@ async function loadPulse(){
 }
 
 // ---- racing (leaderboard /summary) ----------------------------------------------------------------
-var CCOL={"windmill-run":"#3eb5e8","river-run":"#b58cf5"};
-function cname(c){return c==="windmill-run"?"Windmill Run":c==="river-run"?"River Run":c;}
+var CCOL={"windmill-run":"#3eb5e8","river-run":"#b58cf5","tunnel-run":"#e3a83a","pyramid-run":"#f0616d"};
+function cname(c){return c==="windmill-run"?"Windmill Run":c==="river-run"?"River Run":c==="tunnel-run"?"Tunnel Run":c==="pyramid-run"?"Pyramid Run":c;}
 function renderSummary(){
   var d=S.summary,b=d.boards||[];
   if(!b.length){ok("chBoards",'<div class="empty">No laps on the boards yet.</div>');ok("chLaps",'<div class="empty">No laps yet.</div>');renderTiles();renderInsights();return;}
@@ -426,6 +438,34 @@ async function loadSummary(){
   if(!RACING){renderTiles();return;} // no leaderboard request at all for a non-racing product
   try{var d=await getJson(LB);S.summary=d;renderSummary();staleMark(["chBoards","chLaps"],d);}
   catch(e){fail("chBoards","Could not load the leaderboard summary ("+e.message+").");fail("chLaps","Could not load laps per day.");renderTiles();}
+}
+
+// ---- maps -----------------------------------------------------------------------------------------
+var MCOL={"island":"#59d98a","desert-airfield":"#e3a83a","unknown":"#4b5563"};
+function mname(m){return m==="island"?"Island":m==="desert-airfield"?"Desert":m==="unknown"?"Unknown (older client)":m;}
+function dayAfter(day){return new Date(Date.parse(day+"T00:00:00Z")+864e5).toISOString().slice(0,10);}
+function renderMaps(){
+  var d=S.maps,a=d.by_map||[];
+  el("subMaps").innerHTML=esc("real players · last "+d.days+" days · "+fmtN(d.flights)+" flights"+(d.desert_release_ms?" · flights before the Desert release (3 Oct 2026) count as Island":""))+realPill();
+  if(!a.length){ok("chMaps",'<div class="empty">No flights in this window.</div>');ok("chMapDays",'<div class="empty">—</div>');el("mapLegend").innerHTML="";renderInsights();return;}
+  var h=barList(a.map(function(x){return {label:mname(x.map),v:x.flights,title:pc(x.share*100,1)+" of flights"};}),"#3eb5e8",function(it){return fmtN(it.v)+" flights";});
+  var t='<div class="perfwrap"><table class="perf"><tr><th>Map</th><th class="n">Flights</th><th class="n">Share</th><th class="n">Pilots</th><th class="n">Air time</th><th class="n">Avg s</th><th class="n">Landed</th><th class="n">Crashed</th><th class="n">Reset</th><th class="n">Laps</th></tr>';
+  for(var i=0;i<a.length;i++){var x=a[i],lr=x.landing_rate;
+    t+='<tr><td class="hd"><span class="legend" style="display:inline;margin:0"><i style="background:'+(MCOL[x.map]||"#888")+'"></i></span>'+esc(mname(x.map))+'</td><td class="n">'+fmtN(x.flights)+'</td><td class="n">'+esc(pc(x.share==null?null:x.share*100,1))+'</td><td class="n">'+fmtN(x.pilots)+'</td><td class="n">'+esc(fmtT(x.air_s||0))+'</td><td class="n">'+esc(num(x.avg_s))+'</td><td class="n fps-good">'+esc(pc(lr==null?null:lr*100))+'</td><td class="n fps-bad">'+esc(pc(lr==null?null:(1-lr)*100))+'</td><td class="n fps-mid">'+esc(pc(x.reset_rate==null?null:x.reset_rate*100))+'</td><td class="n">'+fmtN(x.laps)+'</td></tr>';}
+  ok("chMaps",h+t+'</table></div><div class="callout">Pilots are counted per map: someone who flew both counts on both. Landed / crashed are shares of flights that ended in a landing or a crash; reset = relaunched, as a share of all flights. "Unknown" is a flight from a client older than the map field (cached before the Desert release).</div>');
+  var keys=a.map(function(x){return x.map;}),byDay={},rows=[],day=d.from;
+  (d.by_day||[]).forEach(function(r){(byDay[r.day]||(byDay[r.day]={}))[r.map]=r.flights;});
+  for(var g=0;g<120&&day<=d.to;g++){var o={key:day,partial:day===d.to};for(var k=0;k<keys.length;k++)o[keys[k]]=(byDay[day]||{})[keys[k]]||0;rows.push(o);day=dayAfter(day);}
+  var lg='';for(k=0;k<keys.length;k++)lg+='<span><i style="background:'+(MCOL[keys[k]]||"#888")+'"></i>'+esc(mname(keys[k]))+'</span>';
+  el("mapLegend").innerHTML=lg;
+  stackChart(el("chMapDays"),rows,keys,keys.map(function(m){return MCOL[m]||"#888";}),keys.map(mname),function(rr,kk){return rr[kk];},false,"flights");
+  rendered.chMapDays=true;setStale("chMapDays",false);
+  renderInsights();
+}
+async function loadMaps(){
+  if(!el("tab-maps"))return; // Nanawing 2 has no maps: the tab is removed, and a missing panel must never stop the boot
+  try{var d=await getJson("/maps?days="+mapsDays);if(d.days!==mapsDays)return;S.maps=d;renderMaps();staleMark(["chMaps","chMapDays"],d);}
+  catch(e){fail("chMaps","Could not load maps ("+e.message+").");fail("chMapDays","Could not load.");}
 }
 
 // ---- wings ----------------------------------------------------------------------------------------
@@ -529,10 +569,14 @@ async function loadAudience(){
 // ---- insights: derived from whatever has loaded; thresholds keep them honest --------------------
 // Every insight carries a score (how much it deserves a look: warnings and trends first, curiosities
 // last) and the tab it belongs to. The Summary shows the five highest; each tab lists its own.
-var TAB_NAMES={activity:"Activity",racing:"Racing",wings:"Wings",hardware:"Hardware",audience:"Audience"};
+var TAB_NAMES={activity:"Activity",maps:"Maps",racing:"Racing",wings:"Wings",hardware:"Hardware",audience:"Audience"};
 function renderInsights(){
-  var out=[],A=S.pulse||S.activity,H=S.hardware,W=S.wings,U=S.audience,L=S.summary;
+  var out=[],A=S.pulse||S.activity,H=S.hardware,W=S.wings,U=S.audience,L=S.summary,M=S.maps;
   function add(cls,head,why,tab,score){out.push({cls:cls,head:head,why:why,tab:tab||"activity",score:score!=null?score:(cls==="warn"?70:cls==="good"?55:35)});}
+  if(M&&M.flights>=30){var dz=(M.by_map||[]).filter(function(x){return x.map==="desert-airfield";})[0];
+    if(dz)add("note","Desert takes "+pc(dz.share*100)+" of flights ("+fmtN(dz.flights)+" in "+M.days+" days).","Share of all real-player launches in the window. Flights before the Desert release (3 Oct 2026) count as Island, so the share keeps moving until the window rolls past that date.","maps",45);
+    var unk=(M.by_map||[]).filter(function(x){return x.map==="unknown";})[0];
+    if(unk&&unk.share>=0.2)add("note",pc(unk.share*100)+" of flights come from clients older than the map field.","Cached pre-release builds update on their next page load; this share should fall within days.","maps",30);}
   if(A&&A.latest_week&&A.latest_week.pilots>=5&&A.latest_week.prev_pilots){var lw=A.latest_week,dl=Math.round((lw.pilots-lw.prev_pilots)/lw.prev_pilots*100);
     if(Math.abs(dl)>=10)add(dl>0?"good":"warn",fmtN(lw.pilots)+" pilots flew last week, "+(dl>0?"up ":"down ")+Math.abs(dl)+"% on the week before.","Exact weekly uniques (week of "+lbl(lw.week)+" vs "+fmtN(lw.prev_pilots)+" the week before).","activity",92);}
   if(A&&A.latest_week&&A.latest_week.pilots>=5){var w=A.latest_week,rr=Math.round(w.pilots_returning/w.pilots*100);
@@ -571,8 +615,8 @@ function renderInsights(){
 }
 
 // ---- tabs -------------------------------------------------------------------------------------------
-var TABS=["summary","activity","racing","wings","hardware","audience"];
-var RERENDER={summary:function(){renderPulse();},activity:function(){if(S.activity)renderActivity();},racing:function(){if(S.summary)renderSummary();},wings:function(){if(S.wings)renderWings();},hardware:function(){if(S.hardware)renderHardware();},audience:function(){if(S.audience)renderAudience();}};
+var TABS=["summary","activity","maps","racing","wings","hardware","audience"];
+var RERENDER={summary:function(){renderPulse();},activity:function(){if(S.activity)renderActivity();},maps:function(){if(S.maps)renderMaps();},racing:function(){if(S.summary)renderSummary();},wings:function(){if(S.wings)renderWings();},hardware:function(){if(S.hardware)renderHardware();},audience:function(){if(S.audience)renderAudience();}};
 function showTab(name){
   if(TABS.indexOf(name)<0)name="summary";
   TABS.forEach(function(t){var sec=el("tab-"+t);if(sec)sec.hidden=t!==name;});
@@ -617,6 +661,10 @@ var SIM_COPY={
     var ix=TABS.indexOf("racing");
     if(ix>=0)TABS.splice(ix,1);
     delete TAB_NAMES.racing;
+    var mt=document.querySelector('.tabs button[data-tab="maps"]');if(mt)mt.remove();
+    var ms=el("tab-maps");if(ms)ms.remove();
+    var mx=TABS.indexOf("maps");if(mx>=0)TABS.splice(mx,1);
+    delete TAB_NAMES.maps;
   }
 })();
 (function(){var bs=document.querySelectorAll(".tabs button");for(var i=0;i<bs.length;i++){bs[i].onclick=function(){showTab(this.getAttribute("data-tab"));};}
@@ -628,13 +676,15 @@ var SIM_COPY={
 
 // ---- boot -------------------------------------------------------------------------------------------
 chips("rangeChips","data-r",range,function(v){range=v;store("nw.stats.range",v);loadActivity();});
+chips("mapChips","data-d",mapsDays,function(v){mapsDays=+v;loadMaps();});
 chips("wingChips","data-d",wingsDays,function(v){wingsDays=+v;loadWings();});
 chips("hwChips","data-d",hwDays,function(v){hwDays=+v;loadHardware();});
 chips("audChips","data-d",audDays,function(v){audDays=+v;loadAudience();});
-loadTotals();loadActivity().then(loadPulse);loadSummary();loadWings();loadHardware();loadAudience();
+loadTotals();loadActivity().then(loadPulse);loadSummary();loadMaps();loadWings();loadHardware();loadAudience();
 setInterval(loadTotals,8000);
 setInterval(function(){loadActivity().then(loadPulse);},300000);
 setInterval(loadSummary,300000);
+setInterval(loadMaps,600000);
 setInterval(loadWings,1500000);
 setInterval(loadHardware,1500000);
 setInterval(loadAudience,1500000);
