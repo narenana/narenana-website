@@ -21,6 +21,7 @@
 // Vars: GA4_PROPERTY_ID, CF_ACCOUNT_TAG. See docs/STATS-SETUP.md.
 
 import { usageSummary } from '../usage/lib/worker.mjs'
+import { DASHBOARD as NANAWING_DASHBOARD } from './nanawing-dashboard.js'
 
 const SNAPSHOT_KEY = 'stats_snapshot'
 const CF_IDS_KEY = 'stats_cf_ids'
@@ -107,6 +108,23 @@ export async function handleStats(request, env, ctx, url) {
         'content-type': 'application/json; charset=utf-8',
         'cache-control': 'no-store',
         'x-robots-tag': 'noindex',
+      },
+    })
+  }
+
+  // The full Nanawing sim dashboard — vendored from the fpvsim-stats worker and
+  // served here so every stat lives under /stats. Its own client JS fetches the
+  // fpvsim-stats + leaderboard workers (CORS *), which connect-src must allow
+  // (its upstream CSP used 'self', which was that worker's own origin).
+  if (url.pathname === '/stats/nanawing' || url.pathname === '/stats/nanawing/') {
+    return new Response(NANAWING_DASHBOARD, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-robots-tag': 'noindex',
+        'referrer-policy': 'no-referrer',
+        'content-security-policy':
+          "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src https://fpvsim-stats.narenana.workers.dev https://fpvsim-leaderboard.narenana.workers.dev; img-src data:; base-uri 'none'; form-action 'none'",
       },
     })
   }
