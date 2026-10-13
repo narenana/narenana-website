@@ -432,6 +432,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-13** · nanawing2 `0fcdc0c`, draft [PR 72](https://github.com/narenana/nanawing2/pull/72), dependent on PR 71: field-life preview adds adapted Poly Haven syringa/jacaranda credits, a prefiltered CC0 environment, revised CC BY-NC hand derivatives and original preparation props/animation. CREDITS.md and shipped LICENSES.txt retain the separate terms. M3 attribution tracking only; this is not merged or production-deployed. No aircraft count/specification, control/privacy claim, page/URL, Fact-inventory row or milestone date/scope changes. KTX2 remains an offline authoring trial.
+
 - **2026-10-13** · nanawing2 `991f979`, draft [PR 71](https://github.com/narenana/nanawing2/pull/71), dependent on PR 70: first field/aircraft visual pass adds turf photography, original oak/hedge assets, revised Sky Surfer materials/geometry and local static shading. CREDITS.md and shipped LICENSES.txt add the Poly Haven Grass Ground CC0 attribution and original-asset authoring record. This is a feature preview, not merged or production-deployed. M3 fact-drift tracking only: aircraft count/specifications, controls, privacy/feature claims, URLs and milestone dates/scope are unchanged; no URL-map or Fact-inventory row needs revision.
 
 
