@@ -110,7 +110,7 @@ export default {
       } catch {
         statsPath = null
       }
-      if (statsPath === '/stats' || statsPath === '/stats/' || (statsPath !== null && statsPath.startsWith('/stats/api/'))) {
+      if (statsPath === '/stats' || statsPath === '/stats/' || statsPath === '/stats/nanawing' || statsPath === '/stats/nanawing/' || (statsPath !== null && statsPath.startsWith('/stats/api/'))) {
         return handleStats(request, env, ctx, url)
       }
       if (statsPath === '/stats.html') {
