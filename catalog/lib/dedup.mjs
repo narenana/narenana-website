@@ -203,7 +203,10 @@ export function findDuplicates(masters) {
   for (const m of masters) {
     if (m.titles == null) continue
     const house = HOUSE_BRAND.has(String(m.brand_norm || '').trim())
-    if (!m.brand_norm || house || brandConfirmed(m.brand_norm, m.titles)) continue
+    // A brand the owner has set or confirmed (m.brand_owner, from field_src)
+    // is final: re-flagging it every run only repeats a question the owner
+    // has answered (the "Tiger Moth" page is not a Thunder Tiger).
+    if (!m.brand_norm || house || m.brand_owner || brandConfirmed(m.brand_norm, m.titles)) continue
     // (a) a DISTINCTIVE different brand appears in the listing titles → mislabel
     const tn = ' ' + normText(m.titles) + ' '
     const mine = new Set(brandWords(m.brand_norm))

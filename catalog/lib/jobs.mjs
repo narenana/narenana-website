@@ -654,6 +654,15 @@ export async function dedupSlice(env, trigger, force = false) {
       (SELECT GROUP_CONCAT(k.title, ' | ') FROM offer o JOIN sku k ON k.id=o.sku_id WHERE o.master_model_id=m.id) AS titles
      FROM master_model m WHERE m.status IN ('ready','draft')`))
     .map((m) => ({ ...m, brand_key: isBlankBrand(m.brand) ? '' : brandKey(m.brand), brand_norm: isBlankBrand(m.brand) ? '' : m.brand_norm }))
+  // Brands the owner set, approved or directed (the curator's lock rows,
+  // migration 0019) are final: the brand-mismatch detector skips them instead
+  // of re-flagging an answered question every run. No field_src table (a
+  // catalog without the curator migration) means no locks.
+  let ownerBrand = new Set()
+  try {
+    ownerBrand = new Set((await all(env, `SELECT entity_id FROM field_src WHERE entity='master' AND field='brand' AND src IN ('owner','directive','owner-approved')`)).map((r) => Number(r.entity_id)))
+  } catch {}
+  for (const m of masters) m.brand_owner = ownerBrand.has(Number(m.id))
   const { obviousClusters, candidatePairs, anomalies } = findDuplicates(masters)
   // Power anomalies (only the electric-tagged direction, so a correctly-tagged
   // gas plane whose title carries no marker never trips it): an explicit gas

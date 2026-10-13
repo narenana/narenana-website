@@ -1658,3 +1658,17 @@ test('parseProductPage: a Shopify ProductGroup page is a priced listing, never q
   const single = '<script type="application/ld+json">' + JSON.stringify({ '@type': 'Product', name: 'SIG Astro Hog', offers: { '@type': 'Offer', price: '100000', priceCurrency: 'INR', availability: 'http://schema.org/OutOfStock' } }) + '</script>'
   assert.deepEqual(parseJsonLd(single), { priceINR: 100000, inStock: false })
 })
+
+// The owner's brand decision is final (a field_src lock arrives as
+// m.brand_owner). The detector used to re-flag "Tiger Moth 1400mm" as a
+// Thunder Tiger every run, because "tiger" is a vocabulary word of a brand
+// confirmed elsewhere, so the owner's dismissal never stuck.
+test('dedup.findDuplicates: a brand the owner locked is never re-flagged as a mismatch', () => {
+  const M = (id, brand, name, titles, extra = {}) => ({ id, category_id: 'wings', brand, brand_norm: brand.toLowerCase(), name, name_norm: name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim(), specs: '{}', status: 'ready', offers: 1, titles, ...extra })
+  const thunder = M(1, 'Thunder Tiger', 'Raiden 1400mm', 'Thunder Tiger Raiden 1400mm ARF')
+  const moth = M(2, 'Dancing Wings Hobby', 'Tiger Moth 1400mm', 'Tiger Moth Balsa Wood Kit 1400mm')
+  const flagged = findDuplicates([thunder, moth]).anomalies
+  assert.ok(flagged.some((a) => a.id === 2 && a.kind === 'brand-mismatch'), 'without a lock the Tiger Moth is flagged as a Thunder Tiger')
+  const kept = findDuplicates([thunder, { ...moth, brand_owner: true }]).anomalies
+  assert.ok(!kept.some((a) => a.id === 2), 'with the owner lock it is left alone')
+})
