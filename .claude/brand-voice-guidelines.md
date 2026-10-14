@@ -8,6 +8,8 @@ narenana is one RC pilot who flies wings and FPV and builds free tools for other
 The owner, in his own words:
 > RC pilots are often not gamers. They don't have Steam accounts and gaming machines to run AAA graphics. All they need is a real engine to practise the craft. Nanawing aims to take away the hassle: take a pilot from thinking about flying on a sim to actually flying in two minutes. Every feature removes what isn't essential. No install. No login. Offline browser cache. Mobile support coming. The goal is to let you fly anywhere and still keep the physics real.
 
+(Mobile has shipped: since 9 Oct 2026 phones fly with two on-screen thumb sticks. Say so wherever devices come up.)
+
 ## Audience
 - RC pilots in India first, most of them **not gamers**: everyday laptops, no Steam, little patience for setup.
 - New wing pilots who want to practise launches, turns and landings before risking a real plane.
@@ -20,12 +22,51 @@ The owner, in his own words:
 3. **Made by a pilot.** The owner flies and films his own flights. Proof comes from pilots, e.g. Giz FPV: "Whoever made this… they are an actual FPV pilot."
 4. **Honest buying help (Wings).** Current prices and stock across Indian sellers, how we check them, and a link straight to the seller. We don't sell anything.
 
+## The first rule: write about the pilot, not the product (owner, 14 Oct 2026)
+
+The owner, in his own words: "The copy needs to tell the user what they can do, what they can achieve, how using this
+product benefits them, that it is enjoyable to them. Your approach to copywriting is how much effort you have put in to build
+features, or how detailed our implementation is."
+
+**Every marketing line** (landing, map pages, share text, cards, section heads, CTAs, meta descriptions) answers one question:
+**what does the pilot get to do, feel or win here?** Write it the way one RC pilot tells another what's fun, what to try and
+what will bite them. A little humour is welcome when it's about the flying. Hype is not.
+
+**Cut on sight:**
+- **What we built or how it works:** solid colliders, light frames, beacons, test bots, boards per aircraft, link quality, tier
+  names, caching, "measured in the sim".
+- **What the pilot can't do, or a limit:** radio range, failsafe boundaries, "only", restrictions in a selling line.
+- **Stat sentences and inventories:** "231 pilots have raced 5,664 laps", "5 Dutch barns, 4 cruck frames, 3 granaries".
+- **Disclaimers in marketing lines.** Put a needed one in small print, once.
+
+**Check every line before it ships:**
+1. Is this line about the pilot (doing, feeling, winning), or about the product?
+2. Does it tell the pilot what they can't do?
+3. Would a pilot say it out loud to a friend at the field?
+4. Is it true today? (Honest still applies: jokes must be true as well.)
+5. Does it break a banned pattern below?
+
+A line that fails any check gets rewritten or cut.
+
+| Doesn't sound like (written by us, rejected by the owner) | Sounds like |
+|---|---|
+| "Three real places to fly — not an empty test box." | "Skim farmland and chase freight trains" |
+| "5 race courses: a leaderboard per course and aircraft" | "5 race courses: race other pilots for the fastest lap" |
+| "231 pilots have raced 5,664 laps so far." | "Compete with 240+ pilots on 5 courses." |
+| "Trunks and limbs are solid, so every gap you fly through has hard edges." | "Avoid the trees. They love to kill motors and airframes." |
+| "Stay inside the 720 m radio range, or the failsafe flies your wing home." | Cut it. Say what's good instead: "Everything is packed close together, so the next gap is always just ahead." |
+| "Fly through the gaps in giant trees" | "Thread your wing through giant oaks" |
+| "Each course keeps a leaderboard for each aircraft that can race it." | "Set a time, see where you rank, then go back and beat it." |
+| "3 graphics presets: Lite, High and Ultra, picked for your device on first launch" | "Your laptop is all you need, no gaming PC" |
+| "Top speed and roll rate are measured in the sim: a test bot flies each aircraft…" | Cut it. Put the spec numbers on the card and say nothing about how they were measured. |
+| "4 aircraft, from a 215 g twin to a 2 kg wing" | "Pick your wing: start on a forgiving trainer, then work up to a 323 km/h wing" |
+
 ## Voice attributes (constant everywhere)
 
 **Plain-spoken**
 - We are: short, direct sentences; everyday words; say the thing.
 - We are not: slogan-speak, taglines, wordplay, or "brand voice" theatre.
-- Sounds like: "Open it in your browser and fly. No download, no account."
+- Sounds like: "Open it in your browser and fly. No install, no login."
 - Doesn't sound like: "Your first flight. Your fastest lap."
 
 **Specific**
@@ -43,8 +84,8 @@ The owner, in his own words:
 **Honest**
 - We are: we only claim what the product does today; features that aren't shipped are labelled "coming"; prices are "last checked".
 - We are not: superlatives without proof ("best", "ultra-realistic"), or promises we can't keep.
-- Sounds like: "Mobile support is coming. For now, fly on any laptop or desktop."
-- Doesn't sound like: "Fly anywhere, on any device."
+- Sounds like: "Fly on your laptop, or on your phone with two thumb sticks."
+- Doesn't sound like: "Fly anywhere, on any device, any time."
 
 ## Tone by context
 | Context | Tone |

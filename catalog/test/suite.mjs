@@ -1096,9 +1096,12 @@ test('hub and landings: own ₹ figures that match the product pages, computed s
   const trainersMore = await more('trainers'), fpvMore = await more('fpv')
   assert.ok(trainersMore.includes('href="https://nanawing2.narenana.com/"'))
   assert.ok(fpvMore.includes('href="https://sim.narenana.com/"'))
+  // Nanawing 2 (line of sight) is laptop or desktop only: never a phone claim for it. Nanawing flies on phones too
+  // (two on-screen thumb sticks, since 9 Oct 2026), and its line says so.
+  assert.match(trainersMore, /laptop or desktop/)
+  assert.ok(!/\b(phone|mobile)\b/i.test(trainersMore), 'never a phone claim for Nanawing 2')
+  assert.match(fpvMore, /on your phone with two thumb sticks/)
   for (const x of [trainersMore, fpvMore]) {
-    assert.match(x, /laptop or desktop/)
-    assert.ok(!/\b(phone|mobile)\b/i.test(x), 'never a phone claim for the sims')
     for (const [, s] of x.matchAll(/href="\/wings\/([a-z0-9-]+)\/"/g)) assert.ok(s === 'browse' || listed.includes(s), `links /wings/${s}/, not a listed landing`)
   }
 
