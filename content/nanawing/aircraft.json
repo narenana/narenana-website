@@ -1,7 +1,7 @@
 {
   "path": "/nanawing/aircraft/",
   "title": "Nanawing aircraft | Fly more. Build your skills for free.",
-  "description": "Explore four lifelike aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Get to know each wing and practise your RC flying, free in your browser.",
+  "description": "Fly four aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Get to know each wing and practise your RC flying, free in your browser or on your phone.",
   "order": ["spectre", "desertwing", "morok", "sukhoi"],
   "social": {
     "title": "Fly the WUDFLY Spectre free in Nanawing",
