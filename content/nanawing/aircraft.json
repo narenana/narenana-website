@@ -20,7 +20,7 @@
   "hero": {
     "eyebrow": "NANAWING / YOUR RC HANGAR",
     "h1": "Fly more aircraft.<br><span>Build your skills for free.</span>",
-    "lede": "Explore four lifelike aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Feel how each one flies, find out what makes it different, and build confidence for your next day at the RC field. Every aircraft is free to fly in your browser. No install. No login.",
+    "lede": "Fly four aircraft, from a forgiving trainer to WUDFLY's 3D-printed Spectre. Feel how each one flies, find out what makes it different, and build confidence for your next day at the RC field. Every aircraft is free to fly in your browser, on a laptop or on your phone. No install, no login.",
     "cta": "Start flying",
     "aircraft": "spectre",
     "secondary": "Get to know the aircraft"
@@ -184,7 +184,7 @@
   ],
   "final": {
     "h2": "Make your next flight a practice flight.",
-    "lede": "Pick an aircraft, get comfortable on the controls and enjoy finding out what it can do. Your whole Nanawing hangar is free, right in your browser on a laptop or desktop.",
+    "lede": "Pick an aircraft, get comfortable on the controls and enjoy finding out what it can do. Your whole Nanawing hangar is free, right in your browser, on a laptop or on your phone with two thumb sticks.",
     "cta": "Start flying for free",
     "aircraft": "spectre"
   },
