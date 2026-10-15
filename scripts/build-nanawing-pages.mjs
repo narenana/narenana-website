@@ -41,7 +41,9 @@ const alt = {
   morok: 'Morok UAV, a silver drone with a V-tail and a pusher prop',
   sukhoi: 'Sukhoi S-70 Okhotnik, a grey, angular flying wing',
   spectre: 'WUDFLY Spectre, a white and yellow twin-motor flying wing with SPECTRE and WUDFLY lettering',
+  chupito: 'TBS Chupito, a dark grey flying wing with a single fin, a red pusher prop and white logos and lettering',
 };
+for (const a of facts.aircraft) if (!alt[a.id]) throw new Error(`No alt text for ${a.id}`);
 const img = (a, sizes, { eager = false, cls = '' } = {}) =>
   `<img${cls ? ` class="${cls}"` : ''} src="${IMG(a.id, 900)}" srcset="${IMG(a.id, 560)} 560w, ${IMG(a.id, 900)} 900w, ${IMG(a.id, 1400)} 1400w" sizes="${sizes}" alt="${esc(alt[a.id])}" width="${dims[a.id].w}" height="${dims[a.id].h}"${eager ? ' fetchpriority="high"' : ' loading="lazy" decoding="async"'}>`;
 
@@ -49,6 +51,9 @@ function credit(a) {
   const c = a.credit;
   if (c.kind === 'cc-by') return `Model: <a href="${c.source}" ${ext}>“${esc(c.title)}”</a> by ${esc(c.author)}, <a href="${c.licenseUrl}" ${ext}>${esc(c.license)}</a>. Modified for Nanawing.`;
   if (c.kind === 'designer') return `Aircraft design by <a href="${c.designerUrl}" ${ext}>${esc(c.designer)}</a>.`;
+  // A real airframe Nanawing recreates with its maker's permission (the TBS Chupito): credit the maker and
+  // link their product page wherever the aircraft is shown (Team BlackSheep's terms, 15 Oct 2026).
+  if (c.kind === 'reference') return `Reference airframe by <a href="${c.url}" ${ext}>${esc(c.designer)}</a>.`;
   return esc(c.text);
 }
 
@@ -59,23 +64,24 @@ const specRows = [
   ['Climb rate', (a) => `${fmt(a.climbRateMs, 1)}&nbsp;m/s`],
   ['Wingspan', (a) => `${fmt(a.spanM, 2)}&nbsp;m`],
   ['Weight', (a) => weight(a.massKg)],
-  ['Thrust', (a) => `${fmt(a.thrustN)}&nbsp;N`],
+  // Whole newtons stay whole (26 N); the Chupito's 14.71 N shows as the Hangar shows it, not rounded to 15.
+  ['Thrust', (a) => `${fmt(a.thrustN, Number.isInteger(a.thrustN) ? 0 : 2)}&nbsp;N`],
   ['Battery', (a) => battery(a.battery)],
 ];
 
-// A course with an aircraft allow-list (facts: course.aircraft; e.g. Parkland's Estate Run, Spectre only) only
+// A course with an aircraft allow-list (facts: course.aircraft; e.g. Parkland's Estate Run: the Spectre and the Chupito) only
 // gets a record row in the sections of the aircraft that may race it. No list = every aircraft.
 const coursesFor = (id) => facts.courses.filter((c) => !Array.isArray(c.aircraft) || c.aircraft.includes(id));
 const courseRows = (id) => coursesFor(id).map((c) =>
   `<tr><th scope="row">${esc(c.name)}<small>${esc(c.map)} · ${fmt(c.km, 1)} km</small></th><td class="ac-time">—</td><td class="ac-pilot">—</td></tr>`).join('');
 
-const lineup = `<ul class="ac-lineup" aria-label="The 4 aircraft">${displayAircraft.map((a, i) =>
-  `<li><a href="#${a.id}">${img(a, '(max-width:700px) 44vw, 270px', { eager: i < 2 })}<span class="ac-lineup-name">${esc(a.name)}</span><span class="ac-lineup-role">${esc(copy.aircraft[a.id].role)}</span></a></li>`).join('')}</ul>`;
+const lineup = `<ul class="ac-lineup" aria-label="The ${displayAircraft.length} aircraft">${displayAircraft.map((a, i) =>
+  `<li><a href="#${a.id}">${img(a, '(max-width:859px) 46vw, 230px', { eager: i < 2 })}<span class="ac-lineup-name">${esc(a.name)}</span><span class="ac-lineup-role">${esc(copy.aircraft[a.id].role)}</span></a></li>`).join('')}</ul>`;
 
 const compare = `<section class="ac-compare" id="compare" aria-labelledby="compare-title"><h2 id="compare-title">${esc(copy.compare.h2)}</h2>
 <div class="ac-table-wrap" role="region" aria-labelledby="compare-title" tabindex="0"><table class="ac-table"><thead><tr><th scope="col">Aircraft</th>${specRows.map(([label]) => `<th scope="col">${label}</th>`).join('')}</tr></thead>
 <tbody>${displayAircraft.map((a) => `<tr><th scope="row"><a href="#${a.id}">${esc(a.name)}</a></th>${specRows.map(([, f]) => `<td>${f(a)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-<p class="ac-swipe">Swipe the table sideways for all 8 specs.</p>${copy.compare.note ? `<p class="ac-note">${esc(copy.compare.note)}</p>` : ''}</section>`;
+<p class="ac-swipe">Swipe the table sideways for all ${specRows.length} specs.</p>${copy.compare.note ? `<p class="ac-note">${esc(copy.compare.note)}</p>` : ''}</section>`;
 
 // A real photo (copy.aircraft.<id>.photo, e.g. the designer's own) in place of the render.
 const PHOTO = (file, w) => `/assets/nanawing/aircraft/${file}-${w}.webp`;
@@ -151,7 +157,7 @@ writeFileSync(`site${path}index.html`, page({
   social: copy.social,
   body,
   schema,
-  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=317e518063">',
+  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=47192db4df">',
   scripts,
 }));
 

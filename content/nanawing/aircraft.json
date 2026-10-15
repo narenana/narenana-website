@@ -1,11 +1,11 @@
 {
   "path": "/nanawing/aircraft/",
   "title": "Nanawing aircraft | Pick your wing and fly it free",
-  "description": "Start on a trainer, thread the 3D-printed WUDFLY Spectre through giant oaks or open the Sukhoi up to 323 km/h. Free in your browser or on your phone.",
-  "order": ["spectre", "desertwing", "morok", "sukhoi"],
+  "description": "Fly free in your browser or on your phone: start on a trainer, thread the WUDFLY Spectre through giant oaks, or snap the TBS Chupito (Team BlackSheep) round at 360°/s.",
+  "order": ["spectre", "desertwing", "morok", "sukhoi", "chupito"],
   "social": {
     "title": "Nanawing: fly the WUDFLY Spectre free",
-    "description": "Thread the 3D-printed, twin-motor WUDFLY Spectre through giant oaks, then try 3 more aircraft. Free in your browser or on your phone.",
+    "description": "Thread the 3D-printed, twin-motor WUDFLY Spectre through giant oaks, then try 4 more aircraft. Free in your browser or on your phone.",
     "image": "/nanawing/aircraft/spectre-share-v2.jpg",
     "imageAlt": "The WUDFLY Spectre, a white and yellow twin-motor wing, on a blue card that reads: Fly the WUDFLY Spectre. Thread it through giant oaks, then race it on Estate Run.",
     "card": {
@@ -20,20 +20,20 @@
   "hero": {
     "eyebrow": "NANAWING / FREE FPV SIMULATOR",
     "h1": "Pick your wing<br><span>and fly it free.</span>",
-    "lede": "Thread the 3D-printed WUDFLY Spectre through giant oaks, open the Sukhoi up to 323 km/h, or settle in on a forgiving trainer before your next day at the field. All 4 fly free in your browser, on a laptop or on your phone. No install, no login.",
+    "lede": "Thread the 3D-printed WUDFLY Spectre through giant oaks, snap the TBS Chupito round at 360°/s, open the Sukhoi up to 323 km/h, or settle in on a forgiving trainer before your next day at the field. All 5 fly free in your browser, on a laptop or on your phone. No install, no login.",
     "cta": "Start flying",
     "aircraft": "spectre",
-    "secondary": "Compare the 4 aircraft"
+    "secondary": "Compare the 5 aircraft"
   },
   "practice": {
     "h2": "Learn a new wing without a repair bill",
     "paragraphs": [
-      "Learning a new wing is the fun part: how much stick it wants, when to ease off the throttle, how early to start a turn. The forgiving trainer, the nimble twin-motor WUDFLY Spectre and the fast, heavy Sukhoi each give you something new to work on.",
+      "Learning a new wing is the fun part: how much stick it wants, when to ease off the throttle, how early to start a turn. The forgiving trainer, the nimble twin-motor WUDFLY Spectre, the quick-rolling TBS Chupito and the fast, heavy Sukhoi each give you something new to work on.",
       "Try them all. Repeat a manoeuvre until it's clean, fly a new line or race a course, and when you crash, reset and go again. Plug in a gamepad or USB RC radio to practise on sticks, or start on the keyboard or your phone."
     ]
   },
   "compare": {
-    "h2": "Compare the 4 aircraft side by side",
+    "h2": "Compare the 5 aircraft side by side",
     "note": "Carry more speed than the stall figure through banked turns."
   },
   "aircraft": {
@@ -54,16 +54,16 @@
     "sukhoi": {
       "role": "Fastest in the hangar",
       "paragraphs": [
-        "Open the Sukhoi up on a straight and enjoy it: 323 km/h flat out, with the strongest climb of the 4. Bringing it through a turn is another matter.",
+        "Open the Sukhoi up on a straight and enjoy it: 323 km/h flat out, with the strongest climb of the 5. Bringing it through a turn is another matter.",
         "Its higher stall speed and slower roll punish a late turn, so plan the next one early and keep flying the line until it comes together."
       ]
     },
     "spectre": {
       "role": "Made for tight gaps",
       "paragraphs": [
-        "Weave the WUDFLY Spectre through tight gaps with small, deliberate stick inputs. It rolls quicker than anything else in the hangar and tops out at 100 km/h, so you have time to line up each one.",
+        "Weave the WUDFLY Spectre through tight gaps with small, deliberate stick inputs. It tops out at 100 km/h, slower than any other wing in the hangar, so you have time to line up each one.",
         "On the Spectre you get yaw too: push the left stick sideways on a gamepad or your phone, or use the yaw stick on your RC radio, and the nose swings. Try it at a gentle pace first. Yaw comes in once the throttle is past 10%.",
-        "Then take it to Parkland and race Estate Run, its own course. Thread the green start arch, then 14 gates in 2.8 km: through a colonnade, a barn and the forks of giant trees, and under the estate bridge."
+        "Then take it to Parkland and race Estate Run. Thread the green start arch, then 14 gates in 2.8 km: through a colonnade, a barn and the forks of giant trees, and under the estate bridge."
       ],
       "photo": {
         "file": "spectre-photo",
@@ -77,6 +77,14 @@
         "alt": "The real WUDFLY Spectre on grass: a white 3D-printed twin-motor flying wing with yellow fins",
         "credit": "The real WUDFLY Spectre. Photo: WUDFLY"
       }
+    },
+    "chupito": {
+      "role": "Quickest roll in the hangar",
+      "paragraphs": [
+        "Fly Team BlackSheep's 800mm pusher wing, recreated in Nanawing. It snaps round at 360°/s, the quickest roll in the hangar, so you can flick it from bank to bank between gates. Then open it up to 140 km/h on its 6S 1800 mAh pack.",
+        "It stalls at 35 km/h, the highest in the hangar, so keep your speed up through the turns, then ease it down gently when you land.",
+        "Race it on all 5 courses, from Windmill Run on the Island to Estate Run through Parkland's giant oaks."
+      ]
     }
   },
   "records": {
@@ -159,19 +167,19 @@
     },
     {
       "q": "Which Nanawing aircraft should I fly first?",
-      "a": "Start with the Nanawing One if you are learning the controls. Try the WUDFLY Spectre for quick banks, tight gaps and yaw. Move to the Morok and Sukhoi to feel how more speed changes your timing. Every aircraft is free, so you can try them all."
+      "a": "Start with the Nanawing One if you are learning the controls. Try the WUDFLY Spectre for tight gaps and yaw. Move to the Morok and Sukhoi to feel how more speed changes your timing, and to the TBS Chupito for the quickest roll in the hangar. Every aircraft is free, so you can try them all."
     },
     {
-      "q": "Is the WUDFLY Spectre in Nanawing the real aircraft?",
-      "a": "No. It's our recreation of WUDFLY's design, with the real wing's 600mm span, twin motors and white and yellow colours. Its handling is a simulator approximation. The real WUDFLY Spectre is designed and sold by WUDFLY at wudfly.com."
+      "q": "Are the WUDFLY Spectre and the TBS Chupito in Nanawing the real aircraft?",
+      "a": "No. They're our recreations of WUDFLY's and Team BlackSheep's wings. The WUDFLY Spectre keeps the real wing's 600mm span, twin motors and white and yellow colours; the TBS Chupito keeps its 800mm span and single pusher prop. Their handling is a simulator approximation, and the TBS Chupito's is not TBS flight data. WUDFLY designs and sells the real Spectre at wudfly.com, and Team BlackSheep sells the real Chupito at team-blacksheep.com."
     },
     {
       "q": "Which aircraft race which course?",
-      "a": "All 4 aircraft race Windmill Run and River Run on the Island, and Tunnel Run and Pyramid Run in the Desert. Estate Run in Parkland is the WUDFLY Spectre's course. Race the pilots flying your wing: set a time, see where you rank, then go back and beat it."
+      "a": "All 5 aircraft race Windmill Run and River Run on the Island, and Tunnel Run and Pyramid Run in the Desert. Take the WUDFLY Spectre or the TBS Chupito to Parkland for Estate Run. Race the pilots flying your wing: set a time, see where you rank, then go back and beat it."
     },
     {
       "q": "Do I need a gamepad or RC radio?",
-      "a": "No. All 4 fly on a keyboard or on your phone's thumb sticks. A gamepad or USB RC radio works too: plug it in and set it up in the Hangar's Controls tab. To yaw the WUDFLY Spectre, use a gamepad, an RC radio or your phone's left stick."
+      "a": "No. All 5 fly on a keyboard or on your phone's thumb sticks. A gamepad or USB RC radio works too: plug it in and set it up in the Hangar's Controls tab. To yaw the WUDFLY Spectre, use a gamepad, an RC radio or your phone's left stick."
     }
   ],
   "faqNote": "Sim time is no substitute for instruction, aircraft checks or safe flying at the field.",
