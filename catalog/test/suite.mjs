@@ -860,7 +860,11 @@ test('hub and landings: sentence-case titles, ₹ figures from comparable listin
   assert.match(fpv.desc, /^3 FPV planes and flying wings in stock at 1 Indian seller, from ₹2,304\. Plug-and-play from ₹2,304\./)
   assert.ok(fpv.more.includes('href="https://sim.narenana.com/">Nanawing</a>'), 'FPV: the FPV wing sim')
   assert.equal(head(land('jets')).title, 'RC jets and EDF planes: prices in India | narenana')
-  for (const h of [t, fpv]) assert.ok(!/\b(phone|mobile|android|iphone)\b/i.test(h.more), 'no phone claim for the sims')
+  // Nanawing 2 (line of sight) is laptop or desktop only: never a phone claim. Nanawing (FPV) flies on phones with two
+  // on-screen thumb sticks since 9 Oct 2026, and its line says exactly that, nothing broader.
+  assert.ok(!/\b(phone|mobile|android|iphone)\b/i.test(t.more), 'no phone claim for Nanawing 2')
+  assert.match(fpv.more, /Fly it free in your browser, on a laptop or on your phone with two thumb sticks\./, 'FPV: the Nanawing phone line')
+  assert.ok(!/\b(mobile|android|iphone)\b/i.test(fpv.more), 'FPV: no wider device claim than the thumb-stick line')
 
   // Every landing slug: a title of at most 60 characters, sentence case,
   // acronyms kept, never a ₹ figure.

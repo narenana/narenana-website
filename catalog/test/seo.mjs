@@ -826,4 +826,45 @@ test('homepage share tags describe narenana.com as a whole, not one product', as
   assert.match(meta('property', 'og:description'), /Indian sellers/, 'description covers buying too')
   assert.equal(meta('property', 'og:image'), 'https://www.narenana.com/og.jpg', 'the umbrella card')
   assert.match((html.match(/<title>([^<]*)<\/title>/) || [])[1], /^Nanawing/, '<title> stays Nanawing-first')
+  assert.equal(meta('name', 'twitter:image:alt'), meta('property', 'og:image:alt'), 'one alt for the share card')
+})
+
+// Owner, 15 Oct 2026: "why does this even exist. exactly the type of content we wanted to avoid", about a "Where the
+// numbers come from" section (test bot, bench, aerodynamic curve, 1 g lift limit) that stayed live on
+// /nanawing/aircraft/. Visitor copy says what the pilot gets to do, never how a number was measured or how a feature
+// works inside (.claude/brand-voice-guidelines.md, "The first rule"). This keeps the cut lines and the guide's banned
+// words off the homepage, the aircraft page and the 404, and keeps the homepage's phone line (owner request, 14 Oct).
+// 'made for pilots' is the guide's own banned slogan; 'best price' is a superlative with no proof (Honest); the board
+// loads once and says "Checked HH:MM", so it is never 'live standings' (guide Terminology: last checked).
+const NANAWING_BANNED = /test bot|\bbench(ed|es)?\b|aerodynamic|lift limit|numbers come from|measured in|off course|buy rc smart|fly rc free|made for pilots|best price|slow laps|live standings|\b(explore|discover|unlock|immersive)\b/i
+test('Nanawing copy on www: no method sections, slogans or banned words; the phone line stays', async () => {
+  const banned = NANAWING_BANNED
+  for (const path of ['site/index.html', 'site/nanawing/aircraft/index.html', 'site/404.html']) {
+    const html = await readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
+    assert.ok(!banned.test(html), `${path}: ${(html.match(banned) || [])[0]}`)
+  }
+  const home = await readFile(new URL('../../site/index.html', import.meta.url), 'utf8')
+  const graph = JSON.parse((home.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/) || [])[1])['@graph']
+  for (const type of ['Organization', 'WebSite']) {
+    const description = graph.find((entry) => entry['@type'] === type)?.description || ''
+    assert.match(description, /^Nanawing and Nanawing 2,/, `${type} description names both sims`)
+  }
+  assert.match(home, /<p class="hero-description">[^<]*on your phone with two thumb sticks\.<\/p>/, 'the hero says Nanawing flies on phones')
+  assert.match(home, /<p class="hero-description">[^<]*most laptops from the last few years/, 'the hero keeps the laptop claim bounded (most recent laptops, not every laptop)')
+  const desc = (home.match(/<meta name="description" content="([^"]*)"/) || [])[1] || ''
+  assert.ok(desc.length > 0 && desc.length <= 160, `homepage description: ${desc.length} characters`)
+  // The homepage board's Estate Run line names the plane the course is raced in; it never reads as a limit
+  // ("… only, for now", "· WUDFLY Spectre only"). Pilots still need to know which plane to pick, so the name stays.
+  const board = await readFile(new URL('../../site/assets/leaderboard.js', import.meta.url), 'utf8')
+  assert.ok(!/\)\} only\b|\bfor now\b/.test(board), 'site/assets/leaderboard.js: the course rule says which plane, not "only"')
+  assert.match(board, /is raced in the \$\{names\.join\(' or the '\)\}\. Fly through its green start arch/, 'the board still names the plane a course is raced in')
+})
+
+// The share card image (assets-src/og-card.html renders site/og.jpg, the og:image of the homepage and the /wings/
+// pages) still shows "Fly RC free. Buy RC smart.", "Built by a pilot, made for pilots" and "₹ best price". Its redraw
+// waits on the owner's wording (docs/post-release-todo.md). Delete the `todo` option once the card is redrawn and
+// `npm run assets` has regenerated og.jpg; from then on this guards the picture every share shows.
+test('share card source: no slogans or unproven superlatives', { todo: 'og-card redraw waits on the owner\'s wording (docs/post-release-todo.md)' }, async () => {
+  const html = await readFile(new URL('../../assets-src/og-card.html', import.meta.url), 'utf8')
+  assert.ok(!NANAWING_BANNED.test(html), `assets-src/og-card.html: ${(html.match(NANAWING_BANNED) || [])[0]}`)
 })

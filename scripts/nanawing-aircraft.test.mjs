@@ -112,6 +112,36 @@ test('the page and social copy do not retain the superseded closer-flying campai
   assert.doesNotMatch(JSON.stringify(copy), /fly a little closer/i);
 });
 
+// Brand voice (owner, 14 Oct 2026): the specs are shown, never how they were measured; the Spectre's
+// recreation and approximation note is said once, in the FAQ; the safety note is small print, once.
+test('the page shows the specs without explaining how they were measured', () => {
+  assert.equal(copy.method, undefined, 'no methodology copy');
+  // The one line under the table is a flying fact a pilot uses beside the stall column, not a measurement disclaimer.
+  assert.match(copy.compare.note, /banked turns/i);
+  assert.match(copy.compare.note, /stall/i);
+  assert.doesNotMatch(copy.compare.note, /measured|simulat|real-world|wings-level|unpowered|battery/i);
+  assert.ok(text(section('compare')).includes(copy.compare.note), 'the banked-turn note sits under the table');
+  assert.doesNotMatch(html, /class="ac-method"/);
+  assert.doesNotMatch(text(html), /test bot|\bmeasured\b|\bbench\b|1 g lift|aerodynamic curve/i);
+  assert.doesNotMatch(html, /rendered from the simulator model/i, 'image alt text describes the aircraft, not how the picture was made');
+  // Nothing military (owner, 7 Oct 2026): no camouflage in copy or alt text, and no stand-in word for it.
+  assert.doesNotMatch(html, /camouflage|\bcamo\b|mottled/i);
+  // Counted in what a visitor reads: the JSON-LD FAQPage repeats the FAQ answers for search engines.
+  const visible = text(html.replace(/<script\b[\s\S]*?<\/script>/g, ''));
+  assert.equal((visible.match(/approximation/gi) || []).length, 1, 'the approximation note appears once');
+  assert.equal((visible.match(/recreation/gi) || []).length, 1, 'the recreation note appears once');
+  // The sim-is-no-substitute line is small print under the FAQ, once, and inside no answer.
+  assert.match(copy.faqNote, /no substitute for instruction/i);
+  for (const entry of copy.faq) assert.doesNotMatch(entry.a, /no substitute|instruction/i, `${entry.q} carries no disclaimer`);
+  const faqNote = match(html, /<section class="ac-faq"[^>]*>[\s\S]*?<p class="ac-note">([\s\S]*?)<\/p>[\s\S]*?<\/section>/, 'FAQ small print exists');
+  assert.equal(text(faqNote), copy.faqNote);
+  assert.equal((visible.match(/no substitute for instruction/gi) || []).length, 1, 'the safety note appears once');
+});
+
+test('the retired camouflage-era share card is not shipped beside the page', async () => {
+  await assert.rejects(readFile(file('site/nanawing/aircraft/og.jpg')), { code: 'ENOENT' });
+});
+
 test('aircraft shares use Spectre-specific metadata without changing the canonical page', () => {
   const canonical = decode(match(html, /<link rel="canonical" href="([^"]+)"/, 'canonical exists'));
   assert.equal(canonical, `${site}/nanawing/aircraft/`);
@@ -122,13 +152,14 @@ test('aircraft shares use Spectre-specific metadata without changing the canonic
   assert.match(copy.social.title, /WUDFLY Spectre/i);
   assert.match(copy.social.description, /(?:WUDFLY )?Spectre/i);
   assert.match(copy.social.imageAlt, /WUDFLY Spectre/i);
+  assert.match(copy.social.imageAlt, /giant oaks[\s\S]*Estate Run/, 'the alt text carries the words printed on the card');
   for (const prefix of ['og', 'twitter']) {
     assert.equal(meta(html, `${prefix}:title`), copy.social.title);
     assert.equal(meta(html, `${prefix}:description`), copy.social.description);
     assert.equal(meta(html, `${prefix}:image`), new URL(copy.social.image, site).href);
     assert.equal(meta(html, `${prefix}:image:alt`), copy.social.imageAlt);
   }
-  assert.equal(copy.social.image, '/nanawing/aircraft/spectre-share-v1.jpg');
+  assert.equal(copy.social.image, '/nanawing/aircraft/spectre-share-v2.jpg');
   assert.equal(meta(html, 'twitter:card'), 'summary_large_image');
   const webPage = graph.find((entry) => entry['@type'] === 'WebPage');
   assert.equal(webPage.url, canonical);
@@ -181,20 +212,35 @@ test('a course with an aircraft allow-list gets records only for those aircraft,
   for (const id of ['desertwing', 'morok', 'sukhoi']) assert.equal(courseAllows(restricted[0], id), false, `${id} cannot race Estate Run`);
   assert.equal(courseAllows(facts.courses[0], 'sukhoi'), true, 'a course without a list allows every aircraft');
   assert.ok(text(section('spectre')).includes('Estate Run'), 'the Spectre section names its Parkland race');
-  const faq = copy.faq.find((entry) => entry.q === 'Can every aircraft race every course?');
-  assert.ok(faq && /Estate Run is for the WUDFLY Spectre only/.test(faq.a), 'the FAQ says who can race Estate Run');
+  const faq = copy.faq.find((entry) => entry.q === 'Which aircraft race which course?');
+  assert.ok(faq && /Estate Run in Parkland is the WUDFLY Spectre's course/.test(faq.a), 'the FAQ says who can race Estate Run');
 });
 
 test('simulator caveats, designer attribution and visible FAQ match the structured answers', () => {
   const spectre = text(section('spectre'));
-  assert.match(copy.aircraft.spectre.note, /simulator approximation/i);
-  assert.match(copy.aircraft.spectre.note, /not a manufacturer-validated flight model/i);
-  assert.ok(spectre.includes(copy.aircraft.spectre.note));
+  // The recreation and approximation note is said once, in the FAQ that asks about it; the Spectre section keeps
+  // the designer credit and the photo credit, not a second copy of the note.
+  assert.equal(copy.aircraft.spectre.note, undefined, 'no duplicate approximation note in the Spectre section');
+  assert.doesNotMatch(spectre, /approximation|recreation/i);
+  assert.ok(spectre.includes(copy.aircraft.spectre.photo.credit), 'the photo credit stays');
+  assert.ok(spectre.includes('Aircraft design by WUDFLY'), 'the designer credit stays');
+  const real = copy.faq.find((entry) => entry.q === 'Is the WUDFLY Spectre in Nanawing the real aircraft?');
+  assert.ok(real, 'the FAQ asks whether the Spectre is the real aircraft');
+  assert.match(real.a, /our recreation of WUDFLY's design/i);
+  assert.match(real.a, /simulator approximation/i);
+  // Phones yaw the Spectre too (the left touch stick pushed sideways), so no line may say yaw needs a gamepad or radio.
+  assert.doesNotMatch(text(html), /yaw needs a yaw stick|yaw on a gamepad or RC radio/i);
+  assert.match(copy.faq.find((entry) => entry.q === 'Do I need a gamepad or RC radio?').a, /phone's left stick/);
   assert.ok(section('spectre').includes('href="https://wudfly.com/"'));
   assert.ok(section('spectre').includes('href="https://wudfly.com/store/spectre"'));
-  assert.ok(text(section('compare')).includes(copy.compare.note));
-  const method = match(html, /<section class="ac-method"[^>]*>([\s\S]*?)<\/section>/, 'methodology exists');
-  for (const paragraph of copy.method.paragraphs) assert.ok(text(method).includes(paragraph));
+  // Each video thumbnail link names the video it plays, so a screen reader hears more than "Play:".
+  const videoLinks = [...section('spectre').matchAll(/<a class="ac-yt"[^>]*\bdata-yt="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)];
+  assert.equal(videoLinks.length, copy.wudfly.videos.length);
+  for (const [, id, inner] of videoLinks) {
+    const video = copy.wudfly.videos.find((entry) => entry.id === id);
+    assert.ok(video, `video ${id} is in the copy`);
+    assert.equal(text(match(inner, /<span class="sr-only">([\s\S]*?)<\/span>/, `video ${id} has a screen-reader label`)), `Play: ${video.title}`);
+  }
   const faq = graph.find((entry) => entry['@type'] === 'FAQPage');
   assert.deepEqual(faq.mainEntity.map((entry) => ({ q: entry.name, a: entry.acceptedAnswer.text })), copy.faq);
   const visibleFaq = match(html, /<section class="ac-faq"[^>]*>([\s\S]*?)<\/section>/, 'visible FAQ exists');
