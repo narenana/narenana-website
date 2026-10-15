@@ -48,6 +48,11 @@ what will bite them. A little humour is welcome when it's about the flying. Hype
 
 A line that fails any check gets rewritten or cut.
 
+**Review the whole page, not just the lines you changed (owner, 15 Oct 2026).** A whole "Where the numbers come from"
+section, which this guide already said to cut, stayed live on www.narenana.com/nanawing/aircraft/ because each edit to
+that page was reviewed line by line and the page itself never was. The owner: "why does this even exist. exactly the type
+of content we wanted to avoid." Any change to a page means the whole page passes these checks before it ships.
+
 | Doesn't sound like (written by us, rejected by the owner) | Sounds like |
 |---|---|
 | "Three real places to fly — not an empty test box." | "Skim farmland and chase freight trains" |
@@ -59,6 +64,8 @@ A line that fails any check gets rewritten or cut.
 | "Each course keeps a leaderboard for each aircraft that can race it." | "Set a time, see where you rank, then go back and beat it." |
 | "3 graphics presets: Lite, High and Ultra, picked for your device on first launch" | "Your laptop is all you need, no gaming PC" |
 | "Top speed and roll rate are measured in the sim: a test bot flies each aircraft…" | Cut it. Put the spec numbers on the card and say nothing about how they were measured. |
+| "Where the numbers come from: a test bot flies each aircraft… The bench is rerun after any tuning." (a whole section, live on www until 15 Oct; owner: "why does this even exist") | Cut the section. The spec table carries the numbers. |
+| "With a measured 249 km/h top speed in the simulator…" | "It tops out at 249 km/h, so start setting up your turns sooner." |
 | "4 aircraft, from a 215 g twin to a 2 kg wing" | "Pick your wing: start on a forgiving trainer, then work up to a 323 km/h wing" |
 
 ## Voice attributes (constant everywhere)
@@ -122,3 +129,7 @@ A line that fails any check gets rewritten or cut.
 | no install, no login | no download, no signup |
 | RC radio / transmitter | controller (except gamepad) |
 | prices last checked | live prices (unless truly real-time) |
+
+**Search phrases (15 Oct 2026):** a page's `<title>` and URL slug may use the words pilots type into search, even where
+this table says otherwise ("FPV simulator with no controller" on `/guides/fpv-simulator-no-controller`). The H1, the
+body and every other string on the page use the terms above ("no RC radio needed").

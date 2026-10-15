@@ -16,3 +16,17 @@ URL, update the plan as part of the same work:
 3. If your change moves a milestone's date or scope, edit the milestone and say why.
 
 A plan-only commit uses `[skip ci]`. This section is removed when the plan closes.
+
+## Copy follows the brand voice guide (owner, 14–15 Oct 2026)
+
+Every string a visitor reads (pages, `content/**.json`, generated pages, meta and og text, JSON-LD, alt text, share cards)
+follows [`.claude/brand-voice-guidelines.md`](.claude/brand-voice-guidelines.md). That file is the source of truth; the
+fpvsim repo keeps a synced copy.
+
+- Its first section is the owner's rule: write about the pilot, not the product. Say what the pilot can do, achieve and
+  enjoy. Never say how a feature works or how a number was measured, and never sell a limit.
+- **Review gate.** Before copy reaches the owner, a preview or master, run the brand-voice quality-assurance agent in strict
+  mode on the **whole page** the change touches, not only the changed lines. Fix every finding, re-run it until it is clean,
+  then read every line yourself against the guide's five checks. On 15 Oct 2026 a section the guide already banned ("Where
+  the numbers come from") was still live on `/nanawing/aircraft/`, because edits to that page were only checked line by line.
+- New feedback from the owner goes into the guide, with his example.

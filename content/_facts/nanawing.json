@@ -2,10 +2,8 @@
   "_about": "Snapshot of Nanawing (fpvsim) facts used by www pages. Source of truth is the fpvsim repo; M3 of docs/site-consolidation-plan.md replaces this hand-made snapshot with the product.json the fpvsim build publishes. Update it whenever these facts change in fpvsim.",
   "source": {
     "repo": "narenana/fpvsim",
-    "commit": "244670f",
-    "date": "2026-10-14",
-    "release": "Parkland: fpvsim main 244670f (branch parkland 794c959), 2026-10-14",
-    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/race/courses.ts", "src/race/desertCourses.json", "src/world/parkland/parklandCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
+    "commit": "7035add", "date": "2026-10-15", "release": "TBS Chupito release: fpvsim main 7035add (15 Oct 2026); leaderboard worker e3948a05.",
+    "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/config/flightConfig.ts", "src/race/courses.ts", "src/race/desertCourses.json", "src/world/parkland/parklandCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
   },
   "playUrl": "https://sim.narenana.com/?play&aircraft={id}",
   "aircraft": [
@@ -90,6 +88,27 @@
         "youtube": "https://www.youtube.com/@WUDFLY",
         "text": "Aircraft design by WUDFLY. The simulator model is an original recreation; handling is a simulator approximation, not a manufacturer-validated flight model."
       }
+    },
+    {
+      "id": "chupito",
+      "name": "TBS Chupito",
+      "spanM": 0.8,
+      "massKg": 0.7,
+      "thrustN": 14.71,
+      "topSpeedKmh": 140,
+      "stallSpeedKmh": 35,
+      "stallWarningKmh": 44,
+      "rollRateDegS": 360,
+      "climbRateMs": 12.8,
+      "battery": "6S 1800 mAh · 30 A",
+      "short": "Snaps round at 360°/s on 6S.",
+      "credit": {
+        "kind": "reference",
+        "designer": "Team BlackSheep",
+        "url": "https://www.team-blacksheep.com/products/prod:tbs_chupito_kit",
+        "text": "Reference airframe by Team BlackSheep. Nanawing's own recreation; its handling is not TBS flight data."
+      },
+      "_credit": "Team BlackSheep's written permission (15 Oct 2026, ticket TBS-S261014-D3E0): name and recognisable product livery may be used if it is presented accurately, never as an official TBS simulator or an endorsement; every public surface that shows it credits Team BlackSheep and links url above. No TBS photographs."
     }
   ],
   "courses": [
@@ -97,7 +116,7 @@
     { "id": "river-run", "name": "River Run", "map": "Island", "km": 8.1 },
     { "id": "tunnel-run", "name": "Tunnel Run", "map": "Desert", "km": 5.1 },
     { "id": "pyramid-run", "name": "Pyramid Run", "map": "Desert", "km": 5.7 },
-    { "id": "parkland-estate-run", "name": "Estate Run", "map": "Parkland", "km": 2.8, "aircraft": ["spectre"] }
+    { "id": "parkland-estate-run", "name": "Estate Run", "map": "Parkland", "km": 2.8, "aircraft": ["spectre", "chupito"] }
   ],
-  "_courses": "aircraft = the course's allow-list (fpvsim RaceCourseDef.aircraft; courseAllowsAircraft in src/race/courses.ts); absent = every aircraft. Estate Run (Parkland, beta) comes from src/world/parkland/parklandCourses.json (14 gates + the START arch, lapKm 2.8), released to fpvsim main with Parkland on 2026-10-14; the production leaderboard worker accepts parkland-estate-run for the Spectre only."
+  "_courses": "aircraft = the course's allow-list (fpvsim RaceCourseDef.aircraft; courseAllowsAircraft in src/race/courses.ts); absent = every aircraft. Estate Run (Parkland, beta) comes from src/world/parkland/parklandCourses.json (14 gates + the START arch, lapKm 2.8), released to fpvsim main with Parkland on 2026-10-14 for the Spectre; the TBS Chupito release (15 Oct 2026) opens it to the Chupito too. The production leaderboard worker must accept chupito on every course, Estate Run included, before this snapshot ships: src/aircraft-records.js reads those boards, and a failed board marks the page degraded."
 }

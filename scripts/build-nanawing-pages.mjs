@@ -37,18 +37,23 @@ for (const a of facts.aircraft) {
   dims[a.id] = { w: m.width, h: m.height };
 }
 const alt = {
-  desertwing: 'Nanawing One, a blue camouflage flying wing with a single pusher prop, rendered from the simulator model',
-  morok: 'Morok UAV, a silver drone with a V-tail and a pusher prop, rendered from the simulator model',
-  sukhoi: 'Sukhoi S-70 Okhotnik, a grey stealth flying wing, rendered from the simulator model',
-  spectre: 'WUDFLY Spectre, a white and yellow twin-motor flying wing with SPECTRE and WUDFLY lettering, rendered from the simulator model',
+  desertwing: 'Nanawing One, a blue flying wing with a single pusher prop',
+  morok: 'Morok UAV, a silver drone with a V-tail and a pusher prop',
+  sukhoi: 'Sukhoi S-70 Okhotnik, a grey, angular flying wing',
+  spectre: 'WUDFLY Spectre, a white and yellow twin-motor flying wing with SPECTRE and WUDFLY lettering',
+  chupito: 'TBS Chupito, a dark grey flying wing with a single fin, a red pusher prop and white logos and lettering',
 };
+for (const a of facts.aircraft) if (!alt[a.id]) throw new Error(`No alt text for ${a.id}`);
 const img = (a, sizes, { eager = false, cls = '' } = {}) =>
   `<img${cls ? ` class="${cls}"` : ''} src="${IMG(a.id, 900)}" srcset="${IMG(a.id, 560)} 560w, ${IMG(a.id, 900)} 900w, ${IMG(a.id, 1400)} 1400w" sizes="${sizes}" alt="${esc(alt[a.id])}" width="${dims[a.id].w}" height="${dims[a.id].h}"${eager ? ' fetchpriority="high"' : ' loading="lazy" decoding="async"'}>`;
 
 function credit(a) {
   const c = a.credit;
-  if (c.kind === 'cc-by') return `Model: <a href="${c.source}" ${ext}>“${esc(c.title)}”</a> by ${esc(c.author)}, <a href="${c.licenseUrl}" ${ext}>${esc(c.license)}</a>. Rendered in Nanawing with its simulator materials.`;
+  if (c.kind === 'cc-by') return `Model: <a href="${c.source}" ${ext}>“${esc(c.title)}”</a> by ${esc(c.author)}, <a href="${c.licenseUrl}" ${ext}>${esc(c.license)}</a>. Modified for Nanawing.`;
   if (c.kind === 'designer') return `Aircraft design by <a href="${c.designerUrl}" ${ext}>${esc(c.designer)}</a>.`;
+  // A real airframe Nanawing recreates with its maker's permission (the TBS Chupito): credit the maker and
+  // link their product page wherever the aircraft is shown (Team BlackSheep's terms, 15 Oct 2026).
+  if (c.kind === 'reference') return `Reference airframe by <a href="${c.url}" ${ext}>${esc(c.designer)}</a>.`;
   return esc(c.text);
 }
 
@@ -59,23 +64,24 @@ const specRows = [
   ['Climb rate', (a) => `${fmt(a.climbRateMs, 1)}&nbsp;m/s`],
   ['Wingspan', (a) => `${fmt(a.spanM, 2)}&nbsp;m`],
   ['Weight', (a) => weight(a.massKg)],
-  ['Thrust', (a) => `${fmt(a.thrustN)}&nbsp;N`],
+  // Whole newtons stay whole (26 N); the Chupito's 14.71 N shows as the Hangar shows it, not rounded to 15.
+  ['Thrust', (a) => `${fmt(a.thrustN, Number.isInteger(a.thrustN) ? 0 : 2)}&nbsp;N`],
   ['Battery', (a) => battery(a.battery)],
 ];
 
-// A course with an aircraft allow-list (facts: course.aircraft; e.g. Parkland's Estate Run, Spectre only) only
+// A course with an aircraft allow-list (facts: course.aircraft; e.g. Parkland's Estate Run: the Spectre and the Chupito) only
 // gets a record row in the sections of the aircraft that may race it. No list = every aircraft.
 const coursesFor = (id) => facts.courses.filter((c) => !Array.isArray(c.aircraft) || c.aircraft.includes(id));
 const courseRows = (id) => coursesFor(id).map((c) =>
   `<tr><th scope="row">${esc(c.name)}<small>${esc(c.map)} · ${fmt(c.km, 1)} km</small></th><td class="ac-time">—</td><td class="ac-pilot">—</td></tr>`).join('');
 
-const lineup = `<ul class="ac-lineup" aria-label="The four aircraft">${displayAircraft.map((a, i) =>
-  `<li><a href="#${a.id}">${img(a, '(max-width:700px) 44vw, 270px', { eager: i < 2 })}<span class="ac-lineup-name">${esc(a.name)}</span><span class="ac-lineup-role">${esc(copy.aircraft[a.id].role)}</span></a></li>`).join('')}</ul>`;
+const lineup = `<ul class="ac-lineup" aria-label="The ${displayAircraft.length} aircraft">${displayAircraft.map((a, i) =>
+  `<li><a href="#${a.id}">${img(a, '(max-width:859px) 46vw, 230px', { eager: i < 2 })}<span class="ac-lineup-name">${esc(a.name)}</span><span class="ac-lineup-role">${esc(copy.aircraft[a.id].role)}</span></a></li>`).join('')}</ul>`;
 
 const compare = `<section class="ac-compare" id="compare" aria-labelledby="compare-title"><h2 id="compare-title">${esc(copy.compare.h2)}</h2>
 <div class="ac-table-wrap" role="region" aria-labelledby="compare-title" tabindex="0"><table class="ac-table"><thead><tr><th scope="col">Aircraft</th>${specRows.map(([label]) => `<th scope="col">${label}</th>`).join('')}</tr></thead>
 <tbody>${displayAircraft.map((a) => `<tr><th scope="row"><a href="#${a.id}">${esc(a.name)}</a></th>${specRows.map(([, f]) => `<td>${f(a)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-<p class="ac-swipe">Swipe the table sideways for all eight specs.</p><p class="ac-note">${esc(copy.compare.note)}</p></section>`;
+<p class="ac-swipe">Swipe the table sideways for all ${specRows.length} specs.</p>${copy.compare.note ? `<p class="ac-note">${esc(copy.compare.note)}</p>` : ''}</section>`;
 
 // A real photo (copy.aircraft.<id>.photo, e.g. the designer's own) in place of the render.
 const PHOTO = (file, w) => `/assets/nanawing/aircraft/${file}-${w}.webp`;
@@ -92,7 +98,7 @@ const wudfly = (w) => `<div class="ac-wudfly"><h3>${esc(w.h3)}</h3>${w.paragraph
 <ul class="ac-wudfly-links">${w.links.map((l) => `<li><a href="${l.href}" ${ext}>${esc(l.label)} <span aria-hidden="true">↗</span></a></li>`).join('')}</ul>
 ${gallery(w)}
 <h4>${esc(w.videosH4)}</h4><ul class="ac-videos">${w.videos.map((v) =>
-  `<li><a class="ac-yt" href="https://www.youtube.com/watch?v=${v.id}" data-yt="${v.id}" ${ext}><img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" width="480" height="360" loading="lazy" decoding="async"><span class="ac-yt-play" aria-hidden="true">▶</span><span class="sr-only">Play: </span></a><p class="ac-yt-title">${esc(v.title)}</p></li>`).join('')}</ul></div>`;
+  `<li><a class="ac-yt" href="https://www.youtube.com/watch?v=${v.id}" data-yt="${v.id}" ${ext}><img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" width="480" height="360" loading="lazy" decoding="async"><span class="ac-yt-play" aria-hidden="true">▶</span><span class="sr-only">Play: ${esc(v.title)}</span></a><p class="ac-yt-title">${esc(v.title)}</p></li>`).join('')}</ul></div>`;
 
 const sections = displayAircraft.map((a, i) => {
   const c = copy.aircraft[a.id];
@@ -109,9 +115,9 @@ ${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-
 </div>${a.id === 'spectre' ? wudfly(copy.wudfly) : ''}</section>`;
 }).join('\n');
 
-const method = `<section class="ac-method" aria-labelledby="method-title"><h2 id="method-title">${esc(copy.method.h2)}</h2>${copy.method.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</section>`;
 const practice = `<section class="ac-practice" aria-labelledby="practice-title"><h2 id="practice-title">${esc(copy.practice.h2)}</h2>${copy.practice.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}</section>`;
-const faq = `<section class="ac-faq" aria-labelledby="faq-title"><h2 id="faq-title">Questions</h2>${copy.faq.map((f) => `<details><summary>${esc(f.q)}</summary><p>${esc(f.a)}</p></details>`).join('')}</section>`;
+// copy.faqNote: the one small-print safety line, under the answers rather than inside one.
+const faq = `<section class="ac-faq" aria-labelledby="faq-title"><h2 id="faq-title">Questions</h2>${copy.faq.map((f) => `<details><summary>${esc(f.q)}</summary><p>${esc(f.a)}</p></details>`).join('')}${copy.faqNote ? `<p class="ac-note">${esc(copy.faqNote)}</p>` : ''}</section>`;
 const final = `<section class="ac-final"><h2>${esc(copy.final.h2)}</h2><p>${esc(copy.final.lede)}</p><a class="ac-btn" href="${play(copy.final.aircraft)}" ${ext}>${esc(copy.final.cta)} <span aria-hidden="true">↗</span></a></section>`;
 const request = `<section class="ac-request" id="request-aircraft" aria-labelledby="request-title"><h2 id="request-title">${esc(copy.request.h2)}</h2><p>${esc(copy.request.lede)}</p><ul>${copy.request.links.map((link) => `<li><a href="${esc(link.href)}" ${ext}>${esc(link.label)} <span aria-hidden="true">↗</span></a></li>`).join('')}</ul></section>`;
 
@@ -123,7 +129,6 @@ ${lineup}</div>
 ${practice}
 ${compare}
 ${sections}
-${method}
 ${faq}
 ${final}
 ${request}
@@ -152,7 +157,7 @@ writeFileSync(`site${path}index.html`, page({
   social: copy.social,
   body,
   schema,
-  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=317e518063">',
+  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=47192db4df">',
   scripts,
 }));
 

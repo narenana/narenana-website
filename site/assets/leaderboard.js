@@ -43,7 +43,7 @@
     if (known.length && !known.includes(aircraft.value)) aircraft.value = known[0];
     if (!known.length) return { challenge: DEFAULT_CHALLENGE, only: '' };
     const names = [...aircraft.options].filter((option) => known.includes(option.value)).map((option) => option.textContent);
-    return { challenge: `${course.selectedOptions[0].textContent} is raced in the ${names.join(' or the ')} only, for now. Fly through its green start arch to begin your lap.`, only: ` · ${names.join(' or ')} only` };
+    return { challenge: `${course.selectedOptions[0].textContent} is raced in the ${names.join(' or the ')}. Fly through its green start arch to begin your lap.`, only: ` · Raced in the ${names.join(' or the ')}` };
   }
   let rule = applyCourseRule();
   let generation = 0;

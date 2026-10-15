@@ -27,6 +27,8 @@ main:has(.ac-page){max-width:1180px}
 .ac-lineup img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:contain}
 .ac-lineup-name{font:700 19px/1.15 'Barlow Condensed',sans-serif;margin-top:8px}
 .ac-lineup-role{font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ac-muted)}
+/* An odd card out on the 2-column phone grid (5 aircraft: 2 + 2 + 1) sits centred at the same width as the rest. */
+.ac-lineup li:last-child:nth-child(odd){grid-column:1/-1;justify-self:center;width:calc((100% - 12px) / 2)}
 
 /* Compare table: scrolls inside its own box on phones; aircraft names stay pinned */
 .ac-compare{margin-top:44px}
@@ -109,7 +111,8 @@ main:has(.ac-page){max-width:1180px}
   .ac-gallery li:first-child img{aspect-ratio:4/3}
 }
 @media (min-width:860px){
-  .ac-lineup{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+  .ac-lineup{grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+  .ac-lineup li:last-child:nth-child(odd){grid-column:auto;justify-self:stretch;width:auto}
   /* Image and text share row 1, placed explicitly; the WUDFLY card takes row 2 across both columns.
      (Reordering with order: put the Spectre image after the full-width card, below the text.) */
   .ac-craft{grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:40px;align-items:start}

@@ -289,7 +289,7 @@ function hubCopy(cat, all) {
 // sim, also flies on phones with two on-screen thumb sticks (since 9 Oct 2026).
 const PRACTISE = {
   Trainer: 'Practise circuits and landings line of sight in <a href="https://nanawing2.narenana.com/">Nanawing 2</a> before you risk the real plane. It runs free in your browser on a laptop or desktop.',
-  'FPV / Flying Wing': 'Practise hand launches and landings in <a href="https://sim.narenana.com/">Nanawing</a> before you risk the real wing. It runs free in your browser, on a laptop or on your phone with two thumb sticks. After a real flight, replay your iNAV or EdgeTX log on a 3D map in the <a href="/log-viewer/">log viewer</a>.',
+  'FPV / Flying Wing': 'Practise hand launches and landings in <a href="https://sim.narenana.com/">Nanawing</a> before you risk the real wing. Fly it free in your browser, on a laptop or on your phone with two thumb sticks. After a real flight, replay your iNAV or EdgeTX log on a 3D map in the <a href="/log-viewer/">log viewer</a>.',
 }
 // Types a buyer of each type often compares next.
 const RELATED = {
