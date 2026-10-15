@@ -450,7 +450,7 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
-- **2026-10-15** · **The TBS Chupito becomes the fifth aircraft (branches `release/chupito` in fpvsim and `copy-full-pass` in narenana-website; not released yet: it ships with the copy pass below).**
+- **2026-10-15** · **Released: the TBS Chupito becomes the fifth aircraft.** fpvsim `main` 7035add (CI deploy), leaderboard worker e3948a05 (deployed first; backups 20261015T151135Z; rollback: client first, then worker ff3b5219), narenana-website master merge of `copy-full-pass`. It shipped together with the copy pass below.
   - **Permission:** Team BlackSheep's written permission, 15 Oct 2026 (ticket TBS-S261014-D3E0). The Chupito may be shown with its name and product livery if it is presented accurately and never as official or endorsed. Every surface that shows it credits Team BlackSheep and links https://www.team-blacksheep.com/products/prod:tbs_chupito_kit. No TBS photographs.
   - **Owner decisions:** the pack is 6S 1800 mAh · 30 A (was 1500); Estate Run opens to the Chupito alongside the WUDFLY Spectre; the Chupito is last in the fleet order.
   - **Sim:** the Hangar shows 5 tiles in one row; the homepage gets a fifth aircraft card; `/leaderboard/` gets a chip and a picture; the map pages, the guides and the in-game credits all carry the Team BlackSheep link. Search snippets (title, meta, og, twitter, JSON-LD) never name it without the credit.
@@ -459,7 +459,7 @@ Add newest entries at the top: date, repo and commit, what changed, and the mile
   - **Facts that change:** 5 aircraft; the Chupito has the quickest roll (360°/s), so the Spectre's line becomes "slowest, the only one with yaw"; the highest stall is the Chupito's 35 km/h, so the stall range is 24–35 km/h; 22 boards (5 each on Windmill, River, Tunnel and Pyramid Run, 2 on Estate Run).
   - **Fact inventory rows:** Nanawing aircraft, Race courses, Controls. **URL map:** no new pages.
   - **Milestones:** none moved.
-- **2026-10-15** · **Whole-page copy pass (branch `copy-full-pass` in fpvsim and narenana-website; not released yet: it ships with the TBS Chupito release).**
+- **2026-10-15** · **Released with the TBS Chupito: the whole-page copy pass** (fpvsim `main` 7035add; narenana-website master merge of `copy-full-pass`).
   The owner found "Where the numbers come from" (test bot, bench, 1 g lift limit) live on `/nanawing/aircraft/` and said it should not exist. Every Nanawing surface was reviewed as a WHOLE page against the brand voice guide, which gains a whole-page review rule and a search-phrase note.
   - **www:** `/nanawing/aircraft/` loses the method section and the measurement notes; new title "Pick your wing and fly it free", new hero and section copy, and a new share card (`spectre-share-v2.jpg`). The homepage's Nanawing copy is rewritten benefit-first; Desert and Parkland stay marked Beta. CLAUDE.md gains the copy rule.
   - **fpvsim:** homepage, `/leaderboard/`, the 3 map pages and their share images, the 9 guides, the 404 and radio bridge, and the Hangar/HUD text. A new share card, `share-home-v2.jpg` (`tools/makeShareHome.mjs`), drops the banned triad; `/og.jpg` and `share-home.jpg` serve the same civilian card. Guide titles changed (URLs unchanged): "How to fly Nanawing", "FPV simulator with no controller: fly it on your keyboard", "Leaderboards: race other pilots for the fastest lap", "Fly an FPV simulator on your Chromebook".
