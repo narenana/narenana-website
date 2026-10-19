@@ -451,6 +451,9 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
+- **2026-10-19** · **Nanawing 2 field motion (branch preview; not production).** nanawing2 `codex/field-realism`, commit `70e58838b1ffb5f4f04cef2d5a385e2003e7cae2`: wind-driven scenery now moves before launch; the windsock flutters, the windmill turns and the imported tree crowns sway. Small circling birds appear on High/Ultra. Pause and hidden tabs freeze scenery; calm stops wind indicators while birds continue flying. Wind-first and combined rendered checks passed before preview delivery.
+  - **M3/M4:** if accepted, refreshed Nanawing 2 media may show this animated field. Do not describe the static sky as animated or imply aerodynamic bird interactions. Aircraft, physics, controls, credits and public URLs are unchanged. No website publication or milestone change accompanies this plan-only entry.
+
 - **2026-10-19** · **Nanawing 2 field visuals (branch preview; not production).** nanawing2 `codex/field-realism`, commit `8922ebba239a7fed8a4160a149be7fd1851cbac3`: updated sky and lighting, distinct cut runway and rough meadow, a revised Sky Surfer finish, and fuller trees with distant ground shadows. The candidate is for owner review before any production release.
   - **Credits:** the sim's `CREDITS.md` and asset manifest record the grass sources and the CC0 Poly Haven trees: Rico Cilliers' Tree Small 02 and Jacaranda Tree, the latter with guidance by Rob Tuytel. Preserve those notices when reusing approved screenshots or assets.
   - **Facts and URLs:** the eight powered aircraft, their physics and controls, and all public URLs remain unchanged. This companion changes only this plan; it adds no website page, feature or deployment.
