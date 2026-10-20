@@ -12,8 +12,8 @@ const file = (path) => new URL(`../${path}`, import.meta.url);
 const facts = JSON.parse(await readFile(file('content/_facts/nanawing.json'), 'utf8'));
 const copy = JSON.parse(await readFile(file('content/nanawing/aircraft.json'), 'utf8'));
 const html = await readFile(file('site/nanawing/aircraft/index.html'), 'utf8');
-// Owner, 15 Oct 2026: the TBS Chupito joins as the fifth aircraft, last in the fleet order.
-const expectedOrder = ['spectre', 'desertwing', 'morok', 'sukhoi', 'chupito'];
+// Owner, 15 Oct 2026: the TBS Chupito joins as the fifth aircraft; 20 Oct 2026: Darkwing the sixth, last in the fleet order.
+const expectedOrder = ['spectre', 'desertwing', 'morok', 'sukhoi', 'chupito', 'darkwing'];
 const TBS_PRODUCT = 'https://www.team-blacksheep.com/products/prod:tbs_chupito_kit';
 const decode = (value) => value.replace(/&(?:amp|quot|apos|lt|gt|nbsp);|&#(?:\d+|x[\da-f]+);/gi, (entity) => {
   const named = { '&amp;': '&', '&quot;': '"', '&apos;': "'", '&lt;': '<', '&gt;': '>', '&nbsp;': ' ' };
@@ -50,7 +50,9 @@ const extreme = (key, end) => facts.aircraft.reduce((best, a) => ((end === 'max'
 // Aircraft that recreate a real maker's airframe (credit kind designer or reference: the WUDFLY Spectre, the TBS
 // Chupito). They share ONE recreation and approximation note per page (release rule, 15 Oct 2026): one FAQ entry.
 const recreated = facts.aircraft.filter((aircraft) => ['designer', 'reference'].includes(aircraft.credit.kind));
-const realQuestion = `Are the ${recreated.map((aircraft) => aircraft.name).join(' and the ')} in Nanawing the real aircraft?`;
+// "the A and the B", or "the A, the B and the C"
+const listed = (names) => names.length < 3 ? names.join(' and the ') : `${names.slice(0, -1).join(', the ')} and the ${names[names.length - 1]}`;
+const realQuestion = `Are the ${listed(recreated.map((aircraft) => aircraft.name))} in Nanawing the real aircraft?`;
 const realAnswer = () => {
   const entries = copy.faq.filter((entry) => /in Nanawing the real aircraft\?$/.test(entry.q));
   assert.equal(entries.length, 1, 'one FAQ entry asks whether the recreated aircraft are the real ones');
@@ -60,7 +62,7 @@ const realAnswer = () => {
 
 test('Spectre leads every presentation surface without reordering the facts snapshot', () => {
   assert.deepEqual(copy.order, expectedOrder);
-  assert.deepEqual(facts.aircraft.map((aircraft) => aircraft.id), ['desertwing', 'morok', 'sukhoi', 'spectre', 'chupito']);
+  assert.deepEqual(facts.aircraft.map((aircraft) => aircraft.id), ['desertwing', 'morok', 'sukhoi', 'spectre', 'chupito', 'darkwing']);
   assert.deepEqual([...new Set(copy.order)].sort(), facts.aircraft.map((aircraft) => aircraft.id).sort());
 
   const lineup = match(html, /<ul class="ac-lineup"[^>]*>([\s\S]*?)<\/ul>/, 'lineup exists');
@@ -145,7 +147,7 @@ test('the page shows the specs without explaining how they were measured', () =>
   // Counted in what a visitor reads: the JSON-LD FAQPage repeats the FAQ answers for search engines.
   const visible = text(html.replace(/<script\b[\s\S]*?<\/script>/g, ''));
   // One shared note for every aircraft that recreates a real maker's airframe, and none for the rest.
-  assert.deepEqual(recreated.map((aircraft) => aircraft.id), ['spectre', 'chupito']);
+  assert.deepEqual(recreated.map((aircraft) => aircraft.id), ['spectre', 'chupito', 'darkwing']);
   assert.equal((visible.match(/approximation/gi) || []).length, 1, 'the approximation note appears once on the page');
   assert.equal((visible.match(/recreation/gi) || []).length, 1, 'the recreation note appears once on the page');
   assert.equal((visible.match(/flight data/gi) || []).length, 1, 'the flight-data note appears once on the page');
@@ -300,7 +302,7 @@ test('the TBS Chupito is credited to Team BlackSheep with its product link and n
   assert.equal(copy.aircraft.chupito.photo, undefined, 'no photo for the Chupito');
   assert.match(body, /<figure class="ac-craft-img"><img [^>]*src="\/assets\/nanawing\/aircraft\/chupito-900\.webp/);
   const real = realAnswer();
-  assert.match(real, /our recreations of WUDFLY's and Team BlackSheep's wings/);
+  assert.match(real, /our recreations of WUDFLY's, Team BlackSheep's and Anirudh's wings/);
   assert.match(real, /the TBS Chupito's is not TBS flight data/);
   assert.match(real, /Team BlackSheep sells the real Chupito at team-blacksheep\.com/);
   const visible = text(html.replace(/<script\b[\s\S]*?<\/script>/g, ''));
@@ -344,7 +346,7 @@ test('the homepage lists, races and credits every aircraft, the TBS Chupito incl
   // The board opens on the Sukhoi (owner rule); the Chupito is appended last.
   const select = match(home, /<select id="race-aircraft">([\s\S]*?)<\/select>/, 'the homepage aircraft picker exists');
   const options = [...select.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)].map(([, id, name]) => ({ id, name }));
-  assert.deepEqual(options.map((option) => option.id), ['sukhoi', 'desertwing', 'morok', 'spectre', 'chupito']);
+  assert.deepEqual(options.map((option) => option.id), ['sukhoi', 'desertwing', 'morok', 'spectre', 'chupito', 'darkwing']);
   for (const option of options) assert.equal(option.name, byId.get(option.id).name);
   // Estate Run's option carries the course allow-list the board script reads (site/assets/leaderboard.js).
   const estate = attributes(match(home, /(<option value="parkland-estate-run"[^>]*>)/, 'the Estate Run option exists'));

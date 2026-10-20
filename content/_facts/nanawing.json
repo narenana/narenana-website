@@ -109,6 +109,28 @@
         "text": "Reference airframe by Team BlackSheep. Nanawing's own recreation; its handling is not TBS flight data."
       },
       "_credit": "Team BlackSheep's written permission (15 Oct 2026, ticket TBS-S261014-D3E0): name and recognisable product livery may be used if it is presented accurately, never as an official TBS simulator or an endorsement; every public surface that shows it credits Team BlackSheep and links url above. No TBS photographs."
+    },
+    {
+      "id": "darkwing",
+      "name": "Darkwing",
+      "spanM": 1,
+      "_spanM": "Assumed from the STL files (no units; millimetres assumed). Unconfirmed by the designer.",
+      "massKg": 1.3,
+      "thrustN": 35,
+      "topSpeedKmh": 270,
+      "stallSpeedKmh": 39,
+      "stallWarningKmh": 48,
+      "rollRateDegS": 240,
+      "climbRateMs": 26.3,
+      "battery": "6S 5000 mAh · 80 A",
+      "short": "Builds speed in a hurry on 6S.",
+      "credit": {
+        "kind": "designer",
+        "designer": "Anirudh",
+        "designerUrl": "https://www.instagram.com/anirud.aero/",
+        "text": "Aircraft by Anirudh. Nanawing's own recreation, tuned from flights of the real aircraft."
+      },
+      "_credit": "Published with Anirudh's agreement (owner, 20 Oct 2026); credit 'Aircraft by Anirudh', linked to the profile he chose. The original STL files are not redistributed."
     }
   ],
   "courses": [

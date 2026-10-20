@@ -27,7 +27,7 @@ main:has(.ac-page){max-width:1180px}
 .ac-lineup img{display:block;width:100%;height:auto;aspect-ratio:16/10;object-fit:contain}
 .ac-lineup-name{font:700 19px/1.15 'Barlow Condensed',sans-serif;margin-top:8px}
 .ac-lineup-role{font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ac-muted)}
-/* An odd card out on the 2-column phone grid (5 aircraft: 2 + 2 + 1) sits centred at the same width as the rest. */
+/* An odd card out on the 2-column phone grid (an odd fleet: 2 + 2 + 1) sits centred at the same width as the rest. */
 .ac-lineup li:last-child:nth-child(odd){grid-column:1/-1;justify-self:center;width:calc((100% - 12px) / 2)}
 
 /* Compare table: scrolls inside its own box on phones; aircraft names stay pinned */

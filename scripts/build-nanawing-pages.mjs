@@ -42,6 +42,7 @@ const alt = {
   sukhoi: 'Sukhoi S-70 Okhotnik, a grey, angular flying wing',
   spectre: 'WUDFLY Spectre, a white and yellow twin-motor flying wing with SPECTRE and WUDFLY lettering',
   chupito: 'TBS Chupito, a dark grey flying wing with a single fin, a red pusher prop and white logos and lettering',
+  darkwing: 'Darkwing, a glossy black 3D-printed flying wing with two blue pusher props',
 };
 for (const a of facts.aircraft) if (!alt[a.id]) throw new Error(`No alt text for ${a.id}`);
 const img = (a, sizes, { eager = false, cls = '' } = {}) =>
@@ -157,7 +158,7 @@ writeFileSync(`site${path}index.html`, page({
   social: copy.social,
   body,
   schema,
-  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=47192db4df">',
+  head: '<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=862eb507d2">',
   scripts,
 }));
 
