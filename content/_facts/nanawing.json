@@ -2,7 +2,7 @@
   "_about": "Snapshot of Nanawing (fpvsim) facts used by www pages. Source of truth is the fpvsim repo; M3 of docs/site-consolidation-plan.md replaces this hand-made snapshot with the product.json the fpvsim build publishes. Update it whenever these facts change in fpvsim.",
   "source": {
     "repo": "narenana/fpvsim",
-    "commit": "7035add", "date": "2026-10-15", "release": "TBS Chupito release: fpvsim main 7035add (15 Oct 2026); leaderboard worker e3948a05.",
+    "commit": "1fea95f", "date": "2026-10-20", "release": "Darkwing release with the audio overhaul: fpvsim main 1fea95f (20 Oct 2026); leaderboard worker 6ba502cf.",
     "files": ["src/aircraft/catalog.ts", "src/config/aircraftSpecs.ts", "src/config/flightConfig.ts", "src/race/courses.ts", "src/race/desertCourses.json", "src/world/parkland/parklandCourses.json", "CREDITS.md", "public/assets/models/real/*.glb (asset.extras)"]
   },
   "playUrl": "https://sim.narenana.com/?play&aircraft={id}",
