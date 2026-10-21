@@ -389,6 +389,8 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Debrief finding vocabulary | log viewer `src/debrief/payload.js` | website `debrief/lib/validate.mjs` ("KEEP IN SYNC" comment) | Contract test |
 | Usage event allowlist | log viewer `src/utils/analytics.js` | website `usage/lib/worker.mjs` | Contract test |
 
+| NanaJet preview keyboard tuning and sound, 21 Oct. Factory roll expo 65%; saved profiles win. Radio bypasses game trim/expo. The synthetic voice remains provisional; actual EDF recordings are shortlisted but not purchased. | nanawing2 `lib/control-tuning.ts`, `lib/pilot-controls.ts`; `docs/nanajet-preview-feedback-2026-10-21.md` | Nanawing 2 Controls; M2 release-copy follow-up | Keep keyboard response separate from aircraft flight specifications; do not claim recorded audio before implementation |
+
 ## 9. Evidence
 
 Research done on 6 Oct 2026: 33 sourced claims, fact-checked (28 supported, 5 overstated and corrected).
@@ -454,6 +456,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 ## Change log
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
+
+- **2026-10-21** · **NanaJet preview feedback (Nanawing 2).** `narenana/nanawing2` commit `7d59add`, PR 84: curved nose-gear doors, wider ready camera and 65% factory keyboard roll expo. Physical flight settings and radio-owned trim/expo stay unchanged; saved keyboard profiles are preserved. Two US$5 EDF recordings are shortlisted, but no sound has been purchased or imported. Fact inventory gains the keyboard/audio status. **M2/M3:** carry keyboard-only expo and avoid a recorded-audio claim until implemented. No URL, production aircraft count or milestone date change.
 
 - **2026-10-21** · **NanaJet flyable branch preview (Nanawing 2).** `narenana/nanawing2`, `codex/nanajet` at `31db2195ce127327cae8c4e8c8607a4755cb6b18`, PR 84. Original blue 1.29 m / 3.2 kg 6S EDF sport jet added to the preview picker; production remains eight aircraft. G operates retractable gear and F cycles flaps; fan/duct audio follows motor state, ground-listener Doppler and distance. Existing aircraft defaults and radio calibration are unchanged. Flight derivatives and audio timbre remain provisional; the scripted landing rollout still exceeds the mown strip. Preview: `https://f474d06f.nanawing2.pages.dev/?play&aircraft=nanajet`. No production release or measured-real-aircraft claim. The existing `/?play` route gains NanaJet preselection; no new indexable page or redirect. Fact inventory and pending **M2** release-copy work updated; **M3** product facts must use the released catalogue. **M4** scope and milestone dates are unchanged. This plan-only companion branch does not deploy www.
 
