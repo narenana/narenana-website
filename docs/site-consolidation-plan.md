@@ -388,7 +388,6 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Sitemaps, robots, lastmod. *Since 14 Oct (the Parkland release): the sim sitemap has `/maps/parkland/` (fpvsim `946f467`); www `/` and `/nanawing/aircraft/` carry lastmod 2026-10-14 (`site/sitemap.xml`, `STATIC_PAGE_LASTMOD`). The sim's changed pages (`/leaderboard/` included) carry the release day too (fpvsim, §7 Parkland item 2)* | Hand-kept per repo + `STATIC_PAGE_LASTMOD` | 5 places | Generated in this repo |
 | Debrief finding vocabulary | log viewer `src/debrief/payload.js` | website `debrief/lib/validate.mjs` ("KEEP IN SYNC" comment) | Contract test |
 | Usage event allowlist | log viewer `src/utils/analytics.js` | website `usage/lib/worker.mjs` | Contract test |
-
 | NanaJet preview keyboard tuning and sound, 21 Oct. Factory roll expo 65%; saved profiles win. Radio bypasses game trim/expo. The synthetic voice remains provisional; actual EDF recordings are shortlisted but not purchased. | nanawing2 `lib/control-tuning.ts`, `lib/pilot-controls.ts`; `docs/nanajet-preview-feedback-2026-10-21.md` | Nanawing 2 Controls; M2 release-copy follow-up | Keep keyboard response separate from aircraft flight specifications; do not claim recorded audio before implementation |
 
 ## 9. Evidence
