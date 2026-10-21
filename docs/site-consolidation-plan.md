@@ -388,7 +388,7 @@ Where each shared fact is defined today (the **source**), where it's copied, and
 | Sitemaps, robots, lastmod. *Since 14 Oct (the Parkland release): the sim sitemap has `/maps/parkland/` (fpvsim `946f467`); www `/` and `/nanawing/aircraft/` carry lastmod 2026-10-14 (`site/sitemap.xml`, `STATIC_PAGE_LASTMOD`). The sim's changed pages (`/leaderboard/` included) carry the release day too (fpvsim, §7 Parkland item 2)* | Hand-kept per repo + `STATIC_PAGE_LASTMOD` | 5 places | Generated in this repo |
 | Debrief finding vocabulary | log viewer `src/debrief/payload.js` | website `debrief/lib/validate.mjs` ("KEEP IN SYNC" comment) | Contract test |
 | Usage event allowlist | log viewer `src/utils/analytics.js` | website `usage/lib/worker.mjs` | Contract test |
-| NanaJet preview keyboard tuning and sound, 21 Oct. Factory roll expo 65%; saved profiles win. Radio bypasses game trim/expo. The synthetic voice remains provisional; actual EDF recordings are shortlisted but not purchased. | nanawing2 `lib/control-tuning.ts`, `lib/pilot-controls.ts`; `docs/nanajet-preview-feedback-2026-10-21.md` | Nanawing 2 Controls; M2 release-copy follow-up | Keep keyboard response separate from aircraft flight specifications; do not claim recorded audio before implementation |
+| NanaJet preview keyboard tuning and sound, 21 Oct. Factory roll expo 65%; saved profiles win. Radio bypasses game trim/expo. The owner purchased the Starmax recording; three edited layers now follow motor speed and Doppler in the branch, with synthetic sound retained only as a loading fallback. Owner listening acceptance is pending. | nanawing2 `lib/control-tuning.ts`, `lib/pilot-controls.ts`, `lib/edf-audio.ts`; `docs/nanajet-recorded-audio-2026-10-21.md` | Nanawing 2 Controls; M2 release-copy follow-up | Keep keyboard response separate from aircraft flight specifications; recorded Starmax sound is not a measured FMS acoustic calibration. Retain PSE credit and separate audio terms. |
 
 ## 9. Evidence
 
@@ -453,6 +453,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 - **After a cutover:** turn off the zone redirect rule (instant, no deploy). The old pages are still deployed on their hosts until the 7 Dec checkpoint.
 
 ## Change log
+
+- **2026-10-21** · **NanaJet recorded sound (Nanawing 2 branch).** `narenana/nanawing2` commits `f7bf4d4` and `714fb08`, PR 84: owner-purchased Starmax EDF audio replaces the primary synthetic voice with low/cruise/full loops, motor-following pitch and one Doppler shift. Paid master remains outside Git/site; the edited material is integrated into the game's code and keeps PSE credit/terms. Local tests cover recorded output, sustained looping, mute/pause, offline playback and keyboard takeoff. Owner listening acceptance and main release remain pending. **M2/M3:** update the audio fact and carry attribution on release; production count stays eight. No URL or milestone date change.
 
 Add newest entries at the top: date, repo and commit, what changed, and the milestone affected.
 
