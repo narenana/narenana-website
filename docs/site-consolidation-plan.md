@@ -308,9 +308,8 @@ Found and not yet fixed (all already live):
 - [ ] **Nana3D preview fact sync, after release only.** Candidate `3a44ac8` adds the tenth aircraft; production remains nine. After owner approval and release, carry Nana3D name, original orange/black art and lightweight 3D description into www/Wings content and M3 product facts. No real-aircraft handling or easy-hover certification claim.
 - [ ] **The Nanawing 2 aircraft count disagrees.**
   - The source of truth, `lib/aircraft-availability.ts`, has nine in the latest recorded production release; Nana3D candidate `3a44ac8` has ten. Keep previews distinct from live facts.
-  - Fix the "5 aircraft" stat strip on nanawing2.narenana.com.
-  - Fix the guide's list, which names 5: add Electric Kato, Extra 3D and Gee Bee.
-  - Fix "See all 5 aircraft" on the www homepage.
+  - Nanawing 2's candidate landing and guide now include Nana3D and say ten; its latest recorded live release says nine.
+  - Synchronize the www homepage and Wings links to the live count; carry ten only after Nana3D releases.
 - [ ] **Nanawing 2 describes Nanawing as one island** (index.html ~415, "exploring an island"). Mention both maps.
 - [ ] **The Island guide contradicts the Island map page.**
   - Racing: it says "no race menu" and one course, but there are two courses (Windmill Run 4.3 km, River Run 8.1 km) and a race menu.
