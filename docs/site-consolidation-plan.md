@@ -454,6 +454,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 ## Change log
 
+- **2026-10-21** · **Nana3D visual refinement (preview only).** nanawing2 `508dbbb` on `codex/nana3d` replaces competing paint/text surfaces with original opaque orange/black UV artwork, rounds the foam contours and refreshes the aircraft thumbnail. The same 37-inch profile construction, flight configuration and ten-candidate/nine-production counts remain. **M2/M3:** use the refined thumbnail if Nana3D is approved for release; no page URL, visitor-facing performance claim or milestone-date change. The preview's visual acceptance remains open.
+
 - **2026-10-21** · **Nana3D aircraft preview (not released).** `narenana/nanawing2` commit `3a44ac8`, branch `codex/nana3d`, adds the owner's orange-and-black Nana3D: an original 940 mm / 325 g profile-foam 3D aircraft, inspired by the 37-inch Wicked Slick Pro V2. Ten powered aircraft in this candidate; the latest recorded production release remains nine including NanaJet (`42eb701`). The picker, landing card/metadata and guide include Nana3D. Fixed wheels/tail skid; no new shortcut, flaps or retracts. Keyboard expo softens small corrections; the transmitter retains radio trim/expo. Original artwork/mesh, no manufacturer media or endorsement. Physical handling and owner acceptance remain provisional. **M2/M3:** sync www/Wings catalogue facts only after Nana3D production release; new query preselection `?play&aircraft=nana3d` is a game link, not a new indexable page. **M4:** no URL move or milestone date change. This plan-only branch does not deploy website content.
 
 
