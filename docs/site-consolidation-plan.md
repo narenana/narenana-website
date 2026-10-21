@@ -271,7 +271,7 @@ Rules: every old URL gets one 301 to its exact new URL, never a chain or a catch
 
 Found on the live sites on 6 Oct.
 
-- [ ] **21 Oct, livery branch release follow-up:** regenerate www's Nanawing One, Morok and Spectre aircraft images from the bright-prop variants (orange/yellow/orange) and refresh image hashes before releasing that branch. Sim Hangar, homepage, leaderboard, maps and guide thumbnails are updated already. Existing Chupito red and Darkwing blue remain unchanged. No aircraft specifications or page copy change.
+- [x] **21 Oct, livery release artwork:** regenerated www's Nanawing One, Morok and Spectre aircraft images from the bright-prop variants (orange/yellow/orange), refreshed image hashes and versioned the Spectre share card as v3. Sim Hangar, homepage, leaderboard, maps and guide thumbnails match. Chupito red and Darkwing blue remain unchanged. Corrected Morok's image description to its actual single fin; no aircraft specification change.
 
 **M2 status (6 Oct, 17:30 IST).** The owner approved the release on 6 Oct.
 

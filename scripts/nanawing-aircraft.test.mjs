@@ -187,7 +187,7 @@ test('aircraft shares use Spectre-specific metadata without changing the canonic
     assert.equal(meta(html, `${prefix}:image`), new URL(copy.social.image, site).href);
     assert.equal(meta(html, `${prefix}:image:alt`), copy.social.imageAlt);
   }
-  assert.equal(copy.social.image, '/nanawing/aircraft/spectre-share-v2.jpg');
+  assert.equal(copy.social.image, '/nanawing/aircraft/spectre-share-v3.jpg');
   assert.equal(meta(html, 'twitter:card'), 'summary_large_image');
   const webPage = graph.find((entry) => entry['@type'] === 'WebPage');
   assert.equal(webPage.url, canonical);

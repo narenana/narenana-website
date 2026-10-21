@@ -38,7 +38,7 @@ for (const a of facts.aircraft) {
 }
 const alt = {
   desertwing: 'Nanawing One, a blue flying wing with a single pusher prop',
-  morok: 'Morok UAV, a silver drone with a V-tail and a pusher prop',
+  morok: 'Morok UAV, a silver swept wing with a single fin and a pusher prop',
   sukhoi: 'Sukhoi S-70 Okhotnik, a grey, angular flying wing',
   spectre: 'WUDFLY Spectre, a white and yellow twin-motor flying wing with SPECTRE and WUDFLY lettering',
   chupito: 'TBS Chupito, a dark grey flying wing with a single fin, a red pusher prop and white logos and lettering',
