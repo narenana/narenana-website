@@ -1,0 +1,86 @@
+{
+  "_about": "Copy for www.narenana.com/nanawing/chupito-simulator/, the TBS Chupito's landing page (search: chupito sim, chupito simulator, TBS Chupito simulator). Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json. Voice: .claude/brand-voice-guidelines.md. Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card.",
+  "path": "/nanawing/chupito-simulator/",
+  "aircraft": "chupito",
+  "crumb": "TBS Chupito simulator",
+  "title": "TBS Chupito simulator: fly it free in your browser",
+  "description": "Fly the TBS Chupito in Nanawing, a free FPV wing sim in your browser. Rolls at 360°/s, tops out at 140 km/h, races 5 courses. Keyboard, radio or phone.",
+  "social": {
+    "title": "Fly the TBS Chupito, free in your browser",
+    "description": "Nanawing has the Chupito in the hangar: snap it round at 360°/s, race it on 5 courses, on a laptop or your phone. No install, no login.",
+    "image": "/nanawing/chupito-simulator/og.jpg",
+    "imageAlt": "Share card: the TBS Chupito, a dark grey flying wing with a red pusher prop, on a blue background with the words Fly the TBS Chupito",
+    "card": {
+      "eyebrow": "NANAWING · FREE FPV WING SIMULATOR",
+      "headline": "Fly the TBS Chupito",
+      "aircraft": "800 mm pusher wing",
+      "details": ["Rolls at 360°/s. Tops out at 140 km/h.", "Keyboard, RC radio or phone. No install."],
+      "cta": "Fly it free",
+      "credit": "Nanawing’s recreation; not TBS flight data. Reference airframe by Team BlackSheep.",
+      "image": "site/assets/nanawing/aircraft/chupito-1400.webp"
+    }
+  },
+  "hero": {
+    "eyebrow": "Nanawing · free FPV wing simulator",
+    "h1": "Fly the TBS Chupito in a free browser simulator",
+    "lede": "Team BlackSheep’s 800 mm pusher wing is in Nanawing’s hangar, recreated so you can learn its habits before your first field day with the real one. Throw it, snap it round tight turns, race other pilots for the fastest lap. No install, no login: open it in your browser and fly.",
+    "cta": "Fly the Chupito now",
+    "ctaNote": "Opens Nanawing’s hangar with the Chupito picked. Press Launch and you’re away.",
+    "secondary": "What you’ll be doing"
+  },
+  "specs": {
+    "eyebrow": "The wing",
+    "h2": "The Chupito in Nanawing",
+    "intro": "What you’re flying, as it flies in the sim."
+  },
+  "smallPrint": "TBS Chupito: Nanawing’s recreation; its handling is not TBS flight data.",
+  "more": { "href": "/nanawing/aircraft/", "label": "All six aircraft in Nanawing" },
+  "doing": {
+    "h2": "What you’ll be doing",
+    "items": [
+      { "h3": "Snap it round", "p": "It rolls at 360°/s, the quickest roll in the hangar. Flick it from bank to bank between the gates and get a feel for how little stick it wants, so the real one doesn’t surprise you." },
+      { "h3": "Keep your speed up", "p": "Open it up to 140 km/h on the straights. It stalls at 35 km/h and warns you at 44, so carry speed through the turns and ease it down gently when you land." },
+      { "h3": "Race it on all 5 courses", "p": "Windmill Run and River Run on the Island, Tunnel Run and Pyramid Run in the Desert, and Estate Run: 2.8 km through Parkland’s giant oaks and over the estate roofs, raced in the Chupito or the WUDFLY Spectre. Set a lap time, see where you rank, then go back and beat it." }
+    ]
+  },
+  "controls": {
+    "h2": "Fly it with what you have",
+    "paragraphs": [
+      "Keyboard, gamepad or your own USB RC radio on a laptop; two thumb sticks on your phone. No gaming PC: most laptops from the last few years run it.",
+      "On the keyboard a tap nudges the wing and a hold gives you full stick, so you can fly it clean without a radio. Press Space for a two-handed throw over your head and it’s away. Keep an eye on your battery on the iNAV-style OSD."
+    ]
+  },
+  "bites": {
+    "h2": "What will bite you",
+    "items": [
+      "It stalls at 35 km/h. A slow, tight turn is how a Chupito meets the ground. Keep the speed up and start the turn early.",
+      "The roll is quick. Small inputs, then wait; the wing does the rest.",
+      "Landing: ease it down and keep a little throttle in. Chop it early and see the first point.",
+      "Crash in the sim, reset, go again. Repeat a manoeuvre until it’s clean, then take it to the field."
+    ]
+  },
+  "real": {
+    "h2": "Get the real one",
+    "p": "Wings checks TBS Chupito prices and stock at Indian hobby sellers and links you straight to the seller’s page. The kit and the manual are on Team BlackSheep’s own page.",
+    "links": [
+      { "href": "/wings/tbs-chupito/", "label": "Compare TBS Chupito prices in India" },
+      { "href": "https://www.team-blacksheep.com/products/prod:tbs_chupito_kit", "label": "TBS Chupito at Team BlackSheep" }
+    ]
+  },
+  "faq": {
+    "h2": "Questions",
+    "items": [
+      { "q": "Is this the real TBS Chupito?", "a": "It’s Nanawing’s recreation of Team BlackSheep’s 800 mm wing: the same span and shape, with the sim’s own handling, which is not TBS flight data. Nanawing is not an official TBS simulator. Practise the habits here; the kit itself comes from Team BlackSheep." },
+      { "q": "Do I need a controller?", "a": "No. Fly on the keyboard, a gamepad or your own USB RC radio. The keyboard is tuned for the Chupito: a tap nudges, a hold gives full stick." },
+      { "q": "Does it work on a phone?", "a": "Yes. Open the same link on your phone and fly with two thumb sticks on the screen." },
+      { "q": "Is it free, and do I have to install anything?", "a": "It’s free and runs in your browser: no install, no login. After the first visit it works offline too." },
+      { "q": "Where can I buy a TBS Chupito in India?", "a": "Wings compares Chupito prices and stock across Indian hobby sellers and links you to each seller’s page.", "link": { "href": "/wings/tbs-chupito/", "label": "Compare TBS Chupito prices in India" } }
+    ]
+  },
+  "faqNote": "Sim time is no substitute for instruction, aircraft checks or safe flying at the field.",
+  "final": {
+    "h2": "Get some stick time in before it arrives",
+    "lede": "Pick the Chupito, throw it, take it round Windmill Run, then try Estate Run through the oaks. Fly it in your browser on a laptop, or on your phone.",
+    "cta": "Fly the Chupito now"
+  }
+}

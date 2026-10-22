@@ -1,5 +1,5 @@
 // Generated from catalog/catalog.css — edit that, then: npm run catalog:css
-export const CSS_VER = 'e09dce5f'
+export const CSS_VER = '58182ee7'
 export const CSS = `/* narenana catalog — approved blue/orange homepage identity. */
 :root {
   --paper: #f4f8fc;
@@ -368,6 +368,8 @@ a.filt-b { text-decoration: none; }
 .pd-jump { font-weight: 700; color: var(--orange-deep); text-decoration: none; white-space: nowrap; }
 .pd-jump:hover { text-decoration: underline; }
 .pd-key .spec { padding-top: 16px; border-top: 1px solid var(--faint); gap: 14px 28px; }
+.pd-sim { margin: 0; font-size: 0.92rem; color: var(--muted); }
+.pd-sim a { font-weight: 700; }
 .pd .lede { margin: 18px 0 0; font-size: 0.98rem; }
 
 /* Sections: a rule, a display heading and one factual line under it, so the

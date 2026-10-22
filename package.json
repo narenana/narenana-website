@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "wrangler dev",
     "dev:static": "npx serve site -l 3000",
-    "aircraft:build": "node scripts/build-aircraft-social-card.mjs && node scripts/build-nanawing-pages.mjs",
-    "aircraft:test": "node --test scripts/nanawing-aircraft.test.mjs",
+    "aircraft:build": "node scripts/build-aircraft-social-card.mjs && node scripts/build-nanawing-pages.mjs && node scripts/build-aircraft-social-card.mjs content/nanawing/chupito-simulator.json && node scripts/build-nanawing-landing.mjs content/nanawing/chupito-simulator.json",
+    "aircraft:test": "node --test scripts/nanawing-aircraft.test.mjs scripts/nanawing-landing.test.mjs",
     "assets": "node scripts/gen-assets.mjs && node scripts/version-assets.mjs",
     "deploy": "wrangler deploy",
     "catalog:css": "node catalog/lib/gen-styles.mjs",

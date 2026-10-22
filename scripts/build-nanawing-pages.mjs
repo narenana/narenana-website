@@ -6,8 +6,8 @@
 // as empty <tbody data-records="<id>"> slots that the Worker fills per request
 // (src/aircraft-records.js), so the page never ships stale times.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import sharp from 'sharp';
-import { site, safe, page } from './page-shell.mjs';
+import { site, page } from './page-shell.mjs';
+import { esc, ext, play as playUrl, fmt, IMG, ALT, imageDims, img as imgTag, credit, specRows } from './nanawing-render.mjs';
 
 const facts = JSON.parse(readFileSync('content/_facts/nanawing.json', 'utf8'));
 const copy = JSON.parse(readFileSync('content/nanawing/aircraft.json', 'utf8'));
@@ -21,54 +21,12 @@ const displayAircraft = copy.order.map((id) => byId.get(id));
 for (const cta of [copy.hero, copy.final]) {
   if (!byId.has(cta.aircraft)) throw new Error(`Unknown CTA aircraft: ${cta.aircraft}`);
 }
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const ext = 'target="_blank" rel="noopener"';
-const play = (id) => facts.playUrl.replace('{id}', id).replace(/&/g, '&amp;');
-const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
-const weight = (kg) => (kg < 1 ? `${fmt(kg * 1000)}&nbsp;g` : `${fmt(kg, 1)}&nbsp;kg`);
-// A number never wraps away from its unit; values break only at the ' · ' separators.
-const battery = (b) => esc(b).replace(/ (mAh|A)\b/g, '&nbsp;$1');
-const IMG = (id, w) => `/assets/nanawing/aircraft/${id}-${w}.webp`;
-
-// Real pixel sizes, so every <img> reserves its space (no layout shift).
-const dims = {};
-for (const a of facts.aircraft) {
-  const m = await sharp(`site${IMG(a.id, 900)}`).metadata();
-  dims[a.id] = { w: m.width, h: m.height };
-}
-const alt = {
-  desertwing: 'Nanawing One, a blue flying wing with a single pusher prop',
-  morok: 'Morok UAV, a silver swept wing with a single fin and a pusher prop',
-  sukhoi: 'Sukhoi S-70 Okhotnik, a grey, angular flying wing',
-  spectre: 'WUDFLY Spectre, a white and yellow twin-motor flying wing with SPECTRE and WUDFLY lettering',
-  chupito: 'TBS Chupito, a dark grey flying wing with a single fin, a red pusher prop and white logos and lettering',
-  darkwing: 'Darkwing, a glossy black 3D-printed flying wing with two blue pusher props',
-};
-for (const a of facts.aircraft) if (!alt[a.id]) throw new Error(`No alt text for ${a.id}`);
-const img = (a, sizes, { eager = false, cls = '' } = {}) =>
-  `<img${cls ? ` class="${cls}"` : ''} src="${IMG(a.id, 900)}" srcset="${IMG(a.id, 560)} 560w, ${IMG(a.id, 900)} 900w, ${IMG(a.id, 1400)} 1400w" sizes="${sizes}" alt="${esc(alt[a.id])}" width="${dims[a.id].w}" height="${dims[a.id].h}"${eager ? ' fetchpriority="high"' : ' loading="lazy" decoding="async"'}>`;
-
-function credit(a) {
-  const c = a.credit;
-  if (c.kind === 'cc-by') return `Model: <a href="${c.source}" ${ext}>“${esc(c.title)}”</a> by ${esc(c.author)}, <a href="${c.licenseUrl}" ${ext}>${esc(c.license)}</a>. Modified for Nanawing.`;
-  if (c.kind === 'designer') return `Aircraft design by <a href="${c.designerUrl}" ${ext}>${esc(c.designer)}</a>.`;
-  // A real airframe Nanawing recreates with its maker's permission (the TBS Chupito): credit the maker and
-  // link their product page wherever the aircraft is shown (Team BlackSheep's terms, 15 Oct 2026).
-  if (c.kind === 'reference') return `Reference airframe by <a href="${c.url}" ${ext}>${esc(c.designer)}</a>.`;
-  return esc(c.text);
-}
-
-const specRows = [
-  ['Top speed', (a) => `${fmt(a.topSpeedKmh)}&nbsp;km/h`],
-  ['Stall speed', (a) => `${fmt(a.stallSpeedKmh)}&nbsp;km/h`],
-  ['Roll rate', (a) => `${fmt(a.rollRateDegS)}°/s`],
-  ['Climb rate', (a) => `${fmt(a.climbRateMs, 1)}&nbsp;m/s`],
-  ['Wingspan', (a) => `${fmt(a.spanM, 2)}&nbsp;m`],
-  ['Weight', (a) => weight(a.massKg)],
-  // Whole newtons stay whole (26 N); the Chupito's 14.71 N shows as the Hangar shows it, not rounded to 15.
-  ['Thrust', (a) => `${fmt(a.thrustN, Number.isInteger(a.thrustN) ? 0 : 2)}&nbsp;N`],
-  ['Battery', (a) => battery(a.battery)],
-];
+// The escapes, images, credit line and spec card are shared with the aircraft landing pages
+// (scripts/nanawing-render.mjs), so every page shows the same figures the same way.
+const play = (id) => playUrl(facts, id);
+const dims = await imageDims(facts.aircraft);
+for (const a of facts.aircraft) if (!ALT[a.id]) throw new Error(`No alt text for ${a.id}`);
+const img = (a, sizes, opts) => imgTag(a, dims, sizes, opts);
 
 // A course with an aircraft allow-list (facts: course.aircraft; e.g. Parkland's Estate Run: the Spectre and the Chupito) only
 // gets a record row in the sections of the aircraft that may race it. No list = every aircraft.
@@ -107,7 +65,7 @@ const sections = displayAircraft.map((a, i) => {
 ${figure(a, c)}
 <div class="ac-craft-body"><span class="eyebrow">${String(i + 1).padStart(2, '0')} / ${esc(c.role.toUpperCase())}</span><h2 id="${a.id}-title">${esc(a.name)}</h2>
 <p class="ac-credit">${credit(a)}</p>
-${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-note">${esc(c.note)}</p>` : ''}
+${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}${c.note ? `<p class="ac-note">${esc(c.note)}</p>` : ''}${c.more ? `<p class="ac-more"><a href="${esc(c.more.href)}">${esc(c.more.label)} <span aria-hidden="true">→</span></a></p>` : ''}
 <dl class="ac-specs">${specRows.map(([label, f]) => `<div><dt>${label}</dt><dd>${f(a)}</dd></div>`).join('')}</dl>
 <div class="ac-records"><h3>${esc(copy.records.h3)} <span>in the ${esc(a.name)}</span></h3>
 <table><thead><tr><th scope="col">Course</th><th scope="col">Best lap</th><th scope="col">Pilot</th></tr></thead><tbody data-records="${a.id}">${courseRows(a.id)}</tbody></table>

@@ -1,10 +1,11 @@
 // Code-native social card using the existing simulator render; no remote assets.
-// Run from the repo root: node scripts/build-aircraft-social-card.mjs
+// Run from the repo root: node scripts/build-aircraft-social-card.mjs [content/nanawing/<page>.json]
+// The page's social.card gives the words and, for an aircraft landing page, its render (card.image).
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import sharp from 'sharp';
 
-const { social } = JSON.parse(readFileSync('content/nanawing/aircraft.json', 'utf8'));
+const { social } = JSON.parse(readFileSync(process.argv[2] || 'content/nanawing/aircraft.json', 'utf8'));
 const text = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const card = social.card;
 const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
@@ -21,7 +22,7 @@ const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1
   <rect x="62" y="416" width="340" height="58" rx="4" fill="#ff8500"/>
   <text x="85" y="453" fill="#15191c" font-family="Arial,sans-serif" font-size="24" font-weight="700">${text(card.cta)}</text>
 </svg>`);
-const wing = await sharp('site/assets/nanawing/aircraft/spectre-1400.webp').resize({ width: 730 }).png().toBuffer();
+const wing = await sharp(card.image || 'site/assets/nanawing/aircraft/spectre-1400.webp').resize({ width: 730 }).png().toBuffer();
 const footer = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
   <rect y="580" width="1200" height="50" fill="#063958"/>
   <text x="62" y="611" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="17">${text(card.credit)}</text>

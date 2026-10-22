@@ -362,8 +362,18 @@ test('sitemap preserves editorial dates in the Worker and static fallback', asyn
   assert.ok(!live.has('https://www.narenana.com/wings/sold-out-wing/'))
 })
 
+// A model the Nanawing sim recreates links its practise page from the summary panel (SIM_PAGES);
+// every other model gets no such line.
+test('product page: a model Nanawing recreates links its landing page; others do not', () => {
+  const cat = { name: 'RC planes', path_prefix: '/wings', spec_schema: '[]' }
+  const chupito = renderMaster(cat, { id: 7, brand: 'TBS', name: 'Chupito', slug: 'tbs-chupito', specs: '{}', power: 'electric', role_tags: '["FPV / Flying Wing"]' }, [offer()])
+  assert.match(chupito, /<p class="pd-sim">Fly it before you buy it: <a href="\/nanawing\/chupito-simulator\/">the TBS Chupito in Nanawing<\/a>, free in your browser\.<\/p>/)
+  const other = renderMaster(cat, { id: 8, brand: 'FMS', name: 'Ranger 1220', slug: 'fms-ranger-1220', specs: '{}', power: 'electric', role_tags: '["Trainer"]' }, [offer()])
+  assert.ok(!other.includes('pd-sim'))
+})
+
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
-const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/']
+const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/', '/nanawing/chupito-simulator/']
 for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, async () => {
   const response = await fetch(base + path)
   assert.equal(response.status, 200)
