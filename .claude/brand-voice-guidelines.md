@@ -67,6 +67,7 @@ of content we wanted to avoid." Any change to a page means the whole page passes
 | "Where the numbers come from: a test bot flies each aircraft… The bench is rerun after any tuning." (a whole section, live on www until 15 Oct; owner: "why does this even exist") | Cut the section. The spec table carries the numbers. |
 | "With a measured 249 km/h top speed in the simulator…" | "It tops out at 249 km/h, so start setting up your turns sooner." |
 | "4 aircraft, from a 215 g twin to a 2 kg wing" | "Pick your wing: start on a forgiving trainer, then work up to a 323 km/h wing" |
+| "Check the numbers before your first throw" (a spec-card heading, 23 Oct 2026; owner: "how is checking numbers a thing that a user wants to do") | "This is what you’re flying". A heading names what the pilot does or gets in the air, never a reading task: check, read, learn, know, compare the specs. |
 
 ## Voice attributes (constant everywhere)
 
