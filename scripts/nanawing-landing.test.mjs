@@ -137,6 +137,11 @@ test('watch, buy, replay: the videos, the live price slot and the log viewer lin
   assert.ok(!/₹/.test(visible), 'no price is baked into the static page');
   // Replay: the log viewer, its walkthrough and its guides.
   for (const href of ['/log-viewer/', '/videos/log-viewer-walkthrough/', '/log-viewer/guides/']) assert.ok(main.includes(`href="${href}"`), `links ${href}`);
+  // Thanks: the maker's site and the product page, from the thanks section.
+  const thanks = main.match(/<section class="ac-practice ac-thanks" id="thanks"[\s\S]*?<\/section>/);
+  assert.ok(thanks, 'the thanks section exists');
+  for (const href of ['https://www.team-blacksheep.com/', aircraft.credit.url]) assert.ok(thanks[0].includes(`href="${href}" target="_blank" rel="noopener"`), `thanks links ${href}`);
+  assert.ok(!/official|endorse/i.test(text(thanks[0])), 'the thanks never claims an official tie');
 });
 
 test('voice: no banned words; "official" appears only in the FAQ denial; the safety line once', () => {

@@ -81,6 +81,8 @@ const prints = copy.prints
   ? `<section class="ac-practice ac-prints" id="prints" aria-labelledby="prints-title"><h2 id="prints-title">${esc(copy.prints.h2)}</h2><p>${esc(copy.prints.intro)}</p>${copy.prints.groups.map((g) =>
     `<h3>${esc(g.h3)}</h3><ul class="ac-print-list">${g.items.map(printItem).join('')}</ul>`).join('')}${copy.prints.note ? `<p class="ac-note">${esc(copy.prints.note)}</p>` : ''}</section>`
   : '';
+// The owner's thank-you to the maker, with links to their site and the product page. Optional.
+const thanks = copy.thanks ? sec('thanks', 'ac-practice ac-thanks', copy.thanks.h2, `${paras(copy.thanks.paragraphs)}${links(copy.thanks.links)}`) : '';
 // copy.faqNote: the one small-print safety line, under the answers rather than inside one.
 const faq = `<section class="ac-faq" id="faq" aria-labelledby="faq-title"><h2 id="faq-title">${esc(copy.faq.h2)}</h2>${copy.faq.items.map((f) =>
   `<details><summary>${esc(f.q)}</summary><p>${esc(f.a)}${f.link ? ` ${link(f.link)}.` : ''}</p></details>`).join('')}<p class="ac-note">${esc(copy.faqNote)}</p></section>`;
@@ -98,6 +100,7 @@ ${buy}
 ${build}
 ${prints}
 ${logs}
+${thanks}
 ${faq}
 ${final}
 </div>`;

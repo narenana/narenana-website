@@ -146,6 +146,17 @@
       { "href": "/log-viewer/guides/", "label": "Turn on logging in EdgeTX, Betaflight or iNAV" }
     ]
   },
+  "thanks": {
+    "_about": "The owner's thank-you to Team BlackSheep (owner, 23 Oct 2026). First person, as on the homepage's contact block. The 'most loved' line is tied to the videos above as its evidence. Permission facts stay factual; the small print under the spec card carries the recreation note.",
+    "h2": "Thank you, Team BlackSheep",
+    "paragraphs": [
+      "Judging by how many pilots film it, the Chupito is one of the most loved FPV wings flying today, and the people at Team BlackSheep built it that way: tough, quick, easy to put together and a joy to throw. Thank you for making it, and for letting it fly in Nanawing under its own name."
+    ],
+    "links": [
+      { "href": "https://www.team-blacksheep.com/", "label": "Team BlackSheep" },
+      { "href": "https://www.team-blacksheep.com/products/prod:tbs_chupito_kit", "label": "The TBS Chupito at Team BlackSheep" }
+    ]
+  },
   "faq": {
     "h2": "Questions",
     "items": [
