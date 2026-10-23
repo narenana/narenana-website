@@ -457,7 +457,7 @@ test('the Chupito page is served with its Wings price slot filled or intact', as
   const slots = [...html.matchAll(/<div class="ac-offers" data-wings-offers="tbs-chupito:([a-z-]+)">([\s\S]*?)<\/div><\/article>/g)]
   assert.deepEqual(slots.map((m) => m[1]), ['kit', 'set', 'crash-a-lot', 'other'], 'one slot per bundle, plus other')
   for (const [, bundle, inner] of slots.slice(0, 3)) {
-    assert.ok(/<table class="ac-offers-table">/.test(inner) || /No Indian seller we check lists|is on the Wings page\./.test(inner), `${bundle}: a table, its empty-state line or the fallback`)
+    assert.ok(/<table class="ac-offers-table">/.test(inner) || /no Indian seller we check lists|on the Wings page\./.test(inner), `${bundle}: a table, its empty-state line or the fallback`)
   }
 })
 test('redirect, genuine 404, staging-only preview exclusion and sitemap discovery', async () => {

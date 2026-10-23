@@ -68,7 +68,7 @@ export function offersTable(offers) {
     const config = `${esc(configLabel(o, 'Not stated'))}${o.pack_qty > 1 ? ` ×${o.pack_qty}` : ''}${o.variant ? `<small>${esc(o.variant)}</small>` : ''}`
     const price = o.flagged ? `<span class="ac-offer-held">${HELD}</span>` : Number.isFinite(o.price_inr) && o.price_inr > 0 ? inr(o.price_inr) : '—'
     const checked = when(o) ? `<small>last checked ${dayOf(when(o))}</small>` : ''
-    const stock = o.dead ? 'Gone' : o.in_stock ? 'In stock' : 'Out of stock'
+    const stock = o.dead ? 'Listing removed' : o.in_stock ? 'In stock' : 'Out of stock'
     const buy = o.dead ? '' : `<a class="ac-btn ac-btn-sm${o.in_stock ? '' : ' ac-btn-quiet'}" href="${esc(o.url_canonical)}" ${ext}>${o.in_stock ? 'Buy' : 'View'}&nbsp;<span aria-hidden="true">↗</span></a>`
     return `<tr class="${state}"><th scope="row" class="ac-offer-seller">${seller}${flags}</th><td class="ac-offer-config">${config}</td><td class="ac-offer-price">${price}${checked}</td><td class="ac-offer-stock">${stock}</td><td class="ac-offer-buy">${buy}</td></tr>`
   }
