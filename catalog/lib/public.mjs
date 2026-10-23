@@ -387,7 +387,7 @@ export function productSnippet(m, offers, specs, { headlineOffer, liveMin, price
 // price can't top the table); otherwise the query's order (cheapest first).
 // Shared with the aircraft landing pages' seller table (src/wings-live.js).
 export const offerOrder = (list) => list.map((o, i) => [o, i]).sort(([a, i], [b, j]) =>
-  (a.dead - b.dead) || (b.in_stock - a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
+  (!!a.dead - !!b.dead) || (!!b.in_stock - !!a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
 
 // landings: productLandings() from grid-next.mjs, the model's role and power
 // landing links (only valid, indexable landings carry an href). Omitted in
