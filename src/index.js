@@ -18,7 +18,7 @@ import { handleStats, refreshStats } from './stats.js'
 import { handleDebrief, DebriefLimiter } from '../debrief/lib/worker.mjs'
 import { handleUsage } from '../usage/lib/worker.mjs'
 import { aircraftRecords, withRecords } from './aircraft-records.js'
-import { LANDINGS, fillWingsLine } from './wings-live.js'
+import { LANDINGS, fillWings } from './wings-live.js'
 
 // Durable Object for the Flight Debrief rate limiter + daily budget.
 // Re-exported so the runtime can instantiate the class named in
@@ -146,7 +146,7 @@ export default {
         : isAircraftPage
           ? await cachedAircraftPage(request, env, ctx, isLocal)
           : landing
-            ? await cachedFilledPage(request, env, ctx, isLocal, { path: url.pathname, tag: landing.tag, fill: (page, state) => fillWingsLine(page, env, state, landing.slug) })
+            ? await cachedFilledPage(request, env, ctx, isLocal, { path: url.pathname, tag: landing.tag, fill: (page, state) => fillWings(page, env, state, landing) })
             : await staticAsset(request, env)
 
     return harden(response, url, isLocal, { staticFile: url.pathname !== '/' && !isAircraftPage && !landing })

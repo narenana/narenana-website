@@ -125,6 +125,15 @@ test('watch, buy, replay: the videos, the live price slot and the log viewer lin
   assert.deepEqual(list.itemListElement.map((e) => e.url), prints.map((p) => p.href));
   // Buy: the Worker's slot with the fallback sentence; no price is baked into the page.
   assert.ok(main.includes(`<p class="ac-live" data-wings="${copy.wingsSlug}">${copy.buy.fallback}</p>`));
+  // One card per bundle, each with its what-is-in-the-box and who-it-is-for lines and a listings slot;
+  // the hidden "other" card is there for listings that match no bundle.
+  for (const v of copy.buy.variants) {
+    assert.ok(main.includes(`<article class="ac-variant" id="buy-${v.id}">`), `${v.id} card`);
+    assert.ok(visible.includes(v.includes) && visible.includes(v.pick), `${v.id} copy`);
+    assert.ok(main.includes(`<div class="ac-offers" data-wings-offers="${copy.wingsSlug}:${v.id}"><p class="ac-note">${copy.buy.tableFallback}</p></div>`), `${v.id} slot with its fallback`);
+    assert.doesNotThrow(() => new RegExp(v.match, 'i'), `${v.id} pattern compiles`);
+  }
+  assert.ok(main.includes(`id="buy-other" hidden`) && main.includes(`data-wings-offers="${copy.wingsSlug}:other"`), 'the hidden other card');
   assert.ok(!/₹/.test(visible), 'no price is baked into the static page');
   // Replay: the log viewer, its walkthrough and its guides.
   for (const href of ['/log-viewer/', '/videos/log-viewer-walkthrough/', '/log-viewer/guides/']) assert.ok(main.includes(`href="${href}"`), `links ${href}`);

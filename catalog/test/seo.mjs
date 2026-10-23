@@ -388,6 +388,44 @@ test('wings-live: the landing page price line follows the product page rules', a
     'Out of stock at the 1 Indian seller we check · last seen ₹9,499 on 1 Oct 2026')
 })
 
+// The landing page's seller table: the product page's rows and rules in the page's own markup.
+test('wings-live: the seller table orders rows like the product page and never quotes a flagged amount', async () => {
+  const { offersTable } = await import('../../src/wings-live.js')
+  assert.equal(offersTable([]), null)
+  const checked = Date.UTC(2026, 9, 21)
+  const html = offersTable([
+    offer({ flagged: 'price_jump', price_inr: 1733, source_name: 'flagged.example', last_checked: checked }),
+    offer({ price_inr: 22500, source_name: 'fpvguru.in', last_checked: checked, url_canonical: 'https://fpvguru.example/chupito' }),
+    offer({ in_stock: 0, price_inr: 23000, source_name: 'oos.example', last_checked: checked, url_canonical: 'https://oos.example/chupito' }),
+    offer({ dead: 1, price_inr: 24000, source_name: 'gone.example', tax_included: 0 }),
+  ])
+  const rows = [...html.matchAll(/<tr class="(is-[a-z]+)">([\s\S]*?)<\/tr>/g)].map((m) => [m[1], m[2]])
+  assert.deepEqual(rows.map(([state]) => state), ['is-live', 'is-live', 'is-oos', 'is-gone'])
+  assert.ok(rows[0][1].includes('fpvguru.in') && rows[0][1].includes('₹22,500'), 'the priced live row leads')
+  assert.ok(rows[1][1].includes('flagged.example') && rows[1][1].includes('Price on the seller’s page'), 'the flagged live row follows')
+  assert.ok(!html.includes('1,733') && !html.includes('1733'), 'a flagged amount is never quoted')
+  assert.ok(rows[0][1].includes('>Buy&nbsp;') && rows[0][1].includes('href="https://fpvguru.example/chupito"'), 'in stock: Buy')
+  assert.ok(rows[2][1].includes('>View&nbsp;') && rows[2][1].includes('ac-btn-quiet'), 'out of stock: View')
+  assert.ok(!rows[3][1].includes('<a '), 'gone: no link at all')
+  assert.ok(html.includes('last checked 21 Oct 2026') && html.includes('excluding tax or duty'))
+  for (const [, href] of html.matchAll(/href="([^"]+)"/g)) assert.ok(html.includes(`href="${href}" target="_blank" rel="noopener nofollow"`), `${href} opens in a new tab with nofollow`)
+})
+
+// Listings land on the Chupito page's bundle cards by their titles (content/nanawing/chupito-simulator.json).
+test('wings-live: listings map onto the Chupito bundles by title', async () => {
+  const { bundleOf, LANDINGS } = await import('../../src/wings-live.js')
+  const { variants } = LANDINGS['/nanawing/chupito-simulator/']
+  assert.deepEqual(variants.map((v) => v.id), ['kit', 'set', 'crash-a-lot'])
+  const bundle = (title) => bundleOf({ title }, variants)
+  assert.equal(bundle('TBS Chupito Set'), 'set')
+  assert.equal(bundle('TBS Chupito 800mm FPV Airplane – PNP – Crash A Lot Kit'), 'crash-a-lot', 'Crash-A-Lot wins over the kit and PNP words in the same title')
+  assert.equal(bundle('TBS CHUPITO 800MM-PNP-CRASH A LOT KIT'), 'crash-a-lot')
+  assert.equal(bundle('TBS Chupito Crash A Lot Set'), 'crash-a-lot')
+  assert.equal(bundle('TBS Chupito PNP'), 'set', 'a shop\'s PNP is the Set')
+  assert.equal(bundle('TBS Chupito Kit'), 'kit')
+  assert.equal(bundle('TBS Chupito spare wing'), 'other')
+})
+
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
 const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/', '/nanawing/chupito-simulator/']
 for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, async () => {
@@ -416,6 +454,11 @@ test('the Chupito page is served with its Wings price slot filled or intact', as
   const slot = html.match(/<p class="ac-live" data-wings="tbs-chupito">([\s\S]*?)<\/p>/)
   assert.ok(slot, 'the slot is on the page')
   assert.ok(/^(<strong>From ₹[\d,]+<\/strong> at .+|In stock at .+|Out of stock at .+|Compare prices and stock at Indian hobby sellers on the Wings page\.)$/.test(slot[1]), slot[1])
+  const slots = [...html.matchAll(/<div class="ac-offers" data-wings-offers="tbs-chupito:([a-z-]+)">([\s\S]*?)<\/div><\/article>/g)]
+  assert.deepEqual(slots.map((m) => m[1]), ['kit', 'set', 'crash-a-lot', 'other'], 'one slot per bundle, plus other')
+  for (const [, bundle, inner] of slots.slice(0, 3)) {
+    assert.ok(/<table class="ac-offers-table">/.test(inner) || /No Indian seller we check lists|is on the Wings page\./.test(inner), `${bundle}: a table, its empty-state line or the fallback`)
+  }
 })
 test('redirect, genuine 404, staging-only preview exclusion and sitemap discovery', async () => {
   const redirect = await fetch(base + '/index.html?source=test', { redirect: 'manual' })
