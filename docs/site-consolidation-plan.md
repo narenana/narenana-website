@@ -455,6 +455,8 @@ Log the cutover dates in GA4 and on `/stats`, so the comparison is honest.
 
 ## Change log
 
+- **2026-10-23** · **Nanawing 2 shortcut readability (preview only).** nanawing2 `e9b2889` on `codex/nana3d` gives the in-flight shortcut strip larger brand-font labels, distinct blue keycaps, stronger contrast and more spacing. All keys, aircraft-specific gear/flap states and control behaviour are unchanged. **M2/M3:** refresh game screenshots after release if they show the strip; no Fact inventory or URL-map changes, and no milestone-date change. This does not release Nana3D or change production.
+
 - **2026-10-23** · **Nana3D wider start and blue/white livery (preview only).** nanawing2 `842c306` on `codex/nana3d` changes the owner-selected artwork to NanaJet's #087bc1 blue and pearl white, refreshes the picker/landing thumbnail and alt text, and fits the full parked aircraft with more runway/HUD margin. Geometry, physical size, neutral trims, flight camera and handling are unchanged. **M2/M3:** carry the blue/white thumbnail with Nana3D after release; production remains nine aircraft. The existing branch preview alias is updated; immutable deployment URLs retain their original builds. No new indexable page, URL move or milestone-date change.
 
 - **2026-10-22** · **Nana3D neutral keyboard trims (preview only).** nanawing2 `7eaef5b` changes Nana3D factory pitch/roll/rudder/throttle trims to zero, retaining its keyboard expo. The menu says Restore default setup; the calculated cruise trims are optional under Apply cruise trims. Saved custom profiles and transmitter-owned trim/expo survive. **M2/M3:** carry this setup wording with Nana3D after release; no new URL or milestone-date change. Production is unchanged.
