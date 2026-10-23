@@ -82,12 +82,37 @@ export async function handleUsage(request, env) {
 export async function usageSummary(env, days = 30) {
   if (!env.USAGE_DB) return null
   const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10)
+  // One pass keyed by day gives BOTH the window totals and the day-on-day
+  // series — lv_usage is already a per-UTC-day rollup, so this is exact.
   const { results } = await env.USAGE_DB.prepare(
-    `SELECT event, dim, SUM(count) AS n FROM lv_usage WHERE day >= ? GROUP BY event, dim`,
+    `SELECT day, event, dim, SUM(count) AS n FROM lv_usage WHERE day >= ? GROUP BY day, event, dim`,
   ).bind(since).all()
   const rows = results || []
   const sum = (event, dim) => rows.filter(r => r.event === event && (dim == null || r.dim === dim)).reduce((a, r) => a + r.n, 0)
-  const byDim = event => rows.filter(r => r.event === event && r.dim).map(r => ({ dim: r.dim, n: r.n })).sort((a, b) => b.n - a.n)
+  const byDim = (event) => {
+    const m = {}
+    rows.filter(r => r.event === event && r.dim).forEach(r => { m[r.dim] = (m[r.dim] || 0) + r.n })
+    return Object.entries(m).map(([dim, n]) => ({ dim, n })).sort((a, b) => b.n - a.n)
+  }
+
+  // Day-on-day series, zero-filled across the whole window (oldest → newest),
+  // so charts draw a continuous line and the delta windows line up.
+  const dayList = []
+  for (let i = days - 1; i >= 0; i--) dayList.push(new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10))
+  const perDay = (event, dim) => {
+    const m = {}
+    rows.filter(r => r.event === event && (dim == null || r.dim === dim)).forEach(r => { m[r.day] = (m[r.day] || 0) + r.n })
+    return dayList.map(d => m[d] || 0)
+  }
+  const daily = {
+    days: dayList,
+    loads: perDay('log_loaded', null),
+    failed: perDay('parse_failed', null),
+    summaries: perDay('log_summary', null), // flights analysed
+    debriefs: perDay('debrief_shown', null),
+    crashes: perDay('debrief_shown', 'critical'),
+    narrations: perDay('narration_completed', null),
+  }
 
   const loaded = sum('log_loaded', null)
   const failed = sum('parse_failed', null)
@@ -106,5 +131,6 @@ export async function usageSummary(env, days = 30) {
     crashes: sum('debrief_shown', 'critical'),
     byFwFamily: byDim('fw_family'), // betaflight / inav / emuflight
     byCraft: byDim('craft'), // quad / wing / unknown
+    daily,
   }
 }
