@@ -41,7 +41,13 @@ test('search metadata: the title names the aircraft and "simulator", within the 
   assert.ok(html.includes(`<link rel="canonical" href="${site}${copy.path}">`));
   assert.ok(!/<meta[^>]+noindex/.test(html));
   assert.equal((html.match(/<h1\b/g) || []).length, 1, 'one H1');
-  assert.match(text(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)[1]), /TBS Chupito/);
+  assert.equal(text(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)[1]), copy.hero.h1);
+  assert.match(copy.hero.h1, /Chupito simulator/, 'the tagline carries the search phrase');
+  assert.ok(visible.includes(copy.hero.sub) && /TBS Chupito/.test(copy.hero.sub), 'the sub-line names the TBS Chupito');
+  // The hero banner: the sim's own artwork in three sizes, with an alt that names what is in it.
+  const heroImg = main.match(/<img class="ac-hero-bg"[^>]*>/)[0];
+  for (const w of copy.hero.image.widths) assert.ok(heroImg.includes(`/assets/nanawing/${copy.hero.image.file}-${w}.webp?v=`), `hero ${w}w, versioned`);
+  assert.ok(heroImg.includes(`alt="${copy.hero.image.alt}"`) && heroImg.includes('fetchpriority="high"'));
   assert.equal(meta('og:image'), `${site}${copy.social.image}`);
   assert.equal(meta('og:title'), copy.social.title);
 });
@@ -92,10 +98,13 @@ test('watch, buy, replay: the videos, the live price slot and the log viewer lin
   // Watch: the owner's flights first, then Team BlackSheep's, then others; every card is a click-to-play
   // facade with a VideoObject (uploadDate from the feed or the catalog), and the player script is on the page.
   const groups = copy.watch.groups;
-  assert.equal(groups[0].h3, 'From my own flights');
-  assert.ok(groups[0].videos.every((v) => v.channel === 'narenana'));
-  assert.equal(groups[1].h3, 'From Team BlackSheep');
-  assert.ok(groups[1].videos.every((v) => v.channel === 'Team BlackSheep'));
+  assert.ok(groups[0].videos.every((v) => v.channel === 'narenana'), "the owner's own flights lead");
+  // Owner, 23 Oct 2026: a heading promises what the pilot gets or does; never a filler like "Worth your time too".
+  for (const g of groups) {
+    assert.doesNotMatch(g.h3, /worth your time|more videos|other videos|also|too$/i, `${g.h3}: no filler heading`);
+    assert.match(g.h3, /^(Come|Watch|See|Learn|Admire|Fly|Throw|Race|Hear|Join)\b/, `${g.h3}: leads with what the pilot does`);
+    assert.ok(g.videos.length >= 1);
+  }
   const videos = groups.flatMap((g) => g.videos);
   assert.ok(videos.length >= 6 && new Set(videos.map((v) => v.id)).size === videos.length, 'distinct videos');
   for (const v of videos) {

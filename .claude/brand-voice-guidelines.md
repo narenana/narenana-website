@@ -68,6 +68,7 @@ of content we wanted to avoid." Any change to a page means the whole page passes
 | "With a measured 249 km/h top speed in the simulator…" | "It tops out at 249 km/h, so start setting up your turns sooner." |
 | "4 aircraft, from a 215 g twin to a 2 kg wing" | "Pick your wing: start on a forgiving trainer, then work up to a 323 km/h wing" |
 | "Check the numbers before your first throw" (a spec-card heading, 23 Oct 2026; owner: "how is checking numbers a thing that a user wants to do") | "Fly a powerful modern machine" (the owner's own heading for the spec card). A heading names what the pilot does or gets in the air, never a reading task: check, read, learn, know, compare the specs. |
+| "Worth your time too" (a video-group heading, 23 Oct 2026; owner: "the least effort heading on the planet… no human has ever put something unattractive as a heading on content on their site") | "Learn to launch it", "Learn to tune it", "Admire the sunset with the Chupito", "Watch it flat out". Every heading carries excitement, relevance and a benefit for the pilot. If no such heading exists for a block, use no heading at all and just show the content. Never a neutral filler: "Worth your time", "More videos", "Other", "Also". |
 
 ## Voice attributes (constant everywhere)
 
