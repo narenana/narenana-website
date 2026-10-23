@@ -45,6 +45,10 @@ export function credit(a) {
   return esc(c.text);
 }
 
+// Click a video thumbnail (a.ac-yt[data-yt]) to load the player in its place; nothing from
+// YouTube loads before that. The iframe's title is the card's .ac-yt-title text.
+export const YT_SCRIPT = `<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[data-yt]');if(!a||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();var f=document.createElement('iframe');f.src='https://www.youtube-nocookie.com/embed/'+a.getAttribute('data-yt')+'?autoplay=1&rel=0';f.title=a.parentNode.querySelector('.ac-yt-title').textContent;f.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';f.allowFullscreen=true;f.className='ac-yt ac-yt-on';a.replaceWith(f);f.focus()});</script>`;
+
 export const specRows = [
   ['Top speed', (a) => `${fmt(a.topSpeedKmh)}&nbsp;km/h`],
   ['Stall speed', (a) => `${fmt(a.stallSpeedKmh)}&nbsp;km/h`],

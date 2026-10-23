@@ -7,7 +7,7 @@
 // (src/aircraft-records.js), so the page never ships stale times.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { site, page } from './page-shell.mjs';
-import { esc, ext, play as playUrl, fmt, IMG, ALT, imageDims, img as imgTag, credit, specRows } from './nanawing-render.mjs';
+import { esc, ext, play as playUrl, fmt, IMG, ALT, imageDims, img as imgTag, credit, specRows, YT_SCRIPT } from './nanawing-render.mjs';
 
 const facts = JSON.parse(readFileSync('content/_facts/nanawing.json', 'utf8'));
 const copy = JSON.parse(readFileSync('content/nanawing/aircraft.json', 'utf8'));
@@ -105,7 +105,7 @@ const schema = {
 };
 
 // Click a video thumbnail to load the player; nothing from YouTube loads before that.
-const scripts = `<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[data-yt]');if(!a||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();var f=document.createElement('iframe');f.src='https://www.youtube-nocookie.com/embed/'+a.getAttribute('data-yt')+'?autoplay=1&rel=0';f.title=a.parentNode.querySelector('.ac-yt-title').textContent;f.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';f.allowFullscreen=true;f.className='ac-yt ac-yt-on';a.replaceWith(f);f.focus()});</script>`;
+const scripts = YT_SCRIPT;
 
 mkdirSync(`site${path}`, { recursive: true });
 writeFileSync(`site${path}index.html`, page({

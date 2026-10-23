@@ -18,7 +18,7 @@ const SITE = 'https://www.narenana.com'
 const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 // Models the Nanawing sim recreates: their product page links the practise page on www
 // (content/nanawing/<page>.json), keyed by the master's slug.
-const SIM_PAGES = { 'tbs-chupito': { href: '/nanawing/chupito-simulator/', label: 'the TBS Chupito in Nanawing' } }
+const SIM_PAGES = { 'tbs-chupito': { href: '/nanawing/chupito-simulator/', label: 'fly it in Nanawing' } }
 
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`
@@ -552,7 +552,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
         <dl class="spec">
           ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}${landingRows}
         </dl>
-        ${SIM_PAGES[m.slug] ? `<p class="pd-sim">Fly it before you buy it: <a href="${SIM_PAGES[m.slug].href}">${esc(SIM_PAGES[m.slug].label)}</a>, free in your browser.</p>` : ''}
+        ${SIM_PAGES[m.slug] ? `<p class="pd-sim">Try the ${esc(name)} before you buy: <a href="${SIM_PAGES[m.slug].href}">${esc(SIM_PAGES[m.slug].label)}</a>, free in your browser.</p>` : ''}
       </div>
     </section>
     <p class="lede">${esc(overview)}</p>

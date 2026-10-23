@@ -367,9 +367,25 @@ test('sitemap preserves editorial dates in the Worker and static fallback', asyn
 test('product page: a model Nanawing recreates links its landing page; others do not', () => {
   const cat = { name: 'RC planes', path_prefix: '/wings', spec_schema: '[]' }
   const chupito = renderMaster(cat, { id: 7, brand: 'TBS', name: 'Chupito', slug: 'tbs-chupito', specs: '{}', power: 'electric', role_tags: '["FPV / Flying Wing"]' }, [offer()])
-  assert.match(chupito, /<p class="pd-sim">Fly it before you buy it: <a href="\/nanawing\/chupito-simulator\/">the TBS Chupito in Nanawing<\/a>, free in your browser\.<\/p>/)
+  assert.match(chupito, /<p class="pd-sim">Try the TBS Chupito before you buy: <a href="\/nanawing\/chupito-simulator\/">fly it in Nanawing<\/a>, free in your browser\.<\/p>/)
   const other = renderMaster(cat, { id: 8, brand: 'FMS', name: 'Ranger 1220', slug: 'fms-ranger-1220', specs: '{}', power: 'electric', role_tags: '["Trainer"]' }, [offer()])
   assert.ok(!other.includes('pd-sim'))
+})
+
+// The Chupito page's live price line (src/wings-live.js) follows the product page's rules: the
+// headline is the cheapest live, new, single-unit, unflagged listing; a withheld amount is never quoted.
+test('wings-live: the landing page price line follows the product page rules', async () => {
+  const { offerLine } = await import('../../src/wings-live.js')
+  assert.equal(offerLine([]), null)
+  assert.equal(offerLine([offer({ dead: 1 })]), null, 'every listing gone: the page keeps its own sentence')
+  const checked = Date.UTC(2026, 9, 21)
+  assert.equal(offerLine([offer({ price_inr: 22500, source_name: 'fpvguru.in', last_checked: checked }), offer({ price_inr: 23000, source_name: 'b.example', last_checked: checked })]),
+    '<strong>From ₹22,500</strong> at fpvguru.in · in stock at 2 Indian sellers · last checked 21 Oct 2026')
+  const flagged = offerLine([offer({ flagged: 'price_jump', price_inr: 1733, last_checked: checked })])
+  assert.match(flagged, /^In stock at 1 Indian seller · price on the seller’s page · last checked 21 Oct 2026$/)
+  assert.ok(!flagged.includes('1,733') && !flagged.includes('1733'), 'a flagged amount is never quoted')
+  assert.equal(offerLine([offer({ in_stock: 0, price_inr: 9499, last_checked: null, last_seen: Date.UTC(2026, 9, 1) })]),
+    'Out of stock at the 1 Indian seller we check · last seen ₹9,499 on 1 Oct 2026')
 })
 
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
@@ -391,6 +407,15 @@ for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, asy
     assert.ok(video?.uploadDate && video?.duration && video?.embedUrl)
     assert.match(html, /<iframe[^>]+youtube/)
   }
+})
+// The Worker fills the Chupito page's price slot from the catalog (or leaves the page's own sentence).
+test('the Chupito page is served with its Wings price slot filled or intact', async () => {
+  const response = await fetch(base + '/nanawing/chupito-simulator/')
+  assert.equal(response.status, 200)
+  const html = await response.text()
+  const slot = html.match(/<p class="ac-live" data-wings="tbs-chupito">([\s\S]*?)<\/p>/)
+  assert.ok(slot, 'the slot is on the page')
+  assert.ok(/^(<strong>From ₹[\d,]+<\/strong> at .+|In stock at .+|Out of stock at .+|Compare prices and stock at Indian hobby sellers on the Wings page\.)$/.test(slot[1]), slot[1])
 })
 test('redirect, genuine 404, staging-only preview exclusion and sitemap discovery', async () => {
   const redirect = await fetch(base + '/index.html?source=test', { redirect: 'manual' })

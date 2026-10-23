@@ -6,7 +6,7 @@
 // spec card (nanawing-render.mjs), so the two never show different figures.
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { site, page } from './page-shell.mjs';
-import { esc, ext, play, IMG, ALT, imageDims, img, specRows } from './nanawing-render.mjs';
+import { esc, ext, play, IMG, ALT, imageDims, img, specRows, YT_SCRIPT } from './nanawing-render.mjs';
 
 const contentPath = process.argv[2] || 'content/nanawing/chupito-simulator.json';
 const facts = JSON.parse(readFileSync('content/_facts/nanawing.json', 'utf8'));
@@ -27,6 +27,15 @@ const link = (l) => (/^https?:/.test(l.href)
   : `<a href="${esc(l.href)}">${esc(l.label)}</a>`);
 const paras = (list) => list.map((p) => `<p>${esc(p)}</p>`).join('');
 const sec = (id, cls, h2, inner) => `<section class="${cls}" id="${id}" aria-labelledby="${id}-title"><h2 id="${id}-title">${esc(h2)}</h2>${inner}</section>`;
+const links = (list) => `<ul class="ac-links">${list.map((l) => `<li>${link(l)}</li>`).join('')}</ul>`;
+
+// Videos: the hangar page's click-to-play cards (YT_SCRIPT). Only well-formed YouTube ids reach
+// the markup. A published date is an ISO string (the channel feed) or epoch seconds (the catalog).
+const YT_ID = /^[A-Za-z0-9_-]{6,15}$/;
+const videos = copy.watch.groups.flatMap((g) => g.videos);
+for (const v of videos) if (!YT_ID.test(v.id)) throw new Error(`Bad video id: ${v.id}`);
+const publishedIso = (p) => (typeof p === 'number' ? new Date(p * 1000) : new Date(p)).toISOString();
+const videoCard = (v) => `<li><a class="ac-yt" href="https://www.youtube.com/watch?v=${v.id}" data-yt="${v.id}" ${ext}><img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" width="480" height="360" loading="lazy" decoding="async"><span class="ac-yt-play" aria-hidden="true">▶</span><span class="sr-only">Play: ${esc(v.title)}</span></a><p class="ac-yt-title">${esc(v.title)}</p><p class="ac-yt-by">${esc(v.channel)}</p></li>`;
 
 // The one small-print line about the recreation, under the spec card. Its credit and link come
 // from the facts, so the maker's terms (credited and linked wherever the aircraft is shown)
@@ -35,12 +44,12 @@ const makerUrl = a.credit.url ?? a.credit.designerUrl;
 const smallPrint = `${esc(copy.smallPrint)} ${a.credit.kind === 'reference' ? 'Reference airframe by' : 'Aircraft design by'} <a href="${esc(makerUrl)}" ${ext}>${esc(a.credit.designer)}&nbsp;<span aria-hidden="true">↗</span></a>.`;
 
 const hero = `<div class="ac-hero"><span class="eyebrow">${esc(copy.hero.eyebrow)}</span><h1>${esc(copy.hero.h1)}</h1><p class="lede">${esc(copy.hero.lede)}</p>
-<div class="ac-actions">${btn(copy.hero.cta)}<a class="ac-link" href="#fly">${esc(copy.hero.secondary)} <span aria-hidden="true">↓</span></a></div>
+<div class="ac-actions">${btn(copy.hero.cta)}<nav class="ac-jumps" aria-label="On this page">${copy.hero.jumps.map((j) => `<a href="${esc(j.href)}">${esc(j.label)}</a>`).join('')}</nav></div>
 <p class="ac-note">${esc(copy.hero.ctaNote)}</p></div>`;
 
 const wing = `<section class="ac-craft" id="wing" aria-labelledby="wing-title">
 <figure class="ac-craft-img">${img(a, dims, '(max-width:860px) 92vw, 520px', { eager: true })}</figure>
-<div class="ac-craft-body"><span class="eyebrow">${esc(copy.specs.eyebrow)}</span><h2 id="wing-title">${esc(copy.specs.h2)}</h2><p>${esc(copy.specs.intro)}</p>
+<div class="ac-craft-body"><span class="eyebrow">${esc(copy.specs.eyebrow)}</span><h2 id="wing-title">${esc(copy.specs.h2)}</h2>${copy.specs.intro ? `<p>${esc(copy.specs.intro)}</p>` : ''}
 <dl class="ac-specs">${specRows.map(([label, f]) => `<div><dt>${label}</dt><dd>${f(a)}</dd></div>`).join('')}</dl>
 <p class="ac-credit">${smallPrint}</p>
 <p class="ac-more"><a href="${esc(copy.more.href)}">${esc(copy.more.label)} <span aria-hidden="true">→</span></a></p></div></section>`;
@@ -48,7 +57,25 @@ const wing = `<section class="ac-craft" id="wing" aria-labelledby="wing-title">
 const doing = sec('fly', 'ac-practice ac-doing', copy.doing.h2, copy.doing.items.map((i) => `<h3>${esc(i.h3)}</h3><p>${esc(i.p)}</p>`).join(''));
 const controls = sec('controls', 'ac-practice', copy.controls.h2, paras(copy.controls.paragraphs));
 const bites = sec('bites', 'ac-practice', copy.bites.h2, `<ul class="ac-bites">${copy.bites.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`);
-const real = sec('real', 'ac-practice', copy.real.h2, `<p>${esc(copy.real.p)}</p><ul class="ac-links">${copy.real.links.map((l) => `<li>${link(l)}</li>`).join('')}</ul>`);
+const watch = `<section class="ac-practice ac-watch" id="watch" aria-labelledby="watch-title"><h2 id="watch-title">${esc(copy.watch.h2)}</h2><p>${esc(copy.watch.intro)}</p>${copy.watch.groups.map((g) =>
+  `<h3>${esc(g.h3)}</h3><ul class="ac-videos">${g.videos.map(videoCard).join('')}</ul>`).join('')}</section>`;
+// The price line is a slot: the Worker fills it per request from the catalog (src/wings-live.js);
+// the fallback sentence stays when the catalog has nothing to say.
+const buy = sec('buy', 'ac-practice', copy.buy.h2, `<p class="ac-live" data-wings="${esc(copy.wingsSlug)}">${esc(copy.buy.fallback)}</p><p>${esc(copy.buy.p)}</p>${links(copy.buy.links)}`);
+const logs = sec('logs', 'ac-practice', copy.logs.h2, `${paras(copy.logs.paragraphs)}${links(copy.logs.links)}`);
+// 3D prints: a curated list from the model sites, each a link to its designer's own page (none of
+// their files or images are copied here). Optional: only pages with a `prints` block render it.
+const printItem = (p) => `<li><a href="${esc(p.href)}" ${ext}>${esc(p.title)}&nbsp;<span aria-hidden="true">↗</span></a><span class="ac-print-by">${esc(p.by)} · ${esc(p.site)}</span><p>${esc(p.what)}</p></li>`;
+// The owner's own build: each part, what he flies, and the alternates he would stand behind.
+// Optional: rendered only once the list is in the page's JSON.
+const build = copy.build
+  ? sec('build', 'ac-practice ac-build', copy.build.h2, `<p>${esc(copy.build.intro)}</p><div class="ac-table-wrap" role="region" aria-labelledby="build-title" tabindex="0"><table class="ac-table ac-build-table"><thead><tr><th scope="col">Part</th><th scope="col">${esc(copy.build.mineLabel)}</th><th scope="col">${esc(copy.build.altLabel)}</th></tr></thead><tbody>${copy.build.items.map((p) =>
+    `<tr><th scope="row">${esc(p.part)}</th><td>${p.href ? `<a href="${esc(p.href)}" ${ext}>${esc(p.mine)}&nbsp;<span aria-hidden="true">↗</span></a>` : esc(p.mine)}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td>${(p.alternates || []).map(esc).join(', ') || '—'}</td></tr>`).join('')}</tbody></table></div>${copy.build.note ? `<p class="ac-note">${esc(copy.build.note)}</p>` : ''}`)
+  : '';
+const prints = copy.prints
+  ? `<section class="ac-practice ac-prints" id="prints" aria-labelledby="prints-title"><h2 id="prints-title">${esc(copy.prints.h2)}</h2><p>${esc(copy.prints.intro)}</p>${copy.prints.groups.map((g) =>
+    `<h3>${esc(g.h3)}</h3><ul class="ac-print-list">${g.items.map(printItem).join('')}</ul>`).join('')}${copy.prints.note ? `<p class="ac-note">${esc(copy.prints.note)}</p>` : ''}</section>`
+  : '';
 // copy.faqNote: the one small-print safety line, under the answers rather than inside one.
 const faq = `<section class="ac-faq" id="faq" aria-labelledby="faq-title"><h2 id="faq-title">${esc(copy.faq.h2)}</h2>${copy.faq.items.map((f) =>
   `<details><summary>${esc(f.q)}</summary><p>${esc(f.a)}${f.link ? ` ${link(f.link)}.` : ''}</p></details>`).join('')}<p class="ac-note">${esc(copy.faqNote)}</p></section>`;
@@ -57,11 +84,15 @@ const final = `<section class="ac-final"><h2>${esc(copy.final.h2)}</h2><p>${esc(
 const body = `<div class="ac-page ac-landing">
 <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/nanawing/aircraft/">Nanawing aircraft</a> / ${esc(copy.crumb)}</nav>
 ${hero}
+${watch}
 ${wing}
 ${doing}
 ${controls}
 ${bites}
-${real}
+${buy}
+${build}
+${prints}
+${logs}
 ${faq}
 ${final}
 </div>`;
@@ -75,13 +106,25 @@ const schema = {
       { '@type': 'ListItem', position: 2, name: 'Nanawing aircraft', item: site + '/nanawing/aircraft/' },
       { '@type': 'ListItem', position: 3, name: copy.crumb, item: site + path },
     ] },
-    { '@type': 'FAQPage', mainEntity: copy.faq.items.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.link ? `${f.a} ${f.link.label}: ${site}${f.link.href}` : f.a } })) },
+    { '@type': 'FAQPage', mainEntity: copy.faq.items.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.link ? `${f.a} ${f.link.label}: ${f.link.href.startsWith('#') ? site + path : site}${f.link.href}` : f.a } })) },
+    // The curated prints as an ItemList: each entry is the designer's own page.
+    ...(copy.prints ? [{ '@type': 'ItemList', name: `${a.name} 3D prints`, itemListElement: copy.prints.groups.flatMap((g) => g.items).map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: p.title, url: p.href })) }] : []),
+    // One VideoObject per embedded video: video rich-result eligibility, as on the product pages.
+    ...videos.map((v) => ({
+      '@type': 'VideoObject',
+      name: v.title,
+      description: `${v.channel}'s video of the TBS Chupito, on narenana's Chupito page.`,
+      thumbnailUrl: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+      uploadDate: publishedIso(v.published),
+      embedUrl: `https://www.youtube-nocookie.com/embed/${v.id}`,
+      url: `https://www.youtube.com/watch?v=${v.id}`,
+    })),
   ],
 };
 
 // What this page adds to the hangar page's stylesheet: the wing card sits right under the hero,
 // and the text sections get their list and link styles.
-const css = '.ac-landing .ac-actions{margin-bottom:10px}.ac-landing .ac-craft{margin-top:30px;padding-top:0;border-top:0}.ac-landing .ac-craft-img{align-self:start}.ac-more{margin:0;font-weight:700}.ac-doing h3{margin-top:24px}.ac-doing h2+h3{margin-top:0}.ac-bites{margin:0;padding-left:20px}.ac-bites li{margin:0 0 10px}.ac-links{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 28px}.ac-links a{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;text-underline-offset:4px}';
+const css = '.ac-landing .ac-actions{margin-bottom:10px}.ac-jumps{display:flex;flex-wrap:wrap;gap:0 18px}.ac-jumps a{display:inline-flex;align-items:center;min-height:44px;font-weight:700;color:var(--ac-ink);text-underline-offset:4px}.ac-landing .ac-craft{margin-top:56px}.ac-landing .ac-craft-img{align-self:start}.ac-more{margin:0;font-weight:700}.ac-watch h3{margin-top:24px}.ac-watch .ac-videos{margin-top:10px}.ac-yt-by{margin:2px 0 0;font-size:12px;color:var(--ac-muted)}.ac-doing h3{margin-top:24px}.ac-doing h2+h3{margin-top:0}.ac-bites{margin:0;padding-left:20px}.ac-bites li{margin:0 0 10px}.ac-live{font-size:17px}.ac-live strong{color:#C63B2E}.ac-build .ac-table{min-width:0}.ac-build .ac-table th,.ac-build .ac-table td{white-space:normal;vertical-align:top}.ac-build-table small{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-prints h3{margin-top:24px}.ac-print-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}.ac-print-list li{padding:14px 16px;border:1px solid var(--ac-line);border-radius:6px;background:#fff}.ac-print-list a{font-weight:700}.ac-print-by{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-print-list p{margin:6px 0 0;font-size:15px}@media(min-width:600px){.ac-print-list{grid-template-columns:repeat(2,minmax(0,1fr))}}.ac-links{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 28px}.ac-links a{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;text-underline-offset:4px}';
 
 mkdirSync(`site${path}`, { recursive: true });
 writeFileSync(`site${path}index.html`, page({
@@ -93,6 +136,7 @@ writeFileSync(`site${path}index.html`, page({
   body,
   schema,
   head: `<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=862eb507d2"><style>${css}</style>`,
+  scripts: YT_SCRIPT,
 }));
 
 // Stamp ?v= on every asset reference this wrote, as scripts/seo-content.mjs does.

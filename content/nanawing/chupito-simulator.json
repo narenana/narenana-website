@@ -1,46 +1,72 @@
 {
-  "_about": "Copy for www.narenana.com/nanawing/chupito-simulator/, the TBS Chupito's landing page (search: chupito sim, chupito simulator, TBS Chupito simulator). Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json. Voice: .claude/brand-voice-guidelines.md. Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card.",
+  "_about": "Copy for www.narenana.com/nanawing/chupito-simulator/, the TBS Chupito's page (search: chupito sim, chupito simulator, TBS Chupito simulator): watch it, fly it in Nanawing, buy one in India, then replay your own flights in the log viewer. Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json; the buy section's price line is filled per request by the Worker (src/wings-live.js, wingsSlug) and falls back to buy.fallback. Voice: .claude/brand-voice-guidelines.md (strict QA pass 23 Oct 2026). Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card. Third-party video titles are verbatim; the owner's own carry our captions.",
   "path": "/nanawing/chupito-simulator/",
   "aircraft": "chupito",
+  "wingsSlug": "tbs-chupito",
   "crumb": "TBS Chupito simulator",
   "title": "TBS Chupito simulator: fly it free in your browser",
-  "description": "Fly the TBS Chupito in Nanawing, a free FPV wing sim in your browser. Rolls at 360°/s, tops out at 140 km/h, races 5 courses. Keyboard, radio or phone.",
+  "description": "Fly the TBS Chupito in Nanawing, a free FPV wing sim in your browser. Snap it round, then race it on 5 courses, on a laptop or your phone.",
   "social": {
     "title": "Fly the TBS Chupito, free in your browser",
-    "description": "Nanawing has the Chupito in the hangar: snap it round at 360°/s, race it on 5 courses, on a laptop or your phone. No install, no login.",
+    "description": "Snap the Chupito round, then race it on 5 courses, on a laptop or your phone. No install, no login.",
     "image": "/nanawing/chupito-simulator/og.jpg",
-    "imageAlt": "Share card: the TBS Chupito, a dark grey flying wing with a red pusher prop, on a blue background with the words Fly the TBS Chupito",
+    "imageAlt": "The TBS Chupito, a dark grey flying wing with a red pusher prop, on a blue background with the words Fly the TBS Chupito",
     "card": {
       "eyebrow": "NANAWING · FREE FPV WING SIMULATOR",
       "headline": "Fly the TBS Chupito",
-      "aircraft": "800 mm pusher wing",
-      "details": ["Rolls at 360°/s. Tops out at 140 km/h.", "Keyboard, RC radio or phone. No install."],
+      "aircraft": "800mm pusher wing",
+      "details": ["Rolls at 360°/s. Tops out at 140 km/h.", "Fly on a keyboard, RC radio or phone. No install."],
       "cta": "Fly it free",
-      "credit": "Nanawing’s recreation; not TBS flight data. Reference airframe by Team BlackSheep.",
+      "credit": "Nanawing’s recreation. Reference airframe by Team BlackSheep.",
       "image": "site/assets/nanawing/aircraft/chupito-1400.webp"
     }
   },
   "hero": {
     "eyebrow": "Nanawing · free FPV wing simulator",
-    "h1": "Fly the TBS Chupito in a free browser simulator",
-    "lede": "Team BlackSheep’s 800 mm pusher wing is in Nanawing’s hangar, recreated so you can learn its habits before your first field day with the real one. Throw it, snap it round tight turns, race other pilots for the fastest lap. No install, no login: open it in your browser and fly.",
+    "h1": "Fly the TBS Chupito free, in your browser",
+    "lede": "Practise on Team BlackSheep’s 800mm pusher wing in Nanawing before your first field day with the real one. Open it in your browser and fly: no install, no login. Then find one in India, and once yours is flying, replay your own flights.",
     "cta": "Fly the Chupito now",
-    "ctaNote": "Opens Nanawing’s hangar with the Chupito picked. Press Launch and you’re away.",
-    "secondary": "What you’ll be doing"
+    "ctaNote": "Press Launch when the hangar opens and you’re away.",
+    "jumps": [
+      { "href": "#watch", "label": "Watch it" },
+      { "href": "#wing", "label": "Fly it in the sim" },
+      { "href": "#buy", "label": "Buy one in India" },
+      { "href": "#prints", "label": "3D prints" },
+      { "href": "#logs", "label": "Replay your flights" }
+    ]
+  },
+  "watch": {
+    "h2": "Watch it fly first",
+    "intro": "Watch for speed through the turns and a committed throw, and keep your inputs small. My own flights come first, then Team BlackSheep’s, then the other videos pilots pass around.",
+    "groups": [
+      { "h3": "From my own flights", "videos": [
+        { "id": "iaW7Sx0l-yU", "title": "Skimming low cloud on the Chupito", "channel": "narenana", "published": "2026-04-21T07:28:37Z" },
+        { "id": "tiaQBH-iisc", "title": "Formation flight: the Chupito and an AtomRC Dolphin", "channel": "narenana", "published": "2026-06-09T21:51:58Z" },
+        { "id": "rVDwvxTyEog", "title": "FPV by the hills: Chupito, Dolphin and a Sky Surfer", "channel": "narenana", "published": "2026-03-22T13:44:18Z" }
+      ] },
+      { "h3": "From Team BlackSheep", "videos": [
+        { "id": "o0O7a3cfCCk", "title": "TBS Chupito - FPV Wing", "channel": "Team BlackSheep", "published": 1755272815 },
+        { "id": "ENw97zrReU0", "title": "TBS Chupito formation flying into the Sunset", "channel": "Team BlackSheep", "published": 1763676228 }
+      ] },
+      { "h3": "Worth your time too", "videos": [
+        { "id": "xD7LYoVYzq4", "title": "TBS Chupito to the moon", "channel": "Mr Steele", "published": 1758148426 },
+        { "id": "1ni32Usd2DQ", "title": "TBS Chupito Wing Assembly & Inav Setup Guide - Easiest Wing I Have Built!", "channel": "Mads Tech", "published": 1756647001 },
+        { "id": "tg5HHqKmsJI", "title": "How to Launch any FPV Flying Wing (and look real cool doing it) | For Beginners | TBS Chupito", "channel": "kofikofikofi", "published": 1758024047 }
+      ] }
+    ]
   },
   "specs": {
-    "eyebrow": "The wing",
-    "h2": "The Chupito in Nanawing",
-    "intro": "What you’re flying, as it flies in the sim."
+    "eyebrow": "Fly it in the sim",
+    "h2": "Check the numbers before your first throw"
   },
   "smallPrint": "TBS Chupito: Nanawing’s recreation; its handling is not TBS flight data.",
-  "more": { "href": "/nanawing/aircraft/", "label": "All six aircraft in Nanawing" },
+  "more": { "href": "/nanawing/aircraft/", "label": "Pick another wing in Nanawing" },
   "doing": {
     "h2": "What you’ll be doing",
     "items": [
-      { "h3": "Snap it round", "p": "It rolls at 360°/s, the quickest roll in the hangar. Flick it from bank to bank between the gates and get a feel for how little stick it wants, so the real one doesn’t surprise you." },
-      { "h3": "Keep your speed up", "p": "Open it up to 140 km/h on the straights. It stalls at 35 km/h and warns you at 44, so carry speed through the turns and ease it down gently when you land." },
-      { "h3": "Race it on all 5 courses", "p": "Windmill Run and River Run on the Island, Tunnel Run and Pyramid Run in the Desert, and Estate Run: 2.8 km through Parkland’s giant oaks and over the estate roofs, raced in the Chupito or the WUDFLY Spectre. Set a lap time, see where you rank, then go back and beat it." }
+      { "h3": "Snap it round", "p": "It rolls at 360°/s, the quickest roll in the hangar. Flick it from bank to bank between the gates with small stick inputs, so the real one doesn’t surprise you." },
+      { "h3": "Keep your speed up", "p": "Open it up to 140 km/h on the straights. It stalls at 35 km/h and gives a stall warning at 44 km/h, so carry speed through the turns and ease it down gently when you land." },
+      { "h3": "Race it on all 5 courses", "p": "Windmill Run and River Run on the Island, Tunnel Run and Pyramid Run in the Desert, and Estate Run, 2.8 km through Parkland’s giant oaks and over the estate roofs: take the Chupito or the WUDFLY Spectre. Set a lap time, see where you rank, then go back and beat it." }
     ]
   },
   "controls": {
@@ -53,34 +79,79 @@
   "bites": {
     "h2": "What will bite you",
     "items": [
-      "It stalls at 35 km/h. A slow, tight turn is how a Chupito meets the ground. Keep the speed up and start the turn early.",
+      "It stalls at 35 km/h. A slow, tight turn is the usual way to crash a Chupito. Keep the speed up and start the turn early.",
       "The roll is quick. Small inputs, then wait; the wing does the rest.",
-      "Landing: ease it down and keep a little throttle in. Chop it early and see the first point.",
-      "Crash in the sim, reset, go again. Repeat a manoeuvre until it’s clean, then take it to the field."
+      "Landing: ease it down and keep a little throttle in. Chop the throttle early and it drops.",
+      "Crash in the sim, then reset and go again. Repeat a manoeuvre until it’s clean, then take it to the field."
     ]
   },
-  "real": {
-    "h2": "Get the real one",
-    "p": "Wings checks TBS Chupito prices and stock at Indian hobby sellers and links you straight to the seller’s page. The kit and the manual are on Team BlackSheep’s own page.",
+  "buy": {
+    "h2": "Buy one in India",
+    "fallback": "Compare prices and stock at Indian hobby sellers on the Wings page.",
+    "p": "Compare the Chupito’s price and stock at each Indian hobby seller on Wings, with the date each was last checked and a link straight to the seller’s page. You buy from the seller; we don’t sell anything. The kit and the manual are on Team BlackSheep’s own page.",
     "links": [
       { "href": "/wings/tbs-chupito/", "label": "Compare TBS Chupito prices in India" },
-      { "href": "https://www.team-blacksheep.com/products/prod:tbs_chupito_kit", "label": "TBS Chupito at Team BlackSheep" }
+      { "href": "https://www.team-blacksheep.com/products/prod:tbs_chupito_kit", "label": "See the kit at Team BlackSheep" }
+    ]
+  },
+  "prints": {
+    "_about": "Verified 23 Oct 2026 by reading each designer's page (MakerWorld and Thingiverse; both open in a browser). Printables and Cults3D also list Chupito parts but sit behind a bot check, so none are linked yet. Each `what` line paraphrases the designer's own description; `by` and `site` are the credit. Downloads at the time: wall hanger 238, fin slider 220, USB-C mount 156, VTX lock 122, servo cover 97.",
+    "h2": "Print the parts other pilots already designed",
+    "intro": "Each link goes to the designer’s own page on MakerWorld or Thingiverse, picked for downloads, reviews and clear notes. Check the fit on your own build before you print; electronics and shells differ.",
+    "groups": [
+      { "h3": "Keep the camera and VTX where you put them", "items": [
+        { "title": "TBS Chupito 800 Pan-Tower", "href": "https://makerworld.com/en/models/1719772-tbs-chupito-800-pan-tower", "by": "ninjamic85", "site": "MakerWorld", "what": "Pan the camera on a Feetech FT90M servo and look into the turn. It is the mount Team BlackSheep links from the kit page, and the designer links a DJI O4 Pro mount for it." },
+        { "title": "TBS Chupito camera pod with a lock", "href": "https://www.thingiverse.com/thing:7271567", "by": "DJISilesia", "site": "Thingiverse", "what": "A camera pod that locks between the battery-tray ribs, so a hard throw can’t push the VTX assembly back. Lift the lock with a finger to take it out." },
+        { "title": "TBS Chupito VTX Cage lock", "href": "https://makerworld.com/en/models/1946291-tbs-chupito-vtx-cage-lock", "by": "JP75", "site": "MakerWorld", "what": "A 2 g TPU block that stops the stock VTX support sliding back when you throw." },
+        { "title": "TBS Chupito O4 Pro 10 degree soft mount", "href": "https://makerworld.com/en/models/3078621-tbs-chupito-o4-pro-10-degree-soft-mount", "by": "BobbyFPV", "site": "MakerWorld", "what": "Soft-mounts a DJI O4 Pro on M2 gummies, tilts it 10° down and leaves room for ND filters." }
+      ] },
+      { "h3": "A hatch and a battery that stay put", "items": [
+        { "title": "TBS Chupito Battery Holder", "href": "https://makerworld.com/en/models/2202893-tbs-chupito-battery-holder", "by": "FPV Tribe", "site": "MakerWorld", "what": "Lets shorter 5-inch quad packs sit tight under the stock strap. One version takes an Ummagrip plate, so the CG stays where you set it from pack to pack." },
+        { "title": "TBS Chupito Battery Tray 2 Stap", "href": "https://www.thingiverse.com/thing:7153131", "by": "GibroniFPV", "site": "Thingiverse", "what": "A TPU tray with two straps in the middle, for when the single stock strap won’t hold a balanced pack." },
+        { "title": "Screw Down Hatch for Team BlackSheep Chupito", "href": "https://www.thingiverse.com/thing:7147551", "by": "GibroniFPV", "site": "Thingiverse", "what": "Lost the foam hatch? This one screws down with an M3 instead of clipping. Stretch it 2 mm before printing; the page says why." }
+      ] },
+      { "h3": "Fins, servos and wings", "items": [
+        { "title": "TBS Chupito Bottom Fin Slider", "href": "https://makerworld.com/en/models/1834737-tbs-chupito-bottom-fin-slider", "by": "FPV Tribe", "site": "MakerWorld", "what": "A skid for the bottom fin, so landings on tarmac wear the print and not the foam. Tape or hot-glue it on." },
+        { "title": "TBS Chupito Magnetic Wing Connectors", "href": "https://makerworld.com/en/models/2255520-tbs-chupito-magnetic-wing-connectors", "by": "BMS Racing", "site": "MakerWorld", "what": "Slide the wings on with a magnetic click, no servo leads to plug in. Uses the spring-loaded 4-pin connectors the designer links." },
+        { "title": "Servo air cover TBS Chupito", "href": "https://makerworld.com/en/models/2198866-servo-air-cover-tbs-chupito", "by": "voba18", "site": "MakerWorld", "what": "Covers the servo arms. Print it in ASA or nylon and glue it on." }
+      ] },
+      { "h3": "Electronics bay", "items": [
+        { "title": "TBS Chupito FPV Wing USB-C Board Mount", "href": "https://makerworld.com/en/models/2228858-tbs-chupito-fpv-wing-usb-c-board-mount", "by": "BMS Racing", "site": "MakerWorld", "what": "Tape a USB-C board to the print and clip it into the bay, so the port stays reachable." },
+        { "title": "Chupito FC Deck", "href": "https://makerworld.com/en/models/1767392-chupito-fc-deck", "by": "cooties", "site": "MakerWorld", "what": "Replaces the plywood deck: 20×20 or 30.5 mounts for the flight controller, a slot to zip-tie the ESC underneath and a spot for the GPS at the back." }
+      ] },
+      { "h3": "At home", "items": [
+        { "title": "Wall Mount Hanger for TBS Chupito FPV Wing", "href": "https://makerworld.com/en/models/1827050-wall-mount-hanger-for-tbs-chupito-fpv-wing", "by": "TacGriz", "site": "MakerWorld", "what": "Hang the wing on the wall by its motor with one screw. Needs the standard TBS electronics package." }
+      ] }
+    ]
+  },
+  "logs": {
+    "h2": "Once yours is flying, replay the flight",
+    "paragraphs": [
+      "If you’ve flown the real one, drop its log into the log viewer and watch it again on a 3D globe, with attitude, altitude, battery and signal alongside. See where the nose dropped before that wobble. Then check how far out the signal held and what the battery did on the long climb.",
+      "Drop in an iNAV or Betaflight blackbox log, or the telemetry CSV from your EdgeTX radio’s SD card. Free, in your browser, and the log never leaves your machine."
+    ],
+    "links": [
+      { "href": "/log-viewer/", "label": "Open the log viewer" },
+      { "href": "/videos/log-viewer-walkthrough/", "label": "Watch the 2-minute walkthrough" },
+      { "href": "/log-viewer/guides/", "label": "Turn on logging in EdgeTX, Betaflight or iNAV" }
     ]
   },
   "faq": {
     "h2": "Questions",
     "items": [
-      { "q": "Is this the real TBS Chupito?", "a": "It’s Nanawing’s recreation of Team BlackSheep’s 800 mm wing: the same span and shape, with the sim’s own handling, which is not TBS flight data. Nanawing is not an official TBS simulator. Practise the habits here; the kit itself comes from Team BlackSheep." },
-      { "q": "Do I need a controller?", "a": "No. Fly on the keyboard, a gamepad or your own USB RC radio. The keyboard is tuned for the Chupito: a tap nudges, a hold gives full stick." },
+      { "q": "Is this the real TBS Chupito?", "a": "It’s Nanawing’s recreation of Team BlackSheep’s 800mm wing, with the same span and shape. It is not an official TBS simulator. Practise the habits here; the kit itself comes from Team BlackSheep." },
+      { "q": "Do I need an RC radio?", "a": "No. Fly on the keyboard, a gamepad or your own USB RC radio. On the keyboard, a tap nudges and a hold gives full stick." },
       { "q": "Does it work on a phone?", "a": "Yes. Open the same link on your phone and fly with two thumb sticks on the screen." },
       { "q": "Is it free, and do I have to install anything?", "a": "It’s free and runs in your browser: no install, no login. After the first visit it works offline too." },
-      { "q": "Where can I buy a TBS Chupito in India?", "a": "Wings compares Chupito prices and stock across Indian hobby sellers and links you to each seller’s page.", "link": { "href": "/wings/tbs-chupito/", "label": "Compare TBS Chupito prices in India" } }
+      { "q": "Where can I buy a TBS Chupito in India?", "a": "Compare Chupito prices and stock at Indian hobby sellers on Wings, then buy from each seller’s page.", "link": { "href": "/wings/tbs-chupito/", "label": "Compare TBS Chupito prices in India" } },
+      { "q": "Are there 3D-printed parts for the Chupito?", "a": "Yes. Pilots have shared a pan camera tower, battery holders, a screw-down hatch, a fin skid, magnetic wing connectors and more, free on MakerWorld and Thingiverse.", "link": { "href": "#prints", "label": "See the prints" } },
+      { "q": "Can I watch my real Chupito flight back afterwards?", "a": "Yes. Drop in the iNAV or Betaflight blackbox log, or the EdgeTX telemetry CSV, and watch it on a 3D globe with the charts alongside. Free in your browser; the log stays on your machine.", "link": { "href": "/log-viewer/", "label": "Open the log viewer" } }
     ]
   },
   "faqNote": "Sim time is no substitute for instruction, aircraft checks or safe flying at the field.",
   "final": {
     "h2": "Get some stick time in before it arrives",
-    "lede": "Pick the Chupito, throw it, take it round Windmill Run, then try Estate Run through the oaks. Fly it in your browser on a laptop, or on your phone.",
+    "lede": "Take the Chupito round Windmill Run, then thread it through Estate Run’s giant oaks. Fly it in your browser on a laptop, or on your phone.",
     "cta": "Fly the Chupito now"
   }
 }

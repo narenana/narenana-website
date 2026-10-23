@@ -83,9 +83,51 @@ test('structured data: WebPage, a 3-level breadcrumb and a FAQPage matching the 
   assert.equal(crumbs[2].name, copy.crumb);
   const faq = graph.find((entry) => entry['@type'] === 'FAQPage');
   const questions = [...main.matchAll(/<summary>([\s\S]*?)<\/summary>/g)].map(([, q]) => text(q));
-  assert.equal(questions.length, 5);
+  assert.equal(questions.length, 7);
   assert.deepEqual(faq.mainEntity.map((q) => q.name), questions);
   assert.deepEqual(copy.faq.items.map((f) => f.q), questions);
+});
+
+test('watch, buy, replay: the videos, the live price slot and the log viewer links', () => {
+  // Watch: the owner's flights first, then Team BlackSheep's, then others; every card is a click-to-play
+  // facade with a VideoObject (uploadDate from the feed or the catalog), and the player script is on the page.
+  const groups = copy.watch.groups;
+  assert.equal(groups[0].h3, 'From my own flights');
+  assert.ok(groups[0].videos.every((v) => v.channel === 'narenana'));
+  assert.equal(groups[1].h3, 'From Team BlackSheep');
+  assert.ok(groups[1].videos.every((v) => v.channel === 'Team BlackSheep'));
+  const videos = groups.flatMap((g) => g.videos);
+  assert.ok(videos.length >= 6 && new Set(videos.map((v) => v.id)).size === videos.length, 'distinct videos');
+  for (const v of videos) {
+    assert.match(v.id, /^[A-Za-z0-9_-]{6,15}$/);
+    assert.ok(main.includes(`data-yt="${v.id}"`), `card for ${v.id}`);
+  }
+  const objects = graph.filter((entry) => entry['@type'] === 'VideoObject');
+  assert.deepEqual(objects.map((o) => o.url), videos.map((v) => `https://www.youtube.com/watch?v=${v.id}`));
+  for (const o of objects) assert.ok(!Number.isNaN(Date.parse(o.uploadDate)) && o.embedUrl.startsWith('https://www.youtube-nocookie.com/embed/'));
+  assert.ok(html.includes("closest('a[data-yt]')"), 'the click-to-play script is on the page');
+  // The jump strip covers the four stops.
+  const jumps = main.match(/<nav class="ac-jumps"[^>]*>([\s\S]*?)<\/nav>/);
+  assert.ok(jumps, 'the jump strip exists');
+  assert.deepEqual([...jumps[1].matchAll(/href="(#[a-z]+)"/g)].map(([, h]) => h), ['#watch', '#wing', '#buy', '#prints', '#logs']);
+  for (const id of ['watch', 'wing', 'buy', 'prints', 'logs']) assert.ok(main.includes(`id="${id}"`), `#${id} exists`);
+  // Prints: a curated list, every card a distinct https link to a designer's page with a credit and a line
+  // about what it does; the same list is the page's ItemList.
+  const prints = copy.prints.groups.flatMap((g) => g.items);
+  assert.ok(prints.length >= 10, `${prints.length} prints`);
+  assert.equal(new Set(prints.map((p) => p.href)).size, prints.length, 'distinct links');
+  for (const p of prints) {
+    assert.match(p.href, /^https:\/\/(makerworld\.com|www\.thingiverse\.com)\//, p.title);
+    assert.ok(p.by && p.site && p.what.length > 20, `${p.title} has a credit and a line`);
+    assert.ok(main.includes(`href="${p.href}" target="_blank" rel="noopener"`), `${p.title} opens in a new tab`);
+  }
+  const list = graph.find((entry) => entry['@type'] === 'ItemList');
+  assert.deepEqual(list.itemListElement.map((e) => e.url), prints.map((p) => p.href));
+  // Buy: the Worker's slot with the fallback sentence; no price is baked into the page.
+  assert.ok(main.includes(`<p class="ac-live" data-wings="${copy.wingsSlug}">${copy.buy.fallback}</p>`));
+  assert.ok(!/₹/.test(visible), 'no price is baked into the static page');
+  // Replay: the log viewer, its walkthrough and its guides.
+  for (const href of ['/log-viewer/', '/videos/log-viewer-walkthrough/', '/log-viewer/guides/']) assert.ok(main.includes(`href="${href}"`), `links ${href}`);
 });
 
 test('voice: no banned words; "official" appears only in the FAQ denial; the safety line once', () => {
