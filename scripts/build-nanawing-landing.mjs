@@ -3,7 +3,11 @@
 //   node scripts/build-nanawing-landing.mjs content/nanawing/chupito-simulator.json
 // Facts (the specs, the maker credit, the play link) come from content/_facts/nanawing.json;
 // the copy from the page's own JSON. The page shares the hangar page's shell, stylesheet and
-// spec card (nanawing-render.mjs), so the two never show different figures.
+// spec figures (nanawing-render.mjs), so the two never show different numbers.
+// The layout is a product page (owner, 24 Oct 2026: "think Apple product page"): a sticky
+// product nav, a dark centred hero with the real wing under the headline, the videos, a dark
+// band for the sim (stat tiles, then the habits to learn), the bundles side by side, then the
+// prints, the log viewer, the thanks, the questions and a dark closing band.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import sharp from 'sharp';
 import { site, page } from './page-shell.mjs';
@@ -21,7 +25,7 @@ const dims = await imageDims([a]);
 const path = copy.path;
 const fly = play(facts, a.id);
 
-const btn = (label) => `<a class="ac-btn" href="${fly}" ${ext}>${esc(label)} <span aria-hidden="true">↗</span></a>`;
+const btn = (label, cls = '') => `<a class="ac-btn${cls ? ` ${cls}` : ''}" href="${fly}" ${ext}>${esc(label)} <span aria-hidden="true">↗</span></a>`;
 // An outbound text link keeps its arrow on the same line as its last word.
 const link = (l) => (/^https?:/.test(l.href)
   ? `<a href="${esc(l.href)}" ${ext}>${esc(l.label)}&nbsp;<span aria-hidden="true">↗</span></a>`
@@ -30,43 +34,52 @@ const paras = (list) => list.map((p) => `<p>${esc(p)}</p>`).join('');
 const sec = (id, cls, h2, inner) => `<section class="${cls}" id="${id}" aria-labelledby="${id}-title"><h2 id="${id}-title">${esc(h2)}</h2>${inner}</section>`;
 const links = (list) => `<ul class="ac-links">${list.map((l) => `<li>${link(l)}</li>`).join('')}</ul>`;
 
-// Videos: the hangar page's click-to-play cards (YT_SCRIPT). Only well-formed YouTube ids reach
-// the markup. A published date is an ISO string (the channel feed) or epoch seconds (the catalog).
+// Videos: click-to-play cards that open the modal player (YT_LIGHTBOX). Only well-formed YouTube
+// ids reach the markup. A published date is an ISO string (the channel feed) or epoch seconds.
 const YT_ID = /^[A-Za-z0-9_-]{6,15}$/;
 const videos = copy.watch.groups.flatMap((g) => g.videos);
 for (const v of videos) if (!YT_ID.test(v.id)) throw new Error(`Bad video id: ${v.id}`);
 const publishedIso = (p) => (typeof p === 'number' ? new Date(p * 1000) : new Date(p)).toISOString();
 const videoCard = (v) => `<li><a class="ac-yt" href="https://www.youtube.com/watch?v=${v.id}" data-yt="${v.id}" ${ext}><img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="" width="480" height="360" loading="lazy" decoding="async"><span class="ac-yt-play" aria-hidden="true">▶</span><span class="sr-only">Play: ${esc(v.title)}</span></a><p class="ac-yt-title">${esc(v.title)}</p><p class="ac-yt-by">${esc(v.channel)}</p></li>`;
 
-// The one small-print line about the recreation, under the spec card. Its credit and link come
+// The one small-print line about the recreation, under the spec tiles. Its credit and link come
 // from the facts, so the maker's terms (credited and linked wherever the aircraft is shown)
 // cannot be lost in a copy edit.
 const makerUrl = a.credit.url ?? a.credit.designerUrl;
-const smallPrint = `${esc(copy.smallPrint)} ${a.credit.kind === 'reference' ? 'Reference airframe by' : 'Aircraft design by'} <a href="${esc(makerUrl)}" ${ext}>${esc(a.credit.designer)}&nbsp;<span aria-hidden="true">↗</span></a>.`;
+const makerLink = `<a href="${esc(makerUrl)}" ${ext}>${esc(a.credit.designer)}&nbsp;<span aria-hidden="true">↗</span></a>`;
+const smallPrint = `${esc(copy.smallPrint)} ${a.credit.kind === 'reference' ? 'Reference airframe by' : 'Aircraft design by'} ${makerLink}.`;
 
-// The hero: a full-bleed banner on the sim's own artwork (copy.hero.image, under
-// /assets/nanawing/), the tagline as the H1, the old headline as its sub-line.
-// The banner shows this aircraft and nothing else (docs/landing-pages.md, rule H2); a portrait
-// crop serves phones. The lede sits under the band so the CTA stays in the first screen.
+// The product nav: the wing's name, the page's stops and the play button; it sticks to the top
+// as the page scrolls, so the way into the sim is never more than one tap away.
+const jumps = `<nav class="ac-jumps" aria-label="On this page">${copy.hero.jumps.map((j) => `<a href="${esc(j.href)}">${esc(j.label)}</a>`).join('')}</nav>`;
+const subnav = `<div class="ac-subnav"><div class="ac-subnav-in"><a class="ac-subnav-name" href="#hero-title">${esc(a.name)}</a>${jumps}${btn(copy.hero.navCta, 'ac-btn-nav')}</div></div>`;
+
+// The hero: the words first (eyebrow, the tagline as the H1, one line, the play button and the
+// way to the bundles), then the wing itself: the maker's photographs, made into the page's
+// pictures by Astra (owner, 24 Oct 2026), sized by scripts/build-landing-hero.mjs. The pictures
+// show this aircraft and nothing else (docs/landing-pages.md, H2); a square crop serves phones.
+// The maker is credited under the picture, as their terms ask wherever the wing appears.
 const heroImg = copy.hero.image;
 const HERO = (w) => `/assets/nanawing/${heroImg.file}-${w}.webp`;
 const heroMeta = await sharp(`site${HERO(heroImg.widths[1] ?? heroImg.widths[0])}`).metadata();
 const phoneSrc = heroImg.phone ? `<source media="(max-width:599px)" srcset="${heroImg.phone.widths.map((w) => `/assets/nanawing/${heroImg.phone.file}-${w}.webp ${w}w`).join(', ')}" sizes="100vw">` : '';
 const hero = `<section class="ac-hero-band" aria-labelledby="hero-title">
-<picture>${phoneSrc}<img class="ac-hero-bg" src="${HERO(heroImg.widths[1] ?? heroImg.widths[0])}" srcset="${heroImg.widths.map((w) => `${HERO(w)} ${w}w`).join(', ')}" sizes="100vw" alt="${esc(heroImg.alt)}" width="${heroMeta.width}" height="${heroMeta.height}" fetchpriority="high" decoding="async"></picture>
 <div class="ac-hero-in"><span class="eyebrow">${esc(copy.hero.eyebrow)}</span><h1 id="hero-title">${esc(copy.hero.h1)}</h1><p class="ac-hero-sub">${esc(copy.hero.sub)}</p>
-<div class="ac-actions">${btn(copy.hero.cta)}<nav class="ac-jumps" aria-label="On this page">${copy.hero.jumps.map((j) => `<a href="${esc(j.href)}">${esc(j.label)}</a>`).join('')}</nav></div>
-<p class="ac-note">${esc(copy.hero.ctaNote)}</p></div></section>
+<div class="ac-actions">${btn(copy.hero.cta)}<a class="ac-hero-buy" href="#buy">${esc(copy.hero.buyLabel)} <span aria-hidden="true">→</span></a></div>
+<p class="ac-note">${esc(copy.hero.ctaNote)}</p></div>
+<picture class="ac-hero-pic">${phoneSrc}<img class="ac-hero-bg" src="${HERO(heroImg.widths[1] ?? heroImg.widths[0])}" srcset="${heroImg.widths.map((w) => `${HERO(w)} ${w}w`).join(', ')}" sizes="(max-width:1400px) 100vw, 1400px" alt="${esc(heroImg.alt)}" width="${heroMeta.width}" height="${heroMeta.height}" fetchpriority="high" decoding="async"></picture>
+<p class="ac-hero-credit">${esc(heroImg.creditLead)} ${makerLink}.</p></section>
 <p class="lede ac-hero-lede">${esc(copy.hero.lede)}</p>`;
 
+// The sim band: the recreation's render, the owner's heading, the figures as tiles, the small
+// print, the play button; then the habits to learn, on a real in-sim frame.
 const wing = `<section class="ac-craft" id="wing" aria-labelledby="wing-title">
-<figure class="ac-craft-img">${img(a, dims, '(max-width:860px) 92vw, 520px', { eager: true })}</figure>
+<figure class="ac-craft-img">${img(a, dims, '(max-width:860px) 92vw, 720px')}</figure>
 <div class="ac-craft-body"><span class="eyebrow">${esc(copy.specs.eyebrow)}</span><h2 id="wing-title">${esc(copy.specs.h2)}</h2>${copy.specs.intro ? `<p>${esc(copy.specs.intro)}</p>` : ''}
-<dl class="ac-specs">${specRows.map(([label, f]) => `<div><dt>${label}</dt><dd>${f(a)}</dd></div>`).join('')}</dl>
+<dl class="ac-stats">${specRows.map(([label, f]) => `<div><dt>${label}</dt><dd>${f(a)}</dd></div>`).join('')}</dl>
 <p class="ac-credit">${smallPrint}</p>
 <p class="ac-more">${btn(copy.hero.cta)}</p></div></section>`;
 
-// One section for learning the wing: a real in-sim frame of this aircraft, then three short cards.
 // The frame is optional until captured (the build warns, the section renders without it).
 const flyImg = copy.fly.image;
 const FLY = (w) => `/assets/nanawing/${flyImg.file}-${w}.webp`;
@@ -74,25 +87,28 @@ const flyHas = existsSync(`site${FLY(flyImg.widths[0])}`);
 const flyMeta = flyHas ? await sharp(`site${FLY(flyImg.widths[0])}`).metadata() : null;
 if (!flyHas) console.warn(`warning: no in-sim frame at site${FLY(flyImg.widths[0])}; the section renders without it`);
 const flyFigure = flyHas
-  ? `<figure class="ac-fly-shot"><img src="${FLY(flyImg.widths[0])}" srcset="${flyImg.widths.map((w) => `${FLY(w)} ${w}w`).join(', ')}" sizes="(max-width:1180px) 100vw, 1132px" alt="${esc(flyImg.alt)}" width="${flyMeta.width}" height="${flyMeta.height}" loading="lazy" decoding="async"><figcaption>${esc(flyImg.caption)}</figcaption></figure>`
+  ? `<figure class="ac-fly-shot"><img src="${FLY(flyImg.widths[0])}" srcset="${flyImg.widths.map((w) => `${FLY(w)} ${w}w`).join(', ')}" sizes="(max-width:1180px) 100vw, 1132px" alt="${esc(flyImg.alt)}" width="${flyMeta.width}" height="${flyMeta.height}" loading="lazy" decoding="async"><figcaption>${esc(flyImg.caption).replace("{maker}", makerLink)}</figcaption></figure>`
   : '';
 const flyBlocks = `<div class="ac-fly-grid">${copy.fly.blocks.map((b) => `<div class="ac-fly-card"><h3>${esc(b.h3)}</h3><ul>${b.items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></div>`).join('')}</div>`;
 const flySection = sec('fly', 'ac-practice ac-fly', copy.fly.h2, `${flyFigure}${flyBlocks}`);
+const stage = `<div class="ac-stage"><div class="ac-stage-in">${wing}${flySection}</div></div>`;
+
 // Groups with several videos get a full-width grid under their heading; groups with one video sit
 // two to a row on wide screens, each heading above its card, so no card is left alone in a row.
 const videoGroup = (g) => `<h3>${esc(g.h3)}</h3><ul class="ac-videos">${g.videos.map(videoCard).join('')}</ul>`;
 const singles = copy.watch.groups.filter((g) => g.videos.length === 1);
 const multis = copy.watch.groups.filter((g) => g.videos.length > 1);
 const watch = `<section class="ac-practice ac-watch" id="watch" aria-labelledby="watch-title"><h2 id="watch-title">${esc(copy.watch.h2)}</h2><p>${esc(copy.watch.intro)}</p>${multis.map(videoGroup).join('')}${singles.length ? `<div class="ac-watch-singles">${singles.map((g) => `<div>${videoGroup(g)}</div>`).join('')}</div>` : ''}</section>`;
+
 // The price line is a slot: the Worker fills it per request from the catalog (src/wings-live.js);
 // the fallback sentence stays when the catalog has nothing to say.
-// One card per bundle (copy.buy.variants): what is in the box, who it is for, and a slot the Worker
-// fills with that bundle's listings from the catalog (src/wings-live.js: offersTable). A hidden
-// "Other listings" card takes any listing that matches no bundle.
-const variantCard = (v) => `<article class="ac-variant" id="buy-${esc(v.id)}"><h3>${esc(v.name)} <span>${esc(v.sub)}</span></h3><p>${esc(v.includes)}</p><p>${esc(v.pick)}</p><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:${esc(v.id)}"><p class="ac-note">${esc(copy.buy.tableFallback)}</p></div></article>`;
-const variants = `<div class="ac-variants">${copy.buy.variants.map(variantCard).join('')}<article class="ac-variant ac-variant-other" id="buy-other" hidden><h3>${esc(copy.buy.otherName)}</h3><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:other"></div></article></div><p class="ac-note">${esc(copy.buy.note)}</p>`;
-const buy = sec('buy', 'ac-practice ac-buy', copy.buy.h2, `<p class="ac-live" data-wings="${esc(copy.wingsSlug)}">${esc(copy.buy.fallback)}</p>${variants}<p>${esc(copy.buy.p)}</p>${links(copy.buy.links)}`);
-const logs = sec('logs', 'ac-practice', copy.logs.h2, `${paras(copy.logs.paragraphs)}${links(copy.logs.links)}`);
+// One card per bundle (copy.buy.variants), side by side on a wide screen: what is in the box, who
+// it is for, and a slot the Worker fills with that bundle's listings (src/wings-live.js:
+// offersTable). A hidden card takes any listing that matches no bundle.
+const variantCard = (v) => `<article class="ac-variant" id="buy-${esc(v.id)}"><h3>${esc(v.name)}</h3><p class="ac-variant-sub">${esc(v.sub)}</p><p>${esc(v.includes)}</p><p>${esc(v.pick)}</p><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:${esc(v.id)}"><p class="ac-note">${esc(copy.buy.tableFallback)}</p></div></article>`;
+const variants = `<div class="ac-variants">${copy.buy.variants.map(variantCard).join('')}<article class="ac-variant ac-variant-other" id="buy-other" hidden><h3>${esc(copy.buy.otherName)}</h3><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:other"></div></article></div><p class="ac-note ac-centre">${esc(copy.buy.note)}</p>`;
+const buy = sec('buy', 'ac-practice ac-buy', copy.buy.h2, `<p class="ac-live" data-wings="${esc(copy.wingsSlug)}">${esc(copy.buy.fallback)}</p>${variants}<p class="ac-centre">${esc(copy.buy.p)}</p>${links(copy.buy.links)}`);
+const logs = sec('logs', 'ac-practice ac-logs', copy.logs.h2, `${paras(copy.logs.paragraphs)}${links(copy.logs.links)}`);
 // 3D prints: a curated list from the model sites, each a link to its designer's own page (none of
 // their files or images are copied here). Optional: only pages with a `prints` block render it.
 const printItem = (p) => `<li><a href="${esc(p.href)}" ${ext}>${esc(p.title)}&nbsp;<span aria-hidden="true">↗</span></a><span class="ac-print-by">${esc(p.by)} · ${esc(p.site)}</span><p>${esc(p.what)}</p></li>`;
@@ -115,10 +131,10 @@ const final = `<section class="ac-final" id="go" aria-labelledby="go-title"><h2 
 
 const body = `<div class="ac-page ac-landing">
 <nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> / <a href="/nanawing/aircraft/">Nanawing aircraft</a> / ${esc(copy.crumb)}</nav>
+${subnav}
 ${hero}
 ${watch}
-${wing}
-${flySection}
+${stage}
 ${buy}
 ${build}
 ${prints}
@@ -131,7 +147,7 @@ ${final}
 const schema = {
   '@context': 'https://schema.org',
   '@graph': [
-    { '@type': 'WebPage', '@id': site + path, url: site + path, name: copy.title, description: copy.description, isPartOf: { '@id': site + '/#website' }, about: { '@id': 'https://sim.narenana.com/#app' }, primaryImageOfPage: { '@type': 'ImageObject', url: `${site}${IMG(a.id, 1400)}` } },
+    { '@type': 'WebPage', '@id': site + path, url: site + path, name: copy.title, description: copy.description, isPartOf: { '@id': site + '/#website' }, about: { '@id': 'https://sim.narenana.com/#app' }, primaryImageOfPage: { '@type': 'ImageObject', url: `${site}${HERO(heroImg.widths[1] ?? heroImg.widths[0])}` } },
     { '@type': 'BreadcrumbList', itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Home', item: site + '/' },
       { '@type': 'ListItem', position: 2, name: 'Nanawing aircraft', item: site + '/nanawing/aircraft/' },
@@ -153,9 +169,82 @@ const schema = {
   ],
 };
 
-// What this page adds to the hangar page's stylesheet: the wing card sits right under the hero,
-// and the text sections get their list and link styles.
-const css = 'html,body{overflow-x:clip}.ac-hero-band{position:relative;margin:14px calc(50% - 50vw) 0;min-height:clamp(420px,56vh,540px);display:grid;align-items:center;color:#fff;background:#0d1d2a;overflow:hidden}.ac-hero-band picture{position:absolute;inset:0;display:block}.ac-hero-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:70% 50%}.ac-hero-band::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,20,30,.78) 0%,rgba(8,20,30,.55) 42%,rgba(8,20,30,.08) 72%)}.ac-hero-in{position:relative;z-index:1;width:100%;max-width:1180px;margin:0 auto;padding:clamp(28px,5vh,48px) 24px clamp(24px,4vh,40px);box-sizing:border-box}.ac-hero-band .eyebrow{display:inline-block;color:#fff;background:rgba(8,20,30,.6);padding:5px 10px;border-radius:4px}.ac-hero-band h1{color:#fff;font-size:clamp(2.2rem,5.6vw,4.4rem);line-height:.98;margin:10px 0 10px;max-width:20ch;text-wrap:balance;text-shadow:0 2px 24px rgba(0,0,0,.35)}.ac-hero-sub{margin:0 0 16px;font:700 clamp(1.15rem,2.3vw,1.6rem)/1.25 "Barlow Condensed",sans-serif;color:#ffd08a}.ac-hero-band .ac-jumps a{color:#fff}.ac-hero-band .ac-note{color:#c9d7e2;margin:0}.ac-hero-band .ac-actions{margin-bottom:10px}.ac-hero-lede{margin:22px 0 0;font-size:1.05rem;max-width:62ch}@media(max-width:599px){.ac-hero-band{min-height:70vh;align-items:end}.ac-hero-bg{object-position:50% 20%}.ac-hero-band::after{background:linear-gradient(180deg,rgba(8,20,30,.05) 0%,rgba(8,20,30,.25) 40%,rgba(8,20,30,.86) 100%)}.ac-hero-in{padding-top:36vh}}.ac-landing .ac-actions{margin-bottom:10px}.ac-jumps{display:flex;flex-wrap:wrap;gap:0 18px}.ac-jumps a{display:inline-flex;align-items:center;min-height:44px;font-weight:700;color:var(--ac-ink);text-underline-offset:4px}.ac-landing .ac-craft{margin-top:56px}.ac-landing .ac-craft-img{align-self:start}.ac-more{margin:0;font-weight:700}.ac-yt-dialog{width:min(96vw,1120px);max-width:none;margin:auto;padding:0;border:0;border-radius:8px;background:#000;overflow:visible}.ac-yt-dialog::backdrop{background:rgba(5,10,16,.86)}.ac-yt-stage{aspect-ratio:16/9;width:100%;background:#000;border-radius:8px;overflow:hidden}.ac-yt-stage iframe{width:100%;height:100%;border:0;display:block}.ac-yt-close{position:absolute;right:0;top:-48px;width:44px;height:44px;border:0;border-radius:4px;background:#fff;color:#15191c;font:400 28px/1 "DM Sans",sans-serif;cursor:pointer}.ac-yt-close:focus-visible{outline:3px solid var(--ac-orange);outline-offset:2px}.ac-watch h3{margin-top:24px}.ac-watch .ac-videos{margin-top:10px}.ac-watch-singles{display:grid;gap:8px 24px}.ac-watch-singles .ac-videos{grid-template-columns:1fr}@media(min-width:860px){.ac-watch-singles{grid-template-columns:repeat(2,minmax(0,1fr))}}.ac-yt-by{margin:2px 0 0;font-size:12px;color:var(--ac-muted)}.ac-fly{max-width:none}.ac-fly-shot{margin:0 0 18px}.ac-fly-shot img{display:block;width:100%;height:auto;border-radius:8px;border:1px solid var(--ac-line)}.ac-fly-shot figcaption{font-size:12px;color:var(--ac-muted);margin-top:6px}.ac-fly-grid{display:grid;gap:14px}.ac-fly-card{padding:16px 18px;border:1px solid var(--ac-line);border-radius:8px;background:#fff}.ac-fly-card h3{margin:0 0 8px}.ac-fly-card ul{margin:0;padding-left:18px}.ac-fly-card li{margin:0 0 8px;font-size:15px}@media(min-width:860px){.ac-fly-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}.ac-live{font-size:17px}.ac-live strong{color:#C63B2E}.ac-variants{display:grid;gap:14px;margin:16px 0 8px}.ac-variant{padding:16px 18px 14px;border:1px solid var(--ac-line);border-radius:8px;background:var(--ac-sky)}.ac-variant h3{margin:0 0 8px}.ac-variant h3 span{display:block;font:500 13px/1.4 \'DM Sans\',sans-serif;color:var(--ac-muted)}.ac-variant p{margin:0 0 8px;font-size:15px}.ac-variant .ac-offers{margin:10px 0 0}.ac-variant .ac-offers .ac-note{margin:0}.ac-variant .ac-table-wrap{background:#fff}.ac-offers{margin:14px 0 18px}.ac-offers-table{width:100%;min-width:0;border-collapse:collapse;font-size:14px;line-height:1.35;background:#fff}.ac-offers-table th,.ac-offers-table td{padding:11px 12px;border-bottom:1px solid var(--ac-line);text-align:left;vertical-align:middle}.ac-offers-table thead th{font:500 10px/1.4 \'JetBrains Mono\',monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ac-muted);background:var(--ac-paper)}.ac-offers-table tbody tr:last-child th,.ac-offers-table tbody tr:last-child td{border-bottom:0}.ac-offers-table tbody th{font-weight:700}.ac-offers-table small{display:block;font-weight:400;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-offer-price{font:600 15px/1.3 \'JetBrains Mono\',monospace;white-space:nowrap}.ac-offer-price small{font-family:\'DM Sans\',sans-serif;white-space:normal}.ac-offer-held{font:600 13px/1.3 \'DM Sans\',sans-serif;color:var(--ac-muted);white-space:normal}.ac-offer-badge{display:inline-block;margin-left:6px;padding:1px 7px;border:1px solid var(--ac-line);border-radius:999px;font:500 10px/1.5 \'JetBrains Mono\',monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ac-muted)}.ac-offer-buy{text-align:right}.ac-btn-sm{min-height:40px;padding:8px 14px;font-size:14px}.ac-btn-quiet{background:#fff;border:1px solid var(--ac-line);color:var(--ac-ink)!important}.ac-btn-quiet:hover{background:var(--ac-paper)}.ac-offers-table .is-oos th a,.ac-offers-table .is-oos td,.ac-offers-table .is-gone th,.ac-offers-table .is-gone td{color:var(--ac-muted)}.ac-offers-table .is-live .ac-offer-stock{color:#2E7D4F;font-weight:700}@media(max-width:599px){.ac-offers .ac-table-wrap{overflow:visible}.ac-offers-table thead{display:none}.ac-offers-table,.ac-offers-table tbody{display:block}.ac-offers-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:\'seller price\' \'config price\' \'stock buy\';gap:2px 12px;align-items:start;padding:12px 14px;border-bottom:1px solid var(--ac-line)}.ac-offers-table tbody tr:last-child{border-bottom:0}.ac-offers-table th,.ac-offers-table td{display:block;padding:0;border:0}.ac-offer-seller{grid-area:seller}.ac-offer-config{grid-area:config;color:var(--ac-muted);font-size:13px}.ac-offer-price{grid-area:price;text-align:right}.ac-offer-stock{grid-area:stock;align-self:end;font-size:13px}.ac-offer-buy{grid-area:buy;justify-self:end;margin-top:6px}}.ac-build .ac-table{min-width:0}.ac-build .ac-table th,.ac-build .ac-table td{white-space:normal;vertical-align:top}.ac-build-table small{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-prints h3{margin-top:24px}.ac-print-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}.ac-print-list li{padding:14px 16px;border:1px solid var(--ac-line);border-radius:6px;background:#fff}.ac-print-list a{font-weight:700}.ac-print-by{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-print-list p{margin:6px 0 0;font-size:15px}@media(min-width:600px){.ac-print-list{grid-template-columns:repeat(2,minmax(0,1fr))}}.ac-links{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 28px}.ac-links a{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;text-underline-offset:4px}';
+// What this page adds to the hangar page's stylesheet. The dark colour is the family's navy
+// (#0d1d2a); the hero and share pictures fade to the same value at their edges.
+const DARK = '#0d1d2a';
+const css = [
+  // Every jump target clears the sticky product nav.
+  'html,body{overflow-x:clip}.ac-landing [id]{scroll-margin-top:72px}',
+  // The sticky product nav.
+  `.ac-subnav{position:sticky;top:0;z-index:20;margin:10px calc(50% - 50vw) 0;background:rgba(13,29,42,.94);-webkit-backdrop-filter:saturate(1.4) blur(10px);backdrop-filter:saturate(1.4) blur(10px);color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}`,
+  '.ac-subnav-in{max-width:1180px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:18px;min-height:54px}',
+  '.ac-subnav-name{font:700 20px/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;color:#fff;text-decoration:none;white-space:nowrap}',
+  '.ac-jumps{display:flex;flex-wrap:wrap;gap:0 18px}.ac-jumps a{display:inline-flex;align-items:center;min-height:44px;font-weight:700;text-underline-offset:4px}',
+  '.ac-landing .ac-subnav .ac-subnav-name{color:#fff}.ac-subnav .ac-jumps{margin-left:auto;gap:0 22px;flex-wrap:nowrap}.ac-landing .ac-subnav .ac-jumps a{color:#c9d7e2;font-weight:500;font-size:14px;min-height:54px;white-space:nowrap;text-decoration:none}.ac-landing .ac-subnav .ac-jumps a:hover{color:#fff}',
+  '.ac-btn-nav{min-height:36px;padding:6px 16px;font-size:14px;border-radius:999px;margin-left:8px}',
+  '@media(max-width:899px){.ac-subnav .ac-jumps{display:none}.ac-btn-nav{margin-left:auto}}',
+  // The hero: words, then the wing.
+  `.ac-hero-band{margin:0 calc(50% - 50vw);background:${DARK};color:#fff;text-align:center;overflow:hidden}`,
+  '.ac-hero-in{max-width:1000px;margin:0 auto;padding:clamp(26px,4.5vh,52px) 24px 0;box-sizing:border-box}',
+  '.ac-hero-band .eyebrow{color:#8fc7ee}',
+  '.ac-hero-band h1{color:#fff;font-size:clamp(2.35rem,5vw,4.5rem);line-height:.98;margin:12px auto 14px;max-width:22ch;text-wrap:balance}',
+  '.ac-hero-sub{margin:0 auto 22px;font:700 clamp(1.2rem,2.4vw,1.8rem)/1.25 "Barlow Condensed",sans-serif;color:#ffd08a}',
+  '.ac-hero-band .ac-actions{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:14px 28px;margin:0 0 10px}',
+  '.ac-landing .ac-hero-band .ac-hero-buy{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:#fff;font-weight:700;text-underline-offset:4px}',
+  '.ac-hero-band .ac-note{color:#9fb3c2;margin:0}',
+  // The pictures carry plain dark space above the wing; the words sit over it, so the wing shows sooner.
+  '.ac-hero-in{position:relative;z-index:1}.ac-hero-pic{display:block;max-width:1400px;margin:calc(-1 * clamp(24px,7vh,80px)) auto 0}',
+  `.ac-hero-bg{display:block;width:100%;height:auto;max-height:min(64vh,660px);object-fit:contain;background:${DARK}}`,
+  '.ac-hero-credit{max-width:1180px;margin:0 auto;padding:4px 24px 20px;font-size:12px;color:#9fb3c2}.ac-hero-credit a{color:#dbe6ee}',
+  '.ac-hero-lede{margin:30px auto 0;max-width:64ch;text-align:center;font-size:1.1rem}',
+  '@media(max-width:599px){.ac-hero-bg{max-height:none}.ac-hero-band h1{font-size:2.4rem}}',
+  // Section rhythm: big centred headings, one centred line, then the content.
+  '.ac-landing .ac-practice{margin-top:clamp(56px,9vh,96px);max-width:none}',
+  '.ac-landing .ac-practice>h2,.ac-landing .ac-faq>h2{text-align:center;font-size:clamp(30px,4.4vw,48px);line-height:1.05;max-width:22ch;margin:0 auto 12px;text-wrap:balance}',
+  '.ac-landing .ac-practice>h2+p{text-align:center;max-width:62ch;margin:0 auto 26px}',
+  '.ac-centre{text-align:center;max-width:64ch;margin-left:auto;margin-right:auto}',
+  '.ac-landing .ac-faq{margin-top:clamp(56px,9vh,96px)}.ac-landing .ac-faq>h2{margin-bottom:18px}',
+  // The dark sim band.
+  `.ac-stage{margin:clamp(56px,9vh,96px) calc(50% - 50vw) 0;padding:clamp(48px,8vh,96px) 24px;background:${DARK};color:#fff}`,
+  '.ac-stage-in{max-width:1180px;margin:0 auto}',
+  '.ac-stage .eyebrow{color:#8fc7ee}.ac-stage h2,.ac-stage h3{color:#fff}.ac-stage p,.ac-stage li{color:#dbe6ee}.ac-stage a{color:#fff}.ac-stage .ac-note,.ac-stage .ac-credit{color:#9fb3c2}.ac-stage .ac-credit a{color:#dbe6ee}',
+  '.ac-stage .ac-craft{display:block;margin:0;padding:0;border:0}',
+  '.ac-stage .ac-craft-img{max-width:760px;margin:0 auto 26px;padding:0;background:none;border:0}.ac-stage .ac-craft-img img{display:block;width:100%;height:auto;filter:drop-shadow(0 24px 40px rgba(0,0,0,.5))}',
+  '.ac-stage .ac-craft-body{text-align:center;max-width:1000px;margin:0 auto}.ac-stage .ac-craft-body h2{font-size:clamp(30px,4.4vw,48px);line-height:1.05;margin:10px auto 12px;max-width:22ch;text-wrap:balance}',
+  '.ac-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 24px;margin:26px 0 0;padding:0}',
+  // Values sit at the top of each tile, so a two-line figure (the battery) keeps the row aligned.
+  '.ac-stats div{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:4px;border-top:1px solid rgba(255,255,255,.16);padding-top:14px}',
+  ".ac-stats dt{font:500 11px/1.5 'JetBrains Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:#8fc7ee}",
+  '.ac-stats dd{margin:0;font:700 clamp(1.7rem,3.2vw,2.5rem)/1.05 "Barlow Condensed",sans-serif;color:#fff}',
+  '@media(min-width:640px){.ac-stats{grid-template-columns:repeat(4,minmax(0,1fr))}}',
+  '.ac-stage .ac-credit{margin:22px auto 0;font-size:13px;max-width:64ch}.ac-stage .ac-more{margin:18px 0 0;font-weight:700}',
+  '.ac-stage .ac-fly{margin-top:clamp(48px,8vh,88px)}.ac-stage .ac-fly>h2{color:#fff}.ac-stage .ac-fly>h2+p{color:#dbe6ee}',
+  '.ac-fly{max-width:none}.ac-fly-shot{margin:0 0 20px}.ac-fly-shot img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid rgba(255,255,255,.12)}.ac-fly-shot figcaption{font-size:12px;color:#9fb3c2;margin-top:8px;text-align:center}',
+  '.ac-fly-grid{display:grid;gap:14px}.ac-fly-card{padding:18px 20px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:rgba(255,255,255,.05)}.ac-fly-card h3{margin:0 0 10px}.ac-fly-card ul{margin:0;padding-left:18px}.ac-fly-card li{margin:0 0 8px;font-size:15px}',
+  '@media(min-width:860px){.ac-fly-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}',
+  // The modal player.
+  '.ac-yt-dialog{width:min(96vw,1120px);max-width:none;margin:auto;padding:0;border:0;border-radius:8px;background:#000;overflow:visible}.ac-yt-dialog::backdrop{background:rgba(5,10,16,.86)}.ac-yt-stage{aspect-ratio:16/9;width:100%;background:#000;border-radius:8px;overflow:hidden}.ac-yt-stage iframe{width:100%;height:100%;border:0;display:block}',
+  '.ac-yt-close{position:absolute;right:0;top:-48px;width:44px;height:44px;border:0;border-radius:4px;background:#fff;color:#15191c;font:400 28px/1 "DM Sans",sans-serif;cursor:pointer}.ac-yt-close:focus-visible{outline:3px solid var(--ac-orange);outline-offset:2px}',
+  // Watch.
+  '.ac-watch h3{margin-top:28px}.ac-watch .ac-videos{margin-top:10px}.ac-watch-singles{display:grid;gap:8px 24px}.ac-watch-singles .ac-videos{grid-template-columns:1fr}@media(min-width:860px){.ac-watch-singles{grid-template-columns:repeat(2,minmax(0,1fr))}}.ac-yt-by{margin:2px 0 0;font-size:12px;color:var(--ac-muted)}',
+  // Buy: the bundles side by side, each with its listings stacked as rows at every width.
+  '.ac-live{font-size:17px;text-align:center;max-width:64ch;margin:0 auto 22px}.ac-live strong{color:#C63B2E}',
+  '.ac-variants{display:grid;gap:16px;margin:0 0 12px}@media(min-width:960px){.ac-variants{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}.ac-variant-other{grid-column:1/-1}}',
+  ".ac-variant{padding:20px 20px 16px;border:1px solid var(--ac-line);border-radius:12px;background:var(--ac-sky)}.ac-variant h3{margin:0 0 2px;font-size:28px}.ac-variant .ac-variant-sub{margin:0 0 12px;font:600 15px/1.35 'DM Sans',sans-serif;color:var(--ac-ink)}.ac-variant p{margin:0 0 8px;font-size:15px}.ac-variant .ac-offers{margin:12px 0 0}.ac-variant .ac-offers .ac-note{margin:0}.ac-variant .ac-table-wrap{background:#fff}",
+  '.ac-offers{margin:14px 0 18px}.ac-offers .ac-table-wrap{overflow:visible}.ac-offers-table{width:100%;min-width:0;border-collapse:collapse;font-size:14px;line-height:1.35;background:#fff;display:block}.ac-offers-table thead{display:none}.ac-offers-table tbody{display:block}',
+  ".ac-offers-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'seller price' 'config price' 'stock buy';gap:2px 12px;align-items:start;padding:12px 14px;border-bottom:1px solid var(--ac-line)}.ac-offers-table tbody tr:last-child{border-bottom:0}.ac-offers-table th,.ac-offers-table td{display:block;padding:0;border:0;text-align:left}",
+  ".ac-offers-table tbody th{font-weight:700}.ac-offers-table small{display:block;font-weight:400;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-offer-seller{grid-area:seller}.ac-offer-config{grid-area:config;color:var(--ac-muted);font-size:13px}.ac-offer-price{grid-area:price;text-align:right;font:600 15px/1.3 'JetBrains Mono',monospace;white-space:nowrap}.ac-offer-price small{font-family:'DM Sans',sans-serif;white-space:normal}.ac-offer-held{font:600 13px/1.3 'DM Sans',sans-serif;color:var(--ac-muted);white-space:normal}",
+  ".ac-offer-badge{display:inline-block;margin-left:6px;padding:1px 7px;border:1px solid var(--ac-line);border-radius:999px;font:500 10px/1.5 'JetBrains Mono',monospace;letter-spacing:.04em;text-transform:uppercase;color:var(--ac-muted)}.ac-offer-stock{grid-area:stock;align-self:end;font-size:13px}.ac-offer-buy{grid-area:buy;justify-self:end;margin-top:6px}",
+  '.ac-btn-sm{min-height:40px;padding:8px 14px;font-size:14px}.ac-btn-quiet{background:#fff;border:1px solid var(--ac-line);color:var(--ac-ink)!important}.ac-btn-quiet:hover{background:var(--ac-paper)}.ac-offers-table .is-oos th a,.ac-offers-table .is-oos td,.ac-offers-table .is-gone th,.ac-offers-table .is-gone td{color:var(--ac-muted)}.ac-offers-table .is-live .ac-offer-stock{color:#2E7D4F;font-weight:700}',
+  '.ac-buy .ac-links{justify-content:center}',
+  // The build table, the prints, the logs, the thanks.
+  '.ac-build .ac-table{min-width:0}.ac-build .ac-table th,.ac-build .ac-table td{white-space:normal;vertical-align:top}.ac-build-table small{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}',
+  '.ac-prints h3{margin-top:28px}.ac-print-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}.ac-print-list li{padding:14px 16px;border:1px solid var(--ac-line);border-radius:8px;background:#fff}.ac-print-list a{font-weight:700}.ac-print-by{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-print-list p{margin:6px 0 0;font-size:15px}@media(min-width:600px){.ac-print-list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:960px){.ac-print-list{grid-template-columns:repeat(3,minmax(0,1fr))}}',
+  '.ac-logs p,.ac-thanks p{text-align:center;max-width:64ch;margin:0 auto 14px}.ac-logs .ac-links,.ac-thanks .ac-links{justify-content:center}',
+  '.ac-links{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 28px}.ac-links a{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;text-underline-offset:4px}',
+  // The closing band.
+  `.ac-landing .ac-final{margin:clamp(56px,9vh,96px) calc(50% - 50vw) 0;padding:clamp(48px,8vh,96px) 24px;border:0;border-radius:0;background:${DARK};color:#fff}.ac-landing .ac-final h2{color:#fff;font-size:clamp(30px,4.4vw,48px);line-height:1.05;max-width:22ch;margin:0 auto 12px;text-wrap:balance}.ac-landing .ac-final p{color:#dbe6ee;max-width:60ch;margin:0 auto 22px}`,
+].join('');
 
 mkdirSync(`site${path}`, { recursive: true });
 writeFileSync(`site${path}index.html`, page({

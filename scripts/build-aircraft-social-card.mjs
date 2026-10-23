@@ -13,6 +13,11 @@ const card = social.card;
 const photo = card.background && existsSync(card.background)
   ? await sharp(card.background).resize(1200, 630, { fit: 'cover', position: 'entropy' }).png().toBuffer()
   : null;
+// card.aircraft may be one line or several (a narrow column clears an aircraft already in the
+// backdrop); the details and the button follow it down. One line keeps the original layout.
+const sub = [].concat(card.aircraft);
+const detailsTop = 325 + (sub.length - 1) * 40;
+const ctaTop = detailsTop + (card.details.length - 1) * 37 + 54;
 const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
   <defs><linearGradient id="sky" x2="1" y2="1"><stop stop-color="#087bc1"/><stop offset="1" stop-color="#063958"/></linearGradient>
   <linearGradient id="shade" x2="1" y2="0"><stop stop-color="#08141e" stop-opacity=".82"/><stop offset=".55" stop-color="#08141e" stop-opacity=".55"/><stop offset="1" stop-color="#08141e" stop-opacity=".1"/></linearGradient></defs>
@@ -22,15 +27,15 @@ const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1
   <text x="62" y="65" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="3">${text(card.eyebrow)}</text>
   <text x="58" y="155" fill="#fff" font-family="Arial,sans-serif" font-size="68" font-weight="700" letter-spacing="-3">${text(card.headline)}</text>
   <rect x="62" y="195" width="60" height="5" fill="#f2c200"/>
-  <text x="62" y="255" fill="#fff" font-family="Arial,sans-serif" font-size="33" font-weight="700">${text(card.aircraft)}</text>
-  <text x="62" y="325" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">${text(card.details[0])}</text>
-  <text x="62" y="362" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">${text(card.details[1])}</text>
-  <rect x="62" y="416" width="340" height="58" rx="4" fill="#ff8500"/>
-  <text x="85" y="453" fill="#15191c" font-family="Arial,sans-serif" font-size="24" font-weight="700">${text(card.cta)}</text>
+  ${sub.map((line, i) => `<text x="62" y="${255 + i * 40}" fill="#fff" font-family="Arial,sans-serif" font-size="33" font-weight="700">${text(line)}</text>`).join('')}
+  ${card.details.map((line, i) => `<text x="62" y="${detailsTop + i * 37}" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">${text(line)}</text>`).join('')}
+  <rect x="62" y="${ctaTop}" width="340" height="58" rx="4" fill="#ff8500"/>
+  <text x="85" y="${ctaTop + 37}" fill="#15191c" font-family="Arial,sans-serif" font-size="24" font-weight="700">${text(card.cta)}</text>
 </svg>`);
 // card.place puts the render where it clears the words (the Chupito's photo card: scratch cardfit search, 24 Oct 2026).
 const place = { left: 445, top: 170, width: 730, ...(card.place || {}) };
-const wing = await sharp(card.image || 'site/assets/nanawing/aircraft/spectre-1400.webp').resize({ width: place.width }).png().toBuffer();
+// card.imageInBackground: the backdrop already carries the aircraft (made by Astra), so no render is laid over it.
+const wing = card.imageInBackground ? null : await sharp(card.image || 'site/assets/nanawing/aircraft/spectre-1400.webp').resize({ width: place.width }).png().toBuffer();
 const footer = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
   <rect y="580" width="1200" height="50" fill="#063958"/>
   <text x="62" y="611" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="17">${text(card.credit)}</text>
@@ -40,7 +45,7 @@ const output = `site${social.image}`;
 mkdirSync(dirname(output), { recursive: true });
 const layers = [
   ...(photo ? [{ input: background, left: 0, top: 0 }] : []),
-  { input: wing, left: place.left, top: place.top },
+  ...(wing ? [{ input: wing, left: place.left, top: place.top }] : []),
   { input: footer, left: 0, top: 0 },
 ];
 await sharp(photo ?? background).composite(layers).jpeg({ quality: 92, mozjpeg: true }).toFile(output);

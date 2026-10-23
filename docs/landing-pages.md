@@ -31,10 +31,21 @@ Rules the auditor cannot judge (taste, truth of a claim) are marked **(human)**.
 - H3. The hero carries the eyebrow, the H1, one sub-line and the CTA; the lede and everything else sit below it.
 - H4. **(human)** A tagline claim ("the only …") is checked before it ships and the check is recorded in the page's
   `_h1` note, with the date; it comes down the day it stops being true.
-- H5. The hero art is the sim's own render of the aircraft (accurate to the real wing) over a backdrop master kept under
-  `assets-src/`, composed by `npm run landing:hero` from `hero.image.source` in the page's content; the share card takes the
-  same backdrop (`social.card.background`) and places the render clear of the words (`social.card.place`). No manufacturer
-  photographs (Team BlackSheep's terms); a generated backdrop is recorded as such in the plan's change log.
+- H5. The hero and share pictures are made by Astra (ChatGPT’s image model, in the Codex app on the owner’s machine),
+  never composited by a script or by hand (owner, 24 Oct 2026). They start from the maker’s own photographs when the
+  maker’s permission covers them (Team BlackSheep: yes, owner 24 Oct 2026), otherwise from the sim’s render. Masters live
+  under `assets-src/<area>/`; `npm run landing:hero` only resizes and encodes them from `hero.image.source`, and the share
+  card script only prints the words over `social.card.background`. The maker is credited and linked under the picture.
+
+## L. Layout
+
+- L1. A landing page is laid out as a product page (owner, 24 Oct 2026: "think Apple product page like iPad"), not a
+  scenery backdrop with a floating plane, which the homepage already has. In order: a sticky product nav (the wing's
+  name, the page's stops as verbs, a play button); a dark centred hero (eyebrow, H1, one line, the play button, a link to
+  the bundles), then the wing itself under the words; the videos; a dark band for the sim (the render, the figures as
+  large tiles, the small print, the play button, the habits to learn on a real in-sim frame); the bundles side by side
+  with their live seller tables; then prints, logs, thanks, questions and a dark closing band.
+- L2. Every jump target clears the sticky nav (a scroll margin on every id), and the nav keeps the play button on a phone.
 
 ## C. Copy
 

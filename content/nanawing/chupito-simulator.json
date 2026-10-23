@@ -1,5 +1,5 @@
 {
-  "_about": "Copy for www.narenana.com/nanawing/chupito-simulator/, the TBS Chupito's page (search: chupito sim, chupito simulator, TBS Chupito simulator): watch it, fly it in Nanawing, buy one in India, then replay your own flights in the log viewer. Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json; the buy section's price line is filled per request by the Worker (src/wings-live.js, wingsSlug) and falls back to buy.fallback. Voice: .claude/brand-voice-guidelines.md (strict QA pass 23 Oct 2026). Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card. Third-party video titles are verbatim; the owner's own carry our captions.",
+  "_about": "Copy for www.narenana.com/nanawing/chupito-simulator/, the TBS Chupito's page (search: chupito sim, chupito simulator, TBS Chupito simulator): watch it, fly it in Nanawing, buy one in India, then replay your own flights in the log viewer. Laid out as a product page (owner, 24 Oct 2026: think Apple product page): a sticky product nav, a dark centred hero with the real wing under the headline, the videos, a dark band for the sim, the bundles side by side, the prints, the log viewer, the thanks, the questions and a closing band. Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json; the buy section's price line is filled per request by the Worker (src/wings-live.js, wingsSlug) and falls back to buy.fallback. Voice: .claude/brand-voice-guidelines.md (strict QA pass 23 Oct 2026). Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card. Third-party video titles are verbatim; the owner's own carry our captions.",
   "path": "/nanawing/chupito-simulator/",
   "aircraft": "chupito",
   "wingsSlug": "tbs-chupito",
@@ -19,24 +19,24 @@
     "title": "The only Chupito simulator on the internet",
     "description": "Fly the TBS Chupito free in your browser: snap it round, race it on 5 courses, on a laptop or your phone. No install, no login.",
     "image": "/nanawing/chupito-simulator/og.jpg",
-    "imageAlt": "Nanawing’s recreation of the TBS Chupito, a dark grey flying wing with a red pusher prop, on a blue background with the words Fly the TBS Chupito",
+    "imageAlt": "The TBS Chupito, Team BlackSheep’s black flying wing, against a dark background beside the words The only Chupito simulator",
     "card": {
       "eyebrow": "NANAWING · FREE FPV WING SIMULATOR",
       "headline": "The only Chupito simulator",
-      "aircraft": "Fly the TBS Chupito free, in your browser",
+      "aircraft": [
+        "Fly the TBS Chupito free,",
+        "in your browser"
+      ],
       "details": [
-        "Flick it round at 360°/s. Race it on 5 courses.",
+        "Flick it round at 360°/s.",
+        "Race it on 5 courses.",
         "Keyboard, RC radio or phone. No install."
       ],
       "cta": "Fly it free",
-      "credit": "Nanawing’s recreation. Reference airframe by Team BlackSheep.",
-      "image": "site/assets/nanawing/aircraft/chupito-1400.webp",
-      "background": "assets-src/nanawing/chupito-hero-bg.webp",
-      "place": {
-        "left": 580,
-        "top": 260,
-        "width": 620
-      }
+      "credit": "Picture made from Team BlackSheep’s product photographs.",
+      "background": "assets-src/nanawing/chupito/share-bg.png",
+      "_about": "Owner, 24 Oct 2026: the card’s picture is made by Astra (ChatGPT’s image model, in the Codex app) from Team BlackSheep’s product photographs, which their permission covers (owner, 24 Oct); the script only prints the words over it. imageInBackground: the wing is already in the backdrop, so no render is composited.",
+      "imageInBackground": true
     }
   },
   "hero": {
@@ -45,6 +45,7 @@
     "h1": "The only Chupito simulator on the internet",
     "sub": "Fly the TBS Chupito free, in your browser.",
     "image": {
+      "_about": "Owner, 24 Oct 2026: the hero shows the real TBS Chupito, made by Astra (ChatGPT’s image model, in the Codex app) from Team BlackSheep’s product photographs, which their permission covers (owner, 24 Oct). Nothing is composited by script: build-landing-hero.mjs only resizes the masters. The pictures fade to #0d1d2a, the page’s dark colour, at their edges.",
       "file": "chupito-hero",
       "widths": [
         1280,
@@ -57,49 +58,40 @@
           1080
         ]
       },
-      "alt": "The TBS Chupito, a dark grey flying wing with a red pusher prop, banking over sunlit farmland and a river at golden hour",
+      "alt": "The TBS Chupito, Team BlackSheep’s black 800mm flying wing, nose up in a gentle bank against a dark background",
+      "creditLead": "Picture made from the product photographs of",
       "source": {
-        "background": "assets-src/nanawing/chupito-hero-bg.webp",
-        "aircraft": "site/assets/nanawing/aircraft/chupito-1400.webp",
-        "desktop": {
-          "x": 0.5,
-          "y": 0.2,
-          "w": 0.46,
-          "position": "centre"
-        },
-        "phone": {
-          "x": 0.03,
-          "y": 0.1,
-          "w": 0.94,
-          "position": "right"
-        }
+        "master": "assets-src/nanawing/chupito/hero-desktop.png",
+        "phoneMaster": "assets-src/nanawing/chupito/hero-phone.png"
       }
     },
-    "lede": "Practise on Nanawing’s recreation of Team BlackSheep’s 800mm pusher wing before your first field day with the real one. Open it in your browser and fly: no install, no login. Then find one in India, and once yours is flying, replay your own flights.",
+    "lede": "Practise on the TBS Chupito, an 800mm pusher wing, in Nanawing before your first field day with the real one. Open it in your browser and fly: no install, no login. Then find one in India, and once yours is flying, replay your own flights.",
     "cta": "Fly the Chupito now",
     "ctaNote": "Press Launch when the hangar opens and you’re away.",
     "jumps": [
       {
         "href": "#watch",
-        "label": "Watch it"
+        "label": "Watch"
       },
       {
         "href": "#wing",
-        "label": "Fly it in the sim"
+        "label": "Fly it"
       },
       {
         "href": "#buy",
-        "label": "Buy one in India"
+        "label": "Buy"
       },
       {
         "href": "#prints",
-        "label": "Print the parts"
+        "label": "Print parts"
       },
       {
         "href": "#logs",
-        "label": "Replay your flights"
+        "label": "Replay"
       }
-    ]
+    ],
+    "buyLabel": "Buy one in India",
+    "navCta": "Fly it free"
   },
   "watch": {
     "h2": "Watch it fly first",
@@ -204,7 +196,7 @@
   "smallPrint": "TBS Chupito: Nanawing’s recreation; its handling is not TBS flight data.",
   "fly": {
     "_about": "Owner, 23 Oct 2026: the three text blocks (3 things to practise / Fly it with what you have / What will bite you) read as a wall of text; one section, one in-sim picture of the Chupito, three short cards. The picture is a real Nanawing frame (chupito-sim-{900,1600}.webp), never generated art.",
-    "h2": "Learn its habits before the first real throw",
+    "h2": "Nail its habits before the first real throw",
     "image": {
       "file": "chupito-sim",
       "widths": [
@@ -212,7 +204,7 @@
         1600
       ],
       "alt": "The TBS Chupito in Nanawing, seen from the chase camera as it banks low over the Island, with the OSD showing speed and battery",
-      "caption": "Nanawing, chase view. Switch to FPV when you’re ready."
+      "caption": "The Chupito in Nanawing, chase view. Switch to FPV when you’re ready. Reference airframe by {maker}."
     },
     "blocks": [
       {
@@ -235,7 +227,7 @@
         "items": [
           "It stalls at 35 km/h. A slow, tight turn is how a Chupito stalls: keep the speed up and start the turn early.",
           "The roll is quick. Small inputs, then wait.",
-          "Landing: ease it down with a little throttle in. Chop it early and it drops. Crash, reset, go again, then take it to the field."
+          "Landing: ease it down with a little throttle in. Chop it early and it drops. After a crash, reset and go again, then take it to the field."
         ]
       }
     ]
@@ -251,7 +243,7 @@
         "matchPriority": 2,
         "match": "\\bkit\\b",
         "name": "Kit",
-        "sub": "the airframe; you bring the electronics",
+        "sub": "Build it with the parts you choose",
         "includes": "The EPP wing, carbon spars, glass-fibre motor and camera mounts, metal hardware and the sticker sheet. You bring every part that moves or lights up.",
         "pick": "Pick it if you already have a motor, an AIO board or ESC, servos, GPS and a receiver, or want to choose every part yourself. TBS also sells the electronics package on its own.",
         "none": "TBS ships the bare kit from its own store. At the last check, no Indian seller we check lists it."
@@ -261,8 +253,8 @@
         "matchPriority": 1,
         "match": "\\b(set|pnp|rtf)\\b",
         "name": "Set",
-        "sub": "airframe plus TBS’s electronics package; some shops call it PNP",
-        "includes": "Everything in the Kit plus TBS’s electronics: the AIO flight-controller and ESC board, GPS, motor, servos and prop. You add your video system (DJI O3 or O4, Walksnail or analogue), a receiver such as a Crossfire Nano RX, and a 4S–6S pack of 800–1800 mAh under 270 g.",
+        "sub": "Fly on electronics matched to the wing",
+        "includes": "Everything in the Kit plus TBS’s electronics: the AIO flight-controller and ESC board, GPS, motor, servos and prop. You add your video system (DJI O3 or O4, Walksnail or analogue), a receiver such as a Crossfire Nano RX, and a 4S–6S pack of 800–1800 mAh under 270 g. Some shops call the Set PNP.",
         "pick": "Pick it for your first Chupito: the electronics are matched to the wing, and TBS publishes iNAV settings for them.",
         "none": "At the last check, no Indian seller we check lists the Set."
       },
@@ -271,13 +263,13 @@
         "matchPriority": 0,
         "match": "crash[- ]?a[- ]?lot",
         "name": "Crash-A-Lot",
-        "sub": "the Set plus a spare set of foam parts",
+        "sub": "Keep flying after a hard landing",
         "includes": "The Set’s airframe and electronics, plus spare foam parts to swap in after a hard landing.",
         "pick": "Pick it if this is your first wing, or your field is unforgiving.",
         "none": "At the last check, no Indian seller we check lists the Crash-A-Lot."
       }
     ],
-    "otherName": "Chupito listings outside these bundles",
+    "otherName": "Pick up a Chupito in another bundle",
     "note": "Prices and stock as last checked at each seller. Confirm on the seller’s page before you pay.",
     "p": "Compare the Chupito’s price and stock at each Indian hobby seller on Wings, with the date each was last checked and a link straight to the seller’s page. You buy from the seller; we don’t sell anything. Read the manual and see the kit on Team BlackSheep’s own page.",
     "links": [
@@ -295,7 +287,6 @@
     "_about": "Verified 23 Oct 2026 by reading each designer's page (MakerWorld and Thingiverse; both open in a browser). Printables and Cults3D also list Chupito parts but sit behind a bot check, so none are linked yet. Each `what` line paraphrases the designer's own description; `by` and `site` are the credit. Downloads at the time: wall hanger 238, fin slider 220, USB-C mount 156, VTX lock 122, servo cover 97.",
     "h2": "Print the parts other pilots already designed",
     "intro": "Each link goes to the designer’s own page on MakerWorld or Thingiverse, with the notes and downloads there. Test-fit each print on your own build first.",
-    "note": "Electronics and shells differ, so the fit may vary.",
     "groups": [
       {
         "h3": "Keep the camera and VTX where you put them",
@@ -397,7 +388,7 @@
             "href": "https://makerworld.com/en/models/1767392-chupito-fc-deck",
             "by": "cooties",
             "site": "MakerWorld",
-            "what": "Replaces the plywood deck: 20×20mm or 30.5mm mounts for the flight controller, a slot to zip-tie the ESC underneath and a spot for the GPS at the back."
+            "what": "Swap the plywood deck for a printed one that fits your 20×20mm or 30.5mm flight controller, with room for the ESC and GPS."
           }
         ]
       },
@@ -454,7 +445,7 @@
     ]
   },
   "faq": {
-    "h2": "Questions",
+    "h2": "Answers before you fly",
     "items": [
       {
         "q": "Is this the real TBS Chupito?",
@@ -482,7 +473,7 @@
       },
       {
         "q": "Are there 3D-printed parts for the Chupito?",
-        "a": "Yes. Pilots have shared prints for the camera, battery, hatch and fins, free on MakerWorld and Thingiverse.",
+        "a": "Yes. Pilots have shared prints for the camera, battery, hatch and fins on MakerWorld and Thingiverse.",
         "link": {
           "href": "#prints",
           "label": "See the prints"
@@ -503,5 +494,6 @@
     "h2": "Get some stick time in before it arrives",
     "lede": "Take the Chupito round Windmill Run, then thread it through Estate Run’s giant oaks. Fly it in your browser on a laptop, or on your phone.",
     "cta": "Fly the Chupito now"
-  }
+  },
+  "_voice": "Strict QA pass 24 Oct 2026 (whole page). Kept on purpose: the thanks heading (the owner's own section and words); \"the quickest roll in the hangar\" (a fleet fact, asserted by scripts/nanawing-landing.test.mjs); \"under 270 g\" in the Set card (TBS's pack limit, buying guidance, not a sold limit); faqNote is already the one small-print line. Second pass: the wingspan stays in metres (the spec tiles share the hangar page's format for every wing); the render's alt says dark grey because the sim's model is dark grey, while the hero picture of the real kit is black."
 }

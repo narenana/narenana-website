@@ -48,6 +48,14 @@ test('search metadata: the title names the aircraft and "simulator", within the 
   const heroImg = main.match(/<img class="ac-hero-bg"[^>]*>/)[0];
   for (const w of copy.hero.image.widths) assert.ok(heroImg.includes(`/assets/nanawing/${copy.hero.image.file}-${w}.webp?v=`), `hero ${w}w, versioned`);
   assert.ok(heroImg.includes(`alt="${copy.hero.image.alt}"`) && heroImg.includes('fetchpriority="high"'));
+  // The product layout (owner, 24 Oct 2026): the words come first, then the picture; the maker is credited under it;
+  // the hero also points at the bundles; the sticky product nav carries the wing's name and the play button.
+  const hero = main.match(/<section class="ac-hero-band"[\s\S]*?<\/section>/)[0];
+  assert.ok(hero.indexOf('<h1') < hero.indexOf('<img class="ac-hero-bg"'), 'the headline sits above the picture');
+  assert.ok(hero.includes(`<a class="ac-hero-buy" href="#buy">`), 'the hero links the bundles');
+  assert.ok(new RegExp(`<p class="ac-hero-credit">[^<]*<a href="${escapeRe(aircraft.credit.url)}"`).test(hero), 'the maker is credited under the hero picture');
+  const subnav = main.match(/<div class="ac-subnav">[\s\S]*?<\/div><\/div>/);
+  assert.ok(subnav && subnav[0].includes(`>${aircraft.name}</a>`) && subnav[0].includes('class="ac-btn ac-btn-nav"'), 'the product nav names the wing and carries the play button');
   assert.equal(meta('og:image'), `${site}${copy.social.image}`);
   assert.equal(meta('og:title'), copy.social.title);
 });
