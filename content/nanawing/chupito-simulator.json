@@ -62,11 +62,11 @@
   "smallPrint": "TBS Chupito: Nanawing’s recreation; its handling is not TBS flight data.",
   "more": { "href": "/nanawing/aircraft/", "label": "Pick another wing in Nanawing" },
   "doing": {
-    "h2": "Three things to practise",
+    "h2": "3 things to practise",
     "items": [
       { "h3": "Snap it round", "p": "Flick it from bank to bank between the gates with small stick inputs, so the real one doesn’t surprise you. It rolls at 360°/s, the quickest roll in the hangar." },
       { "h3": "Keep your speed up", "p": "Open it up to 140 km/h on the straights. It stalls at 35 km/h, so carry speed through the turns and ease it down gently when you land." },
-      { "h3": "Race it on all 5 courses", "p": "Fly Windmill Run and River Run on the Island, Tunnel Run and Pyramid Run in the Desert, then thread Estate Run’s giant oaks, 2.8 km over the estate roofs. Take the Chupito or the WUDFLY Spectre. Set a lap time, see where you rank, then go back and beat it." }
+      { "h3": "Race it on all 5 courses", "p": "Fly Windmill Run and River Run on the Island, Tunnel Run and Pyramid Run in the Desert, then thread Estate Run’s giant oaks over the estate roofs, a 2.8 km run. Take the Chupito or the WUDFLY Spectre. Set a lap time, see where you rank, then go back and beat it." }
     ]
   },
   "controls": {
@@ -97,7 +97,8 @@
   "prints": {
     "_about": "Verified 23 Oct 2026 by reading each designer's page (MakerWorld and Thingiverse; both open in a browser). Printables and Cults3D also list Chupito parts but sit behind a bot check, so none are linked yet. Each `what` line paraphrases the designer's own description; `by` and `site` are the credit. Downloads at the time: wall hanger 238, fin slider 220, USB-C mount 156, VTX lock 122, servo cover 97.",
     "h2": "Print the parts other pilots already designed",
-    "intro": "Each link goes to the designer’s own page on MakerWorld or Thingiverse, with the notes and downloads there. Test-fit each print on your own build first: electronics and shells differ.",
+    "intro": "Each link goes to the designer’s own page on MakerWorld or Thingiverse, with the notes and downloads there. Test-fit each print on your own build first.",
+    "note": "Electronics and shells differ, so the fit may vary.",
     "groups": [
       { "h3": "Keep the camera and VTX where you put them", "items": [
         { "title": "TBS Chupito 800 Pan-Tower", "href": "https://makerworld.com/en/models/1719772-tbs-chupito-800-pan-tower", "by": "ninjamic85", "site": "MakerWorld", "what": "Pan the camera on a Feetech FT90M servo and look into the turn. It is the mount Team BlackSheep links from the kit page, and the designer links a DJI O4 Pro mount for it." },
@@ -117,10 +118,10 @@
       ] },
       { "h3": "Keep the electronics bay tidy", "items": [
         { "title": "TBS Chupito FPV Wing USB-C Board Mount", "href": "https://makerworld.com/en/models/2228858-tbs-chupito-fpv-wing-usb-c-board-mount", "by": "BMS Racing", "site": "MakerWorld", "what": "Tape a USB-C board to the print and clip it into the bay, so the port stays reachable." },
-        { "title": "Chupito FC Deck", "href": "https://makerworld.com/en/models/1767392-chupito-fc-deck", "by": "cooties", "site": "MakerWorld", "what": "Replaces the plywood deck: 20×20 or 30.5 mounts for the flight controller, a slot to zip-tie the ESC underneath and a spot for the GPS at the back." }
+        { "title": "Chupito FC Deck", "href": "https://makerworld.com/en/models/1767392-chupito-fc-deck", "by": "cooties", "site": "MakerWorld", "what": "Replaces the plywood deck: 20×20mm or 30.5mm mounts for the flight controller, a slot to zip-tie the ESC underneath and a spot for the GPS at the back." }
       ] },
       { "h3": "Hang it up between flights", "items": [
-        { "title": "Wall Mount Hanger for TBS Chupito FPV Wing", "href": "https://makerworld.com/en/models/1827050-wall-mount-hanger-for-tbs-chupito-fpv-wing", "by": "TacGriz", "site": "MakerWorld", "what": "Hang the wing on the wall by its motor with one screw. Needs the standard TBS electronics package." }
+        { "title": "Wall Mount Hanger for TBS Chupito FPV Wing", "href": "https://makerworld.com/en/models/1827050-wall-mount-hanger-for-tbs-chupito-fpv-wing", "by": "TacGriz", "site": "MakerWorld", "what": "Hang the wing on the wall by its motor with one screw; made for the standard TBS electronics package." }
       ] }
     ]
   },
