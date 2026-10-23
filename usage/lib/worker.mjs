@@ -26,6 +26,14 @@ const ALLOW = {
   // position, no filename, no content; only one low-cardinality bucket.
   fw_family: ['', 'betaflight', 'inav', 'emuflight'], // flight-controller firmware (blackbox logs)
   craft: ['', 'quad', 'wing', 'unknown'], // best-effort airframe type
+  // Anonymous flight-detail buckets (derived in the browser; no coordinates,
+  // filename, content, or per-visitor id — just the shape of the flight).
+  log_duration: ['', '<1m', '1-3m', '3-6m', '6-15m', '15m+'],
+  peak_alt: ['', '<10m', '10-50m', '50-120m', '120-400m', '400m+'], // max AGL
+  peak_speed: ['', '<20', '20-60', '60-100', '100-150', '150+'], // km/h magnitude
+  cells: ['', '1S', '2S', '3S', '4S', '5S', '6S', '7S', '8S+'], // battery
+  // Which debrief detectors fired at notice+ severity — the "top issues" signal.
+  detector: ['', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'R1', 'R2', 'R3', 'R4', 'B0', 'B1', 'B2', 'B3', 'B4', 'M1', 'M2', 'L0'],
 }
 
 const CORS = /^https:\/\/(www|latest)\.narenana\.com$|^https:\/\/([a-z0-9-]+\.)?edgetx-log-parser\.pages\.dev$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/
@@ -131,6 +139,12 @@ export async function usageSummary(env, days = 30) {
     crashes: sum('debrief_shown', 'critical'),
     byFwFamily: byDim('fw_family'), // betaflight / inav / emuflight
     byCraft: byDim('craft'), // quad / wing / unknown
+    // Anonymous flight-detail distributions.
+    byDuration: byDim('log_duration'),
+    byPeakAlt: byDim('peak_alt'),
+    byPeakSpeed: byDim('peak_speed'),
+    byCells: byDim('cells'),
+    byDetector: byDim('detector'), // which debrief issues fired, most-common first
     daily,
   }
 }
