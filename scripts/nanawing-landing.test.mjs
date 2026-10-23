@@ -115,6 +115,7 @@ test('watch, buy, replay: the videos, the live price slot and the log viewer lin
   assert.deepEqual(objects.map((o) => o.url), videos.map((v) => `https://www.youtube.com/watch?v=${v.id}`));
   for (const o of objects) assert.ok(!Number.isNaN(Date.parse(o.uploadDate)) && o.embedUrl.startsWith('https://www.youtube-nocookie.com/embed/'));
   assert.ok(html.includes("closest('a[data-yt]')"), 'the click-to-play script is on the page');
+  assert.ok(html.includes('<dialog class="ac-yt-dialog" id="yt-dialog"') && html.includes('d.showModal()'), 'videos open in the modal player, not inside the card');
   // The jump strip covers the four stops.
   const jumps = main.match(/<nav class="ac-jumps"[^>]*>([\s\S]*?)<\/nav>/);
   assert.ok(jumps, 'the jump strip exists');

@@ -49,6 +49,15 @@ export function credit(a) {
 // YouTube loads before that. The iframe's title is the card's .ac-yt-title text.
 export const YT_SCRIPT = `<script>document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[data-yt]');if(!a||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();var f=document.createElement('iframe');f.src='https://www.youtube-nocookie.com/embed/'+a.getAttribute('data-yt')+'?autoplay=1&rel=0';f.title=a.parentNode.querySelector('.ac-yt-title').textContent;f.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';f.allowFullscreen=true;f.className='ac-yt ac-yt-on';a.replaceWith(f);f.focus()});</script>`;
 
+// The landing pages' player: a card click opens one large 16:9 player in a modal over the page
+// (owner, 23 Oct 2026: not a player inside the small thumbnail). Esc, the × or the backdrop closes
+// it and stops playback by removing the iframe. Nothing from YouTube loads before a click.
+export const YT_LIGHTBOX = `<dialog class="ac-yt-dialog" id="yt-dialog" aria-label="Video player"><button type="button" class="ac-yt-close" data-close aria-label="Close the video">×</button><div class="ac-yt-stage"></div></dialog>
+<script>(function(){var d=document.getElementById('yt-dialog');if(!d||!d.showModal)return;var stage=d.querySelector('.ac-yt-stage');function close(){stage.innerHTML='';if(d.open)d.close()}
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[data-yt]');if(!a||e.ctrlKey||e.metaKey||e.shiftKey)return;e.preventDefault();var id=a.getAttribute('data-yt');if(!/^[A-Za-z0-9_-]{6,15}$/.test(id))return;
+var f=document.createElement('iframe');f.src='https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0';var t=a.parentNode.querySelector('.ac-yt-title');f.title=t?t.textContent:'YouTube video player';f.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';f.allowFullscreen=true;stage.innerHTML='';stage.appendChild(f);d.showModal();d.querySelector('[data-close]').focus()});
+d.querySelector('[data-close]').addEventListener('click',close);d.addEventListener('cancel',function(e){e.preventDefault();close()});d.addEventListener('click',function(e){if(e.target===d)close()})})()</script>`;
+
 export const specRows = [
   ['Top speed', (a) => `${fmt(a.topSpeedKmh)}&nbsp;km/h`],
   ['Stall speed', (a) => `${fmt(a.stallSpeedKmh)}&nbsp;km/h`],
