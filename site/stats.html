@@ -81,6 +81,10 @@
     .tabh { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 26px 0 12px; }
     .tabh:first-child { margin-top: 4px; }
     #nwframe { width: 100%; min-height: 70vh; border: 0; border-radius: 14px; background: var(--card); display: block; }
+    #lv-activity { margin-bottom: 14px; }
+    .lv-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
+    @media (max-width: 640px) { .lv-mini { grid-template-columns: 1fr; } }
+    .chlbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 2px; }
     .panel { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px 20px; }
     .panel .title { font-weight: 700; margin-bottom: 6px; }
     .panel svg.line { display: block; width: 100%; height: 60px; margin: 4px 0 10px; }
@@ -132,6 +136,7 @@
       <iframe id="nwframe" data-src="/stats/nanawing?embed=1" title="Nanawing flight stats" loading="eager"></iframe>
     </section>
     <section class="tabpanel" data-panel="logviewer" hidden>
+      <div id="lv-activity"></div>
       <div class="cols" id="logviewer"></div>
     </section>
     <section class="tabpanel" data-panel="sites" hidden>
@@ -406,8 +411,41 @@
           ${dimRows(d.byCraft, 'craft')}
           <div style="font-size:0.78rem;color:var(--muted);margin:10px 0 2px">Flight outcome</div>
           ${dimRows(d.byOutcome, 'outcome')}</div>`
-        $('logviewer').innerHTML = funnel + fleet
+        // Day-on-day activity (from lv_usage's per-day rollup).
+        const dy = d.daily
+        const avg = (a) => (a && a.length) ? Math.round((a.reduce((x, y) => x + y, 0) / a.length) * 10) / 10 : 0
+        const activity = (dy && dy.loads && dy.loads.some((v) => v)) ? `<div class="panel">
+          <div class="title" style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+            <span>Activity · log loads per day ${deltaChip(dy.loads)}</span>
+            <span style="font-size:0.72rem;font-weight:400;color:var(--muted)">last ${d.days}d</span></div>
+          ${spark(dy.loads, 680, 74)}
+          <div class="facts" style="color:var(--muted);font-size:0.82rem;margin-top:8px">
+            avg/day <b style="color:var(--fg)">${fmt(avg(dy.loads))}</b> ·
+            peak <b style="color:var(--fg)">${fmt(Math.max(...dy.loads))}</b> ·
+            flights analysed <b style="color:var(--fg)">${fmt(d.summaries)}</b> ·
+            crashes <b style="color:${(d.crashes || 0) > 0 ? '#f85149' : 'var(--fg)'}">${fmt(d.crashes)}</b> ·
+            narrations <b style="color:var(--fg)">${fmt(d.narrations)}</b></div>
+          <div class="lv-mini">
+            <div><div class="chlbl">Flights analysed / day</div>${spark(dy.summaries, 320, 46)}</div>
+            <div><div class="chlbl">AI narrations / day</div>${spark(dy.narrations, 320, 46)}</div></div></div>` : ''
+        $('lv-activity').innerHTML = activity
+        // Flight-detail distributions (anonymous buckets).
+        const profile = `<div class="panel"><div class="title">Flight profile (${d.days}d)</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin:4px 0 2px">Duration</div>${dimRows(d.byDuration, 'duration')}
+          <div style="font-size:0.78rem;color:var(--muted);margin:10px 0 2px">Peak altitude · AGL</div>${dimRows(d.byPeakAlt, 'altitude')}
+          <div style="font-size:0.78rem;color:var(--muted);margin:10px 0 2px">Peak speed · km/h</div>${dimRows(d.byPeakSpeed, 'speed')}
+          <div style="font-size:0.78rem;color:var(--muted);margin:10px 0 2px">Battery</div>${dimRows(d.byCells, 'cells')}</div>`
+        const DETLBL = { E1: 'log not terminated', E2: 'power cut mid-air', E3: 'ADC death rattle', E4: 'in-air power loss', E5: 'electrical', E6: 'electrical', R1: 'link loss · airborne', R2: 'link loss', R3: 'signal degraded', R4: 'link dropouts', B0: 'battery profile', B1: 'voltage sag', B2: 'battery', B3: 'battery notice', B4: 'battery', M1: 'vibration', M2: 'mechanical', L0: 'link profile' }
+        const detRows = (list) => (list && list.length)
+          ? `<div class="tbl"><table><thead><tr><th>detector</th><th class="num">flights</th></tr></thead><tbody>${
+              list.map((x) => `<tr><td><b style="color:var(--fg)">${esc(x.dim)}</b> <span style="color:var(--muted)">${esc(DETLBL[x.dim] || '')}</span></td><td class="num">${fmt(x.n)}</td></tr>`).join('')}</tbody></table></div>`
+          : `<div style="color:var(--muted);font-size:0.8rem">no issues flagged yet</div>`
+        const issues = `<div class="panel"><div class="title">Top issues the debrief flags (${d.days}d)</div>
+          <div style="font-size:0.78rem;color:var(--muted);margin:4px 0 6px">Detectors that fired (notice+), most-common first</div>
+          ${detRows(d.byDetector)}</div>`
+        $('logviewer').innerHTML = funnel + fleet + profile + issues
       } else {
+        $('lv-activity').innerHTML = ''
         $('logviewer').innerHTML = `<div class="panel empty">Log Viewer: ${esc((data.logviewer && data.logviewer.error) || 'no first-party data yet')}</div>`
       }
 

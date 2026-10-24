@@ -26,6 +26,14 @@ const ALLOW = {
   // position, no filename, no content; only one low-cardinality bucket.
   fw_family: ['', 'betaflight', 'inav', 'emuflight'], // flight-controller firmware (blackbox logs)
   craft: ['', 'quad', 'wing', 'unknown'], // best-effort airframe type
+  // Anonymous flight-detail buckets (derived in the browser; no coordinates,
+  // filename, content, or per-visitor id — just the shape of the flight).
+  log_duration: ['', '<1m', '1-3m', '3-6m', '6-15m', '15m+'],
+  peak_alt: ['', '<10m', '10-50m', '50-120m', '120-400m', '400m+'], // max AGL
+  peak_speed: ['', '<20', '20-60', '60-100', '100-150', '150+'], // km/h magnitude
+  cells: ['', '1S', '2S', '3S', '4S', '5S', '6S', '7S', '8S+'], // battery
+  // Which debrief detectors fired at notice+ severity — the "top issues" signal.
+  detector: ['', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'R1', 'R2', 'R3', 'R4', 'B0', 'B1', 'B2', 'B3', 'B4', 'M1', 'M2', 'L0'],
 }
 
 const CORS = /^https:\/\/(www|latest)\.narenana\.com$|^https:\/\/([a-z0-9-]+\.)?edgetx-log-parser\.pages\.dev$|^http:\/\/(localhost|127\.0\.0\.1):\d+$/
@@ -82,12 +90,37 @@ export async function handleUsage(request, env) {
 export async function usageSummary(env, days = 30) {
   if (!env.USAGE_DB) return null
   const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10)
+  // One pass keyed by day gives BOTH the window totals and the day-on-day
+  // series — lv_usage is already a per-UTC-day rollup, so this is exact.
   const { results } = await env.USAGE_DB.prepare(
-    `SELECT event, dim, SUM(count) AS n FROM lv_usage WHERE day >= ? GROUP BY event, dim`,
+    `SELECT day, event, dim, SUM(count) AS n FROM lv_usage WHERE day >= ? GROUP BY day, event, dim`,
   ).bind(since).all()
   const rows = results || []
   const sum = (event, dim) => rows.filter(r => r.event === event && (dim == null || r.dim === dim)).reduce((a, r) => a + r.n, 0)
-  const byDim = event => rows.filter(r => r.event === event && r.dim).map(r => ({ dim: r.dim, n: r.n })).sort((a, b) => b.n - a.n)
+  const byDim = (event) => {
+    const m = {}
+    rows.filter(r => r.event === event && r.dim).forEach(r => { m[r.dim] = (m[r.dim] || 0) + r.n })
+    return Object.entries(m).map(([dim, n]) => ({ dim, n })).sort((a, b) => b.n - a.n)
+  }
+
+  // Day-on-day series, zero-filled across the whole window (oldest → newest),
+  // so charts draw a continuous line and the delta windows line up.
+  const dayList = []
+  for (let i = days - 1; i >= 0; i--) dayList.push(new Date(Date.now() - i * 86400_000).toISOString().slice(0, 10))
+  const perDay = (event, dim) => {
+    const m = {}
+    rows.filter(r => r.event === event && (dim == null || r.dim === dim)).forEach(r => { m[r.day] = (m[r.day] || 0) + r.n })
+    return dayList.map(d => m[d] || 0)
+  }
+  const daily = {
+    days: dayList,
+    loads: perDay('log_loaded', null),
+    failed: perDay('parse_failed', null),
+    summaries: perDay('log_summary', null), // flights analysed
+    debriefs: perDay('debrief_shown', null),
+    crashes: perDay('debrief_shown', 'critical'),
+    narrations: perDay('narration_completed', null),
+  }
 
   const loaded = sum('log_loaded', null)
   const failed = sum('parse_failed', null)
@@ -106,5 +139,12 @@ export async function usageSummary(env, days = 30) {
     crashes: sum('debrief_shown', 'critical'),
     byFwFamily: byDim('fw_family'), // betaflight / inav / emuflight
     byCraft: byDim('craft'), // quad / wing / unknown
+    // Anonymous flight-detail distributions.
+    byDuration: byDim('log_duration'),
+    byPeakAlt: byDim('peak_alt'),
+    byPeakSpeed: byDim('peak_speed'),
+    byCells: byDim('cells'),
+    byDetector: byDim('detector'), // which debrief issues fired, most-common first
+    daily,
   }
 }
