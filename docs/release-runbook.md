@@ -1,5 +1,15 @@
 # Redesign release runbook
 
+## Release record — 24 October 2026 (RELEASED): the TBS Chupito page
+
+Owner approved on 24 October ("lets go to production"). Website only; the sims and the log viewer are unchanged.
+
+| App | Merge on production branch | Production deployment | Rollback target | Verified |
+|---|---|---|---|---|
+| Website | `master` ec17463 (`--no-ff` merge of `feat/chupito-landing`) | Worker version 92642ae8 (Workers Builds) | 9d8706dc | 20/20 post-deploy checks: `/chupito/` 200 with canonical and index robots, live price line and seller tables, 13 prints, 301 from `/nanawing/chupito-simulator/`, share card, sitemap, inbound links, Wings strip gone, pictures 200 |
+
+New with this release: the hourly cron runs the weekly 3D-prints check on Sundays from 04:00 UTC (`src/prints-live.js`, VIDEOS_KV `landing:prints`). To roll back, follow "Rollback (durable)" below with the version and merge above.
+
 ## Release record — 25 September 2026 (RELEASED)
 
 The owner approved the release on 25 September, and all four apps are live. Everything below this section is the original preparation, kept for reference and for future releases.
