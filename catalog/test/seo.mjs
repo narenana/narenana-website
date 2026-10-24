@@ -465,6 +465,10 @@ test('redirect, genuine 404, staging-only preview exclusion and sitemap discover
   assert.equal(redirect.status, 301)
   assert.equal(new URL(redirect.headers.get('location'), base).pathname, '/')
   assert.equal(new URL(redirect.headers.get('location'), base).search, '?source=test')
+  // The moved log-viewer guide answers its old address with a 301 (Search Console 404, 25 Oct 2026).
+  const guide = await fetch(base + '/log-viewer/how-to-read-a-blackbox-log/', { redirect: 'manual' })
+  assert.equal(guide.status, 301)
+  assert.equal(guide.headers.get('location'), '/log-viewer/guides/how-to-read-a-blackbox-log/')
   assert.equal((await fetch(base + '/this-page-does-not-exist-seo-check')).status, 404)
   assert.equal((await fetch(base + '/direction-b/')).status,404)
   const robots = await (await fetch(base + '/robots.txt')).text()

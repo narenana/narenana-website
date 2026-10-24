@@ -72,6 +72,11 @@ export default {
     if (url.pathname === '/log-viewer') {
       return new Response(null, { status: 301, headers: { Location: '/log-viewer/' + url.search } })
     }
+    // A log-viewer guide that moved under /log-viewer/guides/; Google still had the old address as a 404
+    // (Search Console, 25 Oct 2026). Relative Location, as above, so staging stays on its own host.
+    if (url.pathname === '/log-viewer/how-to-read-a-blackbox-log/' || url.pathname === '/log-viewer/how-to-read-a-blackbox-log') {
+      return new Response(null, { status: 301, headers: { Location: '/log-viewer/guides/how-to-read-a-blackbox-log/' + url.search } })
+    }
     if (url.pathname.startsWith('/log-viewer/')) {
       // latest.narenana.com mirrors the LATEST log-viewer preview build (the
       // `latest` Pages branch alias); www / apex stay on the production
