@@ -54,6 +54,10 @@ export default {
     if (url.pathname === '/nanawing' || url.pathname === '/nanawing/') {
       return new Response(null, { status: 301, headers: { Location: '/' + url.search } })
     }
+    // The Chupito page's first address, before its release moved it to /chupito/ (24 Oct 2026).
+    if (url.pathname === '/nanawing/chupito-simulator' || url.pathname === '/nanawing/chupito-simulator/') {
+      return new Response(null, { status: 301, headers: { Location: '/chupito/' + url.search } })
+    }
     if (url.pathname === '/index.html') {
       // Relative Location: behind latest-router this Worker sees the workers.dev
       // host, and an absolute redirect would move staging testers onto it.

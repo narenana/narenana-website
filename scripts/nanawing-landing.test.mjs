@@ -1,4 +1,4 @@
-// File-only regressions for an aircraft's landing page (/nanawing/chupito-simulator/).
+// File-only regressions for an aircraft's landing page (/chupito/).
 // No server, browser or service requests. Build first: npm run aircraft:build
 // Run: node --test scripts/nanawing-landing.test.mjs
 import { test } from 'node:test';

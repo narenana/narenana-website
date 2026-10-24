@@ -82,11 +82,11 @@ test('prints check: a slice confirms a gone print once, then stores the result i
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
 // A fresh connection per request: the dev server drops idle keep-alive sockets while the CLI writes KV.
 const get = async (url) => { for (let i = 0; ; i++) { try { return await (await fetch(url, { headers: { connection: 'close' } })).text() } catch (e) { if (i >= 2) throw e; await new Promise((r) => setTimeout(r, 1500)) } } }
-const up = await fetch(base + '/nanawing/chupito-simulator/', { headers: { connection: 'close' } }).then((r) => r.ok).catch(() => false)
+const up = await fetch(base + '/chupito/', { headers: { connection: 'close' } }).then((r) => r.ok).catch(() => false)
 const wrangler = (...args) => execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['wrangler', 'kv', 'key', ...args, '--binding', 'VIDEOS_KV', '--local'], { stdio: 'pipe', shell: process.platform === 'win32' })
 
 test('prints check: a retired print leaves the served page and its ItemList', { skip: !up && 'no local server' }, async () => {
-  const copy = PRINT_PAGES['/nanawing/chupito-simulator/']
+  const copy = PRINT_PAGES['/chupito/']
   const lone = copy.prints.groups.findIndex((g) => g.items.length === 1)
   const loneId = copy.prints.groups[lone].items[0].id
   const other = copy.prints.groups[0].items[0]

@@ -11,6 +11,9 @@ Rules the auditor cannot judge (taste, truth of a claim) are marked **(human)**.
 
 ## S. Search
 
+- S0. A top-wing page lives at the wing's own short name, maker added only when the bare name is ambiguous:
+  `/chupito/`, `/mojito/`, `/t1-ranger/`, `/atomrc-dolphin/` (owner, 24 Oct 2026: "url being narenana.com/chupito").
+  No other page on the site may take a wing's name.
 - S1. One target phrase per page, declared as `seo.phrase` (e.g. "Chupito simulator"). The `<title>` carries it
   and is at most 60 characters before the site suffix. The URL slug carries it.
 - S2. The meta description is 70 to 155 characters, names the aircraft, and says what the pilot gets.

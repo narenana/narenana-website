@@ -1,5 +1,5 @@
 // Builds one aircraft's landing page on www from content/ (the content home of
-// docs/site-consolidation-plan.md, M3), e.g. /nanawing/chupito-simulator/:
+// docs/site-consolidation-plan.md, M3), e.g. /chupito/:
 //   node scripts/build-nanawing-landing.mjs content/nanawing/chupito-simulator.json
 // Facts (the specs, the maker credit, the play link) come from content/_facts/nanawing.json;
 // the copy from the page's own JSON. The page shares the hangar page's shell, stylesheet and

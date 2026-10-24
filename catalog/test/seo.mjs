@@ -367,7 +367,7 @@ test('sitemap preserves editorial dates in the Worker and static fallback', asyn
 test('product page: a model Nanawing recreates links its landing page; others do not', () => {
   const cat = { name: 'RC planes', path_prefix: '/wings', spec_schema: '[]' }
   const chupito = renderMaster(cat, { id: 7, brand: 'TBS', name: 'Chupito', slug: 'tbs-chupito', specs: '{}', power: 'electric', role_tags: '["FPV / Flying Wing"]' }, [offer()])
-  assert.match(chupito, /<p class="pd-sim">Try the TBS Chupito before you buy: <a href="\/nanawing\/chupito-simulator\/">fly it in Nanawing<\/a>, free in your browser\.<\/p>/)
+  assert.match(chupito, /<p class="pd-sim">Try the TBS Chupito before you buy: <a href="\/chupito\/">fly it in Nanawing<\/a>, free in your browser\.<\/p>/)
   const other = renderMaster(cat, { id: 8, brand: 'FMS', name: 'Ranger 1220', slug: 'fms-ranger-1220', specs: '{}', power: 'electric', role_tags: '["Trainer"]' }, [offer()])
   assert.ok(!other.includes('pd-sim'))
 })
@@ -414,7 +414,7 @@ test('wings-live: the seller table orders rows like the product page and never q
 // Listings land on the Chupito page's bundle cards by their titles (content/nanawing/chupito-simulator.json).
 test('wings-live: listings map onto the Chupito bundles by title', async () => {
   const { bundleOf, LANDINGS } = await import('../../src/wings-live.js')
-  const { variants } = LANDINGS['/nanawing/chupito-simulator/']
+  const { variants } = LANDINGS['/chupito/']
   assert.deepEqual(variants.map((v) => v.id), ['kit', 'pnp', 'crash-a-lot'])
   const bundle = (title) => bundleOf({ title }, variants)
   assert.equal(bundle('TBS Chupito Set'), 'pnp', 'TBS\'s own name for the PNP')
@@ -427,7 +427,7 @@ test('wings-live: listings map onto the Chupito bundles by title', async () => {
 })
 
 const base = process.env.CATALOG_BASE || 'http://localhost:8787'
-const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/', '/nanawing/chupito-simulator/']
+const pages = ['/', '/videos/nanawing-giz-fpv-review/', '/videos/log-viewer-walkthrough/', '/catalog-methodology/', '/chupito/']
 for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, async () => {
   const response = await fetch(base + path)
   assert.equal(response.status, 200)
@@ -448,7 +448,7 @@ for (const path of pages) test(`indexable HTML and valid metadata: ${path}`, asy
 })
 // The Worker fills the Chupito page's price slot from the catalog (or leaves the page's own sentence).
 test('the Chupito page is served with its Wings price slot filled or intact', async () => {
-  const response = await fetch(base + '/nanawing/chupito-simulator/')
+  const response = await fetch(base + '/chupito/')
   assert.equal(response.status, 200)
   const html = await response.text()
   const slot = html.match(/<p class="ac-live" data-wings="tbs-chupito">([\s\S]*?)<\/p>/)

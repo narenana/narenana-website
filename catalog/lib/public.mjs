@@ -18,7 +18,7 @@ const SITE = 'https://www.narenana.com'
 const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
 // Models the Nanawing sim recreates: their product page links the practise page on www
 // (content/nanawing/<page>.json), keyed by the master's slug.
-const SIM_PAGES = { 'tbs-chupito': { href: '/nanawing/chupito-simulator/', label: 'fly it in Nanawing' } }
+const SIM_PAGES = { 'tbs-chupito': { href: '/chupito/', label: 'fly it in Nanawing' } }
 
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`

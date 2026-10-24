@@ -33,7 +33,8 @@ const metas = Object.fromEntries([...html.matchAll(/<meta\b([^>]*)>/g)].map(([, 
 // S. Search ---------------------------------------------------------------
 check('S1 phrase declared', !!phrase, 'seo.phrase');
 check('S1 title carries the phrase, ≤60 chars', phrase && copy.title.toLowerCase().includes(phrase.toLowerCase()) && copy.title.length <= 60, `${copy.title.length} chars`);
-check('S1 slug carries the phrase', phrase && copy.path.replace(/-/g, ' ').toLowerCase().includes(phrase.toLowerCase()), copy.path);
+// The address is the wing's own name, short (owner, 24 Oct 2026: narenana.com/chupito/).
+check('S1 address is the wing\'s name', !!aircraft && copy.path.toLowerCase().includes(aircraft.name.split(' ').pop().toLowerCase()) && copy.path.split('/').filter(Boolean).length <= 2, copy.path);
 check('S2 description 70–155 chars, names the aircraft', copy.description.length >= 70 && copy.description.length <= 155 && (!aircraft || copy.description.includes(aircraft.name)), `${copy.description.length} chars`);
 check('S2 meta description matches', metas.description === copy.description);
 const h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/g)].map((m) => text(m[1]));

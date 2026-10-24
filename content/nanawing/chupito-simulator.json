@@ -1,6 +1,6 @@
 {
-  "_about": "Copy for www.narenana.com/nanawing/chupito-simulator/, the TBS Chupito's page (search: chupito sim, chupito simulator, TBS Chupito simulator): watch it, fly it in Nanawing, buy one in India, then replay your own flights in the log viewer. Laid out as a product page (owner, 24 Oct 2026: think Apple product page): a sticky product nav, a dark centred hero with the real wing under the headline, the videos, a dark band for the sim, the bundles side by side, the prints, the log viewer, the thanks, the questions and a closing band. Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json; the buy section's price line is filled per request by the Worker (src/wings-live.js, wingsSlug) and falls back to buy.fallback. Voice: .claude/brand-voice-guidelines.md (strict QA pass 23 Oct 2026). Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card. Third-party video titles are verbatim; the owner's own carry our captions.",
-  "path": "/nanawing/chupito-simulator/",
+  "_about": "Copy for www.narenana.com/chupito/, the TBS Chupito's page (search: chupito sim, chupito simulator, TBS Chupito simulator): watch it, fly it in Nanawing, buy one in India, then replay your own flights in the log viewer. Laid out as a product page (owner, 24 Oct 2026: think Apple product page): a sticky product nav, a dark centred hero with the real wing under the headline, the videos, a dark band for the sim, the bundles side by side, the prints, the log viewer, the thanks, the questions and a closing band. Built by scripts/build-nanawing-landing.mjs; the specs, credit and play link come from content/_facts/nanawing.json; the buy section's price line is filled per request by the Worker (src/wings-live.js, wingsSlug) and falls back to buy.fallback. Voice: .claude/brand-voice-guidelines.md (strict QA pass 23 Oct 2026). Team BlackSheep's terms (15 Oct 2026): shown accurately, credited and linked wherever it appears, never as an official TBS simulator; the one disclaimer is smallPrint, under the spec card. Third-party video titles are verbatim; the owner's own carry our captions.",
+  "path": "/chupito/",
   "aircraft": "chupito",
   "wingsSlug": "tbs-chupito",
   "seo": {
@@ -23,7 +23,7 @@
   "social": {
     "title": "The only Chupito simulator on the internet",
     "description": "Fly the TBS Chupito free in your browser: snap it round, race it on 5 courses, on a laptop or your phone. No install, no login.",
-    "image": "/nanawing/chupito-simulator/og.jpg",
+    "image": "/chupito/og.jpg",
     "imageAlt": "The TBS Chupito, Team BlackSheep’s black flying wing, against a dark background beside the words The only Chupito simulator",
     "card": {
       "eyebrow": "NANAWING · FREE FPV WING SIMULATOR",
@@ -603,5 +603,6 @@
     "cta": "Fly the Chupito now"
   },
   "_voice": "Strict QA pass 24 Oct 2026 (whole page). Kept on purpose: the thanks heading (the owner's own section and words); \"the quickest roll in the hangar\" (a fleet fact, asserted by scripts/nanawing-landing.test.mjs); \"under 270 g\" in the Set card (TBS's pack limit, buying guidance, not a sold limit); faqNote is already the one small-print line. Second pass: the wingspan stays in metres (the spec tiles share the hangar page's format for every wing); the render's alt says dark grey because the sim's model is dark grey, while the hero picture of the real kit is black. Third pass (24 Oct, SEO rewrite): the AI line says beta and what it reads; the iNAV version range is one small-print line under the logs copy; the bundle photos credit Team BlackSheep with a link.",
-  "_seo": "SEO pass, owner 24 Oct 2026 (\"think SEO… audit all copy on the page with seo landing ideas\"). Phrases from Google's suggestions for \"tbs chupito\" (24 Oct): kit, pnp, set, manual, build, electronics package, motor, price, 3d print (files), setup, inav setup / settings / config, simulator. Each heading carries the wing's name and the pilot's action; the FAQ answers the kit/PNP/Crash-A-Lot, manual, iNAV and logs questions."
+  "_seo": "SEO pass, owner 24 Oct 2026 (\"think SEO… audit all copy on the page with seo landing ideas\"). Phrases from Google's suggestions for \"tbs chupito\" (24 Oct): kit, pnp, set, manual, build, electronics package, motor, price, 3d print (files), setup, inav setup / settings / config, simulator. Each heading carries the wing's name and the pilot's action; the FAQ answers the kit/PNP/Crash-A-Lot, manual, iNAV and logs questions.",
+  "_url": "Owner, 24 Oct 2026: the page is the first of a series of \"top wings\" pages at short addresses (narenana.com/<wing>/). Moved from /nanawing/chupito-simulator/ before its first release; the Worker answers the old address with a 301."
 }

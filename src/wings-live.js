@@ -1,5 +1,5 @@
 // The live Wings content on an aircraft landing page (content/nanawing/<page>.json with a
-// wingsSlug, e.g. /nanawing/chupito-simulator/ → /wings/tbs-chupito/). The static page carries
+// wingsSlug, e.g. /chupito/ → /wings/tbs-chupito/). The static page carries
 // slots with fallback sentences:
 //   <p class="ac-live" data-wings="<slug>">                      one line: the headline price and stock
 //   <div class="ac-offers" data-wings-offers="<slug>:<bundle>">  that bundle's seller table
