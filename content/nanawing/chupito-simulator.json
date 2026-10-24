@@ -196,7 +196,7 @@
   "smallPrint": "TBS Chupito: Nanawing’s recreation; its handling is not TBS flight data.",
   "fly": {
     "_about": "Owner, 23 Oct 2026: the three text blocks (3 things to practise / Fly it with what you have / What will bite you) read as a wall of text; one section, one in-sim picture of the Chupito, three short cards. The picture is a real Nanawing frame (chupito-sim-{900,1600}.webp), never generated art.",
-    "h2": "Nail its habits before the first real throw",
+    "h2": "Learn to fly it before your first real throw",
     "image": {
       "file": "chupito-sim",
       "widths": [
@@ -230,10 +230,11 @@
           "Landing: ease it down with a little throttle in. Chop it early and it drops. After a crash, reset and go again, then take it to the field."
         ]
       }
-    ]
+    ],
+    "_h2": "Owner, 24 Oct 2026: \"Nail its habits before the first real throw\" — \"idea is good. but 'nail its habits' is not the best way to say it\". A \"Learn to …\" heading is the owner's own pattern (Learn to launch it, Learn to tune it); keep it even when the voice check flags \"learn\"."
   },
   "buy": {
-    "_about": "Three cards, one per bundle, from Team BlackSheep's own pages (23 Oct 2026: the Kit US$79.95 is airframe, spars, mounts, hardware, stickers; the Set US$194.95 adds 'all electronics except FPV and R/C'; the UnmannedTech build guide names the package's contents) and the Indian listings' pages (fpvguru: the 'PNP – Crash A Lot Kit' is the Set plus one set of spare foam parts). The Worker fills each card's listings from the catalog by matching listing titles against `match` (tried in `matchPriority` order); a listing matching none goes under the hidden 'Other listings' card.",
+    "_about": "Three cards, one per bundle, from Team BlackSheep's own pages (23 Oct 2026: the Kit US$79.95 is airframe, spars, mounts, hardware, stickers; the Set US$194.95 adds 'all electronics except FPV and R/C'; the UnmannedTech build guide names the package's contents) and the Indian listings' pages (fpvguru: the 'PNP – Crash A Lot Kit' is the Set plus one set of spare foam parts). The Worker fills each card's listings from the catalog by matching listing titles against `match` (tried in `matchPriority` order); a listing matching none goes under the hidden 'Other listings' card. Owner, 24 Oct 2026: the middle card is named PNP, the way Indian shops list it (\"Set is basically PNP. nobody calls it set usually\"); the PNP card's body says TBS's own store calls it the Set.",
     "h2": "Buy one in India",
     "fallback": "Compare prices and stock at Indian hobby sellers on the Wings page.",
     "tableFallback": "Compare each seller’s price and stock, as last checked, on the Wings page.",
@@ -249,14 +250,14 @@
         "none": "TBS ships the bare kit from its own store. At the last check, no Indian seller we check lists it."
       },
       {
-        "id": "set",
+        "id": "pnp",
         "matchPriority": 1,
         "match": "\\b(set|pnp|rtf)\\b",
-        "name": "Set",
+        "name": "PNP",
         "sub": "Fly on electronics matched to the wing",
-        "includes": "Everything in the Kit plus TBS’s electronics: the AIO flight-controller and ESC board, GPS, motor, servos and prop. You add your video system (DJI O3 or O4, Walksnail or analogue), a receiver such as a Crossfire Nano RX, and a 4S–6S pack of 800–1800 mAh under 270 g. Some shops call the Set PNP.",
+        "includes": "Everything in the Kit plus TBS’s electronics: the AIO flight-controller and ESC board, GPS, motor, servos and prop. You add your video system (DJI O3 or O4, Walksnail or analogue), a receiver such as a Crossfire Nano RX, and a 4S–6S pack of 800–1800 mAh under 270 g. Team BlackSheep’s own store calls it the Set.",
         "pick": "Pick it for your first Chupito: the electronics are matched to the wing, and TBS publishes iNAV settings for them.",
-        "none": "At the last check, no Indian seller we check lists the Set."
+        "none": "At the last check, no Indian seller we check lists the PNP on its own."
       },
       {
         "id": "crash-a-lot",
@@ -264,7 +265,7 @@
         "match": "crash[- ]?a[- ]?lot",
         "name": "Crash-A-Lot",
         "sub": "Keep flying after a hard landing",
-        "includes": "The Set’s airframe and electronics, plus spare foam parts to swap in after a hard landing.",
+        "includes": "The PNP’s airframe and electronics, plus spare foam parts to swap in after a hard landing.",
         "pick": "Pick it if this is your first wing, or your field is unforgiving.",
         "none": "At the last check, no Indian seller we check lists the Crash-A-Lot."
       }

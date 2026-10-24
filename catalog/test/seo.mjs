@@ -415,13 +415,13 @@ test('wings-live: the seller table orders rows like the product page and never q
 test('wings-live: listings map onto the Chupito bundles by title', async () => {
   const { bundleOf, LANDINGS } = await import('../../src/wings-live.js')
   const { variants } = LANDINGS['/nanawing/chupito-simulator/']
-  assert.deepEqual(variants.map((v) => v.id), ['kit', 'set', 'crash-a-lot'])
+  assert.deepEqual(variants.map((v) => v.id), ['kit', 'pnp', 'crash-a-lot'])
   const bundle = (title) => bundleOf({ title }, variants)
-  assert.equal(bundle('TBS Chupito Set'), 'set')
+  assert.equal(bundle('TBS Chupito Set'), 'pnp', 'TBS\'s own name for the PNP')
   assert.equal(bundle('TBS Chupito 800mm FPV Airplane – PNP – Crash A Lot Kit'), 'crash-a-lot', 'Crash-A-Lot wins over the kit and PNP words in the same title')
   assert.equal(bundle('TBS CHUPITO 800MM-PNP-CRASH A LOT KIT'), 'crash-a-lot')
   assert.equal(bundle('TBS Chupito Crash A Lot Set'), 'crash-a-lot')
-  assert.equal(bundle('TBS Chupito PNP'), 'set', 'a shop\'s PNP is the Set')
+  assert.equal(bundle('TBS Chupito PNP'), 'pnp')
   assert.equal(bundle('TBS Chupito Kit'), 'kit')
   assert.equal(bundle('TBS Chupito spare wing'), 'other')
 })
@@ -455,7 +455,7 @@ test('the Chupito page is served with its Wings price slot filled or intact', as
   assert.ok(slot, 'the slot is on the page')
   assert.ok(/^(<strong>From ₹[\d,]+<\/strong> at .+|In stock at .+|Out of stock at .+|Compare prices and stock at Indian hobby sellers on the Wings page\.)$/.test(slot[1]), slot[1])
   const slots = [...html.matchAll(/<div class="ac-offers" data-wings-offers="tbs-chupito:([a-z-]+)">([\s\S]*?)<\/div><\/article>/g)]
-  assert.deepEqual(slots.map((m) => m[1]), ['kit', 'set', 'crash-a-lot', 'other'], 'one slot per bundle, plus other')
+  assert.deepEqual(slots.map((m) => m[1]), ['kit', 'pnp', 'crash-a-lot', 'other'], 'one slot per bundle, plus other')
   for (const [, bundle, inner] of slots.slice(0, 3)) {
     assert.ok(/<table class="ac-offers-table">/.test(inner) || /no Indian seller we check lists|on the Wings page\./.test(inner), `${bundle}: a table, its empty-state line or the fallback`)
   }
