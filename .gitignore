@@ -9,3 +9,4 @@ seed-data/
 
 # manufacturer fetch cache (audit tool) — never commit scraped data
 .mfr-cache/
+wrangler.preview.toml

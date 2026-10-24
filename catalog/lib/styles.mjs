@@ -1,5 +1,5 @@
 // Generated from catalog/catalog.css — edit that, then: npm run catalog:css
-export const CSS_VER = 'e09dce5f'
+export const CSS_VER = '01085a93'
 export const CSS = `/* narenana catalog — approved blue/orange homepage identity. */
 :root {
   --paper: #f4f8fc;
@@ -119,6 +119,8 @@ h1, h2, h3 { font-family: 'Barlow Condensed', 'DM Sans', sans-serif; font-weight
 .shr-menu a:hover, .shr-menu button:hover { background: var(--soft); color: var(--ink); }
 
 .wrap { max-width: 880px; margin: 0 auto; padding: 36px 24px 64px; }
+/* The product page opens on its breadcrumb: 20px under the header (14px on a phone). */
+.wrap.pd { padding-top: 20px; }
 
 h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
 .kit-h { font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: 10px; }
@@ -133,7 +135,7 @@ h1 { font-size: clamp(2rem, 5.5vw, 3rem); line-height: 1.08; margin: 0 0 14px; }
   letter-spacing: 0.06em;
   text-transform: uppercase;
   display: inline-block;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
 .crumb:hover { color: var(--orange-deep); }
 /* Product page breadcrumb: narenana › category › role landing › model. */
@@ -167,7 +169,7 @@ nav.crumb [aria-current] { color: var(--ink); }
 
 /* --- shop header -------------------------------------------------------- */
 .shop-head { border-bottom: 2px solid var(--ink); background: var(--card); }
-.shop-head-in { max-width: 1140px; margin: 0 auto; padding: 30px 24px 26px; }
+.shop-head-in { max-width: 1140px; margin: 0 auto; padding: 20px 24px 26px; }
 .shop-kicker {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
@@ -368,6 +370,8 @@ a.filt-b { text-decoration: none; }
 .pd-jump { font-weight: 700; color: var(--orange-deep); text-decoration: none; white-space: nowrap; }
 .pd-jump:hover { text-decoration: underline; }
 .pd-key .spec { padding-top: 16px; border-top: 1px solid var(--faint); gap: 14px 28px; }
+.pd-sim { margin: 0; font-size: 0.92rem; color: var(--muted); }
+.pd-sim a { font-weight: 700; }
 .pd .lede { margin: 18px 0 0; font-size: 0.98rem; }
 
 /* Sections: a rule, a display heading and one factual line under it, so the
@@ -460,7 +464,8 @@ a.filt-b { text-decoration: none; }
 .cta-buy { padding: 12px 24px; font-size: 0.95rem; }
 @media (max-width: 640px) {
   .vars { font-size: 0.85rem; }
-  .pd { padding: 20px 16px 48px; }
+  .wrap.pd { padding: 14px 16px 48px; }
+  .crumb { margin-bottom: 14px; }
   /* Breadcrumb: just the parent link, as a back link. The full trail stays
      in the markup and the BreadcrumbList. */
   nav.crumb > :not(a:nth-last-child(3)) { display: none; }
@@ -494,7 +499,7 @@ a.filt-b { text-decoration: none; }
   .ytv-card { flex: 0 0 82%; scroll-snap-align: start; }
   .pd-similar .prod { flex: 0 0 68%; max-width: 250px; scroll-snap-align: start; }
   /* Compact the shop header so a product card is visible in the first fold. */
-  .shop-head-in { padding: 16px 16px 14px; }
+  .shop-head-in { padding: 14px 16px 14px; }
   .shop-kicker { margin-bottom: 5px; }
   .shop-h1 { font-size: 1.35rem; margin-bottom: 4px; }
   .shop-sub { font-size: 0.82rem; }
@@ -562,7 +567,7 @@ a.filt-b { text-decoration: none; }
 .foot .wordmark { font-family: 'DM Sans', sans-serif; font-size: 20px; font-weight: 400; }
 
 /* Shared product chrome and clearer comparison layout. */
-.catalog-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:1264px;margin:auto;padding:14px 24px;border-bottom:1px solid var(--faint);font:11px/1.5 'JetBrains Mono',monospace}.catalog-toolbar>a{color:var(--muted);text-decoration:none}
+
 .shop-h1{font-size:clamp(42px,5.4vw,72px);line-height:1;text-transform:uppercase;letter-spacing:-.025em}.shop-head{border-bottom:1px solid var(--faint)}
 .prod{border:1px solid var(--faint);border-radius:4px;box-shadow:none;transition:transform .2s,border-color .2s}.prod:hover{border-color:var(--orange);transform:translateY(-3px);box-shadow:0 10px 30px #15191c0b}.prod-img{background:white}.prod-name{font-family:'DM Sans',sans-serif;font-size:17px;font-weight:700}.prod-cta{border-top:1px solid var(--faint);border-radius:0;background:var(--orange);color:var(--ink)}.prod:hover .prod-cta{background:#e87800;color:var(--ink)}.cta{border-radius:3px}.foot{padding-bottom:25px}.foot .wordmark{font-weight:700}.nn-header{position:relative}
 @media(prefers-reduced-motion:reduce){.prod{transition:none}.prod:hover{transform:none}}

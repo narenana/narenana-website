@@ -18,6 +18,8 @@ import { handleStats, refreshStats } from './stats.js'
 import { handleDebrief, DebriefLimiter } from '../debrief/lib/worker.mjs'
 import { handleUsage } from '../usage/lib/worker.mjs'
 import { aircraftRecords, withRecords } from './aircraft-records.js'
+import { LANDINGS, fillWings } from './wings-live.js'
+import { PRINT_PAGES, fillPrints, loadRetired, checkPrintsSlice } from './prints-live.js'
 
 // Durable Object for the Flight Debrief rate limiter + daily budget.
 // Re-exported so the runtime can instantiate the class named in
@@ -51,6 +53,10 @@ export default {
     // decision 3); /nanawing/ only holds its sub-pages, e.g. /nanawing/aircraft/.
     if (url.pathname === '/nanawing' || url.pathname === '/nanawing/') {
       return new Response(null, { status: 301, headers: { Location: '/' + url.search } })
+    }
+    // The Chupito page's first address, before its release moved it to /chupito/ (24 Oct 2026).
+    if (url.pathname === '/nanawing/chupito-simulator' || url.pathname === '/nanawing/chupito-simulator/') {
+      return new Response(null, { status: 301, headers: { Location: '/chupito/' + url.search } })
     }
     if (url.pathname === '/index.html') {
       // Relative Location: behind latest-router this Worker sees the workers.dev
@@ -136,14 +142,20 @@ export default {
     // crawlers / AI answer engines would otherwise see none of it. Inject a
     // <noscript> fallback list from the KV feed the Worker already holds.
     const isAircraftPage = url.pathname === '/nanawing/aircraft/'
+    // An aircraft landing page (content/nanawing/<page>.json with a wingsSlug) gets its
+    // live Wings price line filled the way the aircraft page gets its lap records, and drops any
+    // 3D print the weekly check has retired (src/prints-live.js).
+    const landing = LANDINGS[url.pathname]
     const response =
       url.pathname === '/'
         ? await cachedHome(request, env, ctx, isLocal)
         : isAircraftPage
           ? await cachedAircraftPage(request, env, ctx, isLocal)
-          : await staticAsset(request, env)
+          : landing
+            ? await cachedFilledPage(request, env, ctx, isLocal, { path: url.pathname, tag: landing.tag, fill: async (page, state) => fillPrints(await fillWings(page, env, state, landing), await loadRetired(env), PRINT_PAGES[url.pathname]) })
+            : await staticAsset(request, env)
 
-    return harden(response, url, isLocal, { staticFile: url.pathname !== '/' && !isAircraftPage })
+    return harden(response, url, isLocal, { staticFile: url.pathname !== '/' && !isAircraftPage && !landing })
   },
 
   async scheduled(event, env, ctx) {
@@ -152,6 +164,8 @@ export default {
     if (event.cron === '0 * * * *') {
       ctx.waitUntil(refreshFeed(env))
       ctx.waitUntil(refreshStats(env).catch(() => null)) // fail-soft: keep last-good snapshot
+      // Sundays from 04:00 UTC: this hour's slice of the weekly check on the landing pages' 3D prints.
+      ctx.waitUntil(checkPrintsSlice(env, event.scheduledTime).catch((e) => console.error('prints check failed:', e)))
     }
     catalogScheduled(event, env, ctx)
   },
@@ -292,20 +306,19 @@ async function cachedHome(request, env, ctx, isLocal) {
   return forMethod(request, res)
 }
 
-// /nanawing/aircraft/: the static page (scripts/build-nanawing-pages.mjs) with its
-// live lap records filled in (src/aircraft-records.js), cached at the edge like the
-// homepage: same release key, same TTLs. A render where any board failed is served
-// but never cached, so one blip can't pin dashes for 15 minutes.
-async function cachedAircraftPage(request, env, ctx, isLocal) {
+// A static page with live slots filled per request, cached at the edge like the
+// homepage: same release key, same TTLs. A render where a fill failed is served
+// but never cached, so one blip can't pin stale slots for 15 minutes.
+//   /nanawing/aircraft/ (scripts/build-nanawing-pages.mjs): lap records, src/aircraft-records.js
+//   aircraft landing pages (scripts/build-nanawing-landing.mjs): the Wings price line, src/wings-live.js
+async function cachedFilledPage(request, env, ctx, isLocal, { path, tag, fill }) {
   const render = async (req, state) => {
     const page = await env.ASSETS.fetch(req)
     if (page.status !== 200 || !(page.headers.get('content-type') || '').includes('text/html')) return page
-    const records = await aircraftRecords(env)
-    if (records.degraded) state.degraded = true
-    return withRecords(page, records)
+    return fill(page, state)
   }
   if ((request.method !== 'GET' && request.method !== 'HEAD') || isLocal) return render(request, {})
-  const cacheKey = publicCacheKey(new URL(request.url), env, { path: '/nanawing/aircraft/', params: [], tag: 'aircraft' })
+  const cacheKey = publicCacheKey(new URL(request.url), env, { path, params: [], tag })
   const cache = caches.default
   const hit = await cache.match(cacheKey)
   if (hit) return forMethod(request, hit)
@@ -315,11 +328,20 @@ async function cachedAircraftPage(request, env, ctx, isLocal) {
   if (!state.degraded && res.status === 200 && (res.headers.get('content-type') || '').includes('text/html')) {
     const store = new Response(res.clone().body, res)
     store.headers.set('cache-control', 'public, max-age=300, s-maxage=900')
-    store.headers.set('x-aircraft-cache', 'HIT') // only ever seen on responses served FROM the cache
+    store.headers.set(`x-${tag}-cache`, 'HIT') // only ever seen on responses served FROM the cache
     ctx.waitUntil(cache.put(cacheKey, store))
   }
   return forMethod(request, res)
 }
+const cachedAircraftPage = (request, env, ctx, isLocal) => cachedFilledPage(request, env, ctx, isLocal, {
+  path: '/nanawing/aircraft/',
+  tag: 'aircraft',
+  fill: async (page, state) => {
+    const records = await aircraftRecords(env)
+    if (records.degraded) state.degraded = true
+    return withRecords(page, records)
+  },
+})
 
 async function renderHome(request, env, state = {}) {
   const response = await env.ASSETS.fetch(request)

@@ -16,6 +16,9 @@ import { productOverview, displayName, realBrand, configLabel } from './product-
 // straight from D1. This module holds zero content.
 const SITE = 'https://www.narenana.com'
 const dateOf = (ms) => (ms ? new Date(ms).toISOString().slice(0, 10) : '—')
+// Models the Nanawing sim recreates: their product page links the practise page on www
+// (content/nanawing/<page>.json), keyed by the master's slug.
+const SIM_PAGES = { 'tbs-chupito': { href: '/chupito/', label: 'fly it in Nanawing' } }
 
 export function page({ title, desc, path, body, jsonld, noindex, image }) {
   const url = `${SITE}${path}`
@@ -35,7 +38,6 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
 </head><body>
 ${familyNav({active:'wings',home:'',avatar:'/assets/family/avatar.jpg?v=49424a6497'})}
-<div class="catalog-toolbar"><a href="/wings/browse/">Wings / Browse the catalog</a></div>
 ${body}
 <aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
 ${familyFooter({home:''})}
@@ -379,6 +381,13 @@ export function productSnippet(m, offers, specs, { headlineOffer, liveMin, price
   }
 }
 
+// Offer rows in display order: live before out of stock before gone, and within
+// the same availability the priced rows before the flagged ones (a withheld low
+// price can't top the table); otherwise the query's order (cheapest first).
+// Shared with the aircraft landing pages' seller table (src/wings-live.js).
+export const offerOrder = (list) => list.map((o, i) => [o, i]).sort(([a, i], [b, j]) =>
+  (!!a.dead - !!b.dead) || (!!b.in_stock - !!a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
+
 // landings: productLandings() from grid-next.mjs, the model's role and power
 // landing links (only valid, indexable landings carry an href). Omitted in
 // unit renders: the breadcrumb then stops at the category.
@@ -413,8 +422,6 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
   // stock badge but never shows its amount: the number may be wrong. Rows keep
   // the query's order (live first, cheapest first) with flagged rows after the
   // priced ones of the same availability, so a withheld low price can't top it.
-  const offerOrder = (list) => list.map((o, i) => [o, i]).sort(([a, i], [b, j]) =>
-    (a.dead - b.dead) || (b.in_stock - a.in_stock) || (!!a.flagged - !!b.flagged) || (i - j)).map(([o]) => o)
   // Every cell is classed so a phone can lay the row out as a card (CSS grid
   // on the <tr>, see .offers in catalog.css); wide screens keep the table.
   // Only an in-stock listing gets a Buy button; an out-of-stock one links as
@@ -549,6 +556,7 @@ export function renderMaster(cat, m, offers, similar = [], videos = [], manufact
         <dl class="spec">
           ${schema.filter((f) => specs[f.key] != null && specs[f.key] !== '').map((f) => `<div><dt>${esc(f.label)}</dt><dd>${esc(String(specs[f.key]))}${f.unit ?? ''}</dd></div>`).join('')}${landingRows}
         </dl>
+        ${SIM_PAGES[m.slug] ? `<p class="pd-sim">Try the ${esc(name)} before you buy: <a href="${SIM_PAGES[m.slug].href}">${esc(SIM_PAGES[m.slug].label)}</a>, free in your browser.</p>` : ''}
       </div>
     </section>
     <p class="lede">${esc(overview)}</p>
