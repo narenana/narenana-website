@@ -192,7 +192,7 @@ const css = [
   // Every jump target clears the sticky product nav.
   'html,body{overflow-x:clip}.ac-landing [id]{scroll-margin-top:72px}',
   // The sticky product nav.
-  `.ac-subnav{position:sticky;top:0;z-index:20;margin:10px calc(50% - 50vw) 0;background:rgba(13,29,42,.94);-webkit-backdrop-filter:saturate(1.4) blur(10px);backdrop-filter:saturate(1.4) blur(10px);color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}`,
+  `.ac-subnav{position:sticky;top:0;z-index:20;margin:0 calc(50% - 50vw);background:rgba(13,29,42,.94);-webkit-backdrop-filter:saturate(1.4) blur(10px);backdrop-filter:saturate(1.4) blur(10px);color:#fff;border-bottom:1px solid rgba(255,255,255,.08)}`,
   '.ac-subnav-in{max-width:1180px;margin:0 auto;padding:0 24px;display:flex;align-items:center;gap:18px;min-height:54px}',
   '.ac-subnav-name{font:700 20px/1 "Barlow Condensed",sans-serif;letter-spacing:.02em;color:#fff;text-decoration:none;white-space:nowrap}',
   '.ac-jumps{display:flex;flex-wrap:wrap;gap:0 18px}.ac-jumps a{display:inline-flex;align-items:center;min-height:44px;font-weight:700;text-underline-offset:4px}',

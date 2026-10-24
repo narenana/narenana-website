@@ -38,7 +38,6 @@ ${jsonld ? `<script type="application/ld+json">${JSON.stringify(jsonld).replace(
 <link rel="stylesheet" href="/catalog.css?v=${CSS_VER}" />
 </head><body>
 ${familyNav({active:'wings',home:'',avatar:'/assets/family/avatar.jpg?v=49424a6497'})}
-<div class="catalog-toolbar"><a href="/wings/browse/">Wings / Browse the catalog</a></div>
 ${body}
 <aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
 ${familyFooter({home:''})}

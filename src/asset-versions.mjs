@@ -8,7 +8,7 @@ export const ASSET_VERSIONS = {
   "/assets/banner-800.avif": "3eb3549f0d",
   "/assets/banner-800.webp": "4646fe9b24",
   "/assets/banner.jpg": "76b9e2e58a",
-  "/assets/editorial.css": "f64f49da02",
+  "/assets/editorial.css": "d2362333ec",
   "/assets/family/BarlowCondensed-600.woff2": "215a93c696",
   "/assets/family/BarlowCondensed-700.woff2": "3787a5a419",
   "/assets/family/BarlowCondensed-800.woff2": "2515494e8c",

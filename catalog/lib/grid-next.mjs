@@ -419,8 +419,8 @@ export async function browseData(env, cat) {
 }
 
 const BZ_CSS = `<style>
-.bz{max-width:1000px;margin:0 auto;padding:22px 20px 60px}
-.bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:14px}
+.bz{max-width:1000px;margin:0 auto;padding:20px 20px 60px}@media(max-width:640px){.bz{padding-top:14px}}
+.bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:20px}@media(max-width:640px){.bz-crumbs{margin-bottom:14px}}
 .bz-crumbs a{color:var(--muted);text-decoration:none}.bz-crumbs a:hover{text-decoration:underline}
 .bz-h1{font-family:'Barlow Condensed',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
 .bz-lede{color:var(--muted);max-width:66ch;margin:0 0 26px}
@@ -755,8 +755,8 @@ export function renderGridNext(cat, rows, opts = {}) {
 
 // ---- namespaced styles (reuse catalog.css tokens; --line→--faint, --good→--green) ----
 const FX_CSS = `
-.fx-crumbs{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.fx-crumbs a{color:var(--muted);text-decoration:none}
+.fx-crumbs{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin:0 0 20px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fx-crumbs a{color:var(--muted);text-decoration:none}@media(max-width:640px){.fx-crumbs{margin-bottom:14px}}
 .fx-crumbs a:hover{color:var(--ink);text-decoration:underline}
 .fx-crumbs i{font-style:normal;opacity:.5}
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
