@@ -8,6 +8,7 @@
 //                                            and <phone.file>-<w>.webp (hero.image.phone.widths)
 //   buy.variants[].image.master            → <aircraft>-bundle-<id>-{400,800}.webp
 //   prints.groups[].items[].master         → <aircraft>-print-<id>-{400,800}.webp
+//   fly.image.master                       → <fly.image.file>-<w>.webp (a real sim frame; outline by Astra)
 //   logs.image.master                      → <logs.image.file>-<w>.webp (logs.image.widths)
 import { readFileSync, existsSync } from 'node:fs';
 import sharp from 'sharp';
@@ -32,6 +33,12 @@ if (bundles.length) wrote.push(`${bundles.length} bundle pictures`);
 const prints = (copy.prints?.groups || []).flatMap((g) => g.items).filter((p) => p.master && existsSync(p.master));
 for (const p of prints) for (const w of [400, 800]) await encode(p.master, w, `${OUT}/${copy.aircraft}-print-${p.id}-${w}.webp`);
 if (prints.length) wrote.push(`${prints.length} print pictures`);
+
+const fly = copy.fly?.image;
+if (fly?.master) {
+  for (const w of fly.widths) await encode(need(fly.master), w, `${OUT}/${fly.file}-${w}.webp`);
+  wrote.push(`sim frame ${fly.widths.join('/')}`);
+}
 
 const logs = copy.logs?.image;
 if (logs?.master) {

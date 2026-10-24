@@ -193,7 +193,7 @@
   },
   "smallPrint": "TBS Chupito: Nanawing’s recreation; its handling is not TBS flight data.",
   "fly": {
-    "_about": "Owner, 23 Oct 2026: the three text blocks (3 things to practise / Fly it with what you have / What will bite you) read as a wall of text; one section, one in-sim picture of the Chupito, three short cards. The picture is a real Nanawing frame (chupito-sim-{900,1600}.webp), never generated art.",
+    "_about": "Owner, 23 Oct 2026: the three text blocks (3 things to practise / Fly it with what you have / What will bite you) read as a wall of text; one section, one in-sim picture of the Chupito, three short cards. The picture is a real Nanawing frame (chupito-sim-{900,1600}.webp), never generated art. Owner, 24 Oct 2026: the Island frame hid the wing (\"this needs a far better image. i think the desert will be better\"; \"can't even see the chupito in this. maybe needs a slight outline\"). Now a real Desert frame from the sim (dev build, chase view; the frame-rate badge and a hint toast hidden in the page before capture) with a slight white outline by Astra; the raw frame is kept as sim-desert-raw.png.",
     "h2": "Learn to fly the Chupito before your first real throw",
     "image": {
       "file": "chupito-sim",
@@ -201,8 +201,9 @@
         900,
         1600
       ],
-      "alt": "The TBS Chupito in Nanawing, seen from the chase camera as it banks low over the Island, with the OSD showing speed and battery",
-      "caption": "The Chupito in Nanawing, chase view. Switch to FPV when you’re ready. Reference airframe by {maker}."
+      "alt": "The TBS Chupito in Nanawing, seen from the chase camera as it banks over the Desert’s dunes and temple, with the OSD showing speed, altitude and battery",
+      "caption": "The Chupito in Nanawing, chase view. Switch to FPV when you’re ready. Reference airframe by {maker}.",
+      "master": "assets-src/nanawing/chupito/sim-desert.png"
     },
     "blocks": [
       {
