@@ -10,7 +10,12 @@
       "site/nanawing/aircraft/index.html",
       "catalog/lib/public.mjs",
       "catalog/lib/grid-next.mjs"
-    ]
+    ],
+    "keptHeadings": [
+      "Fly a powerful modern machine",
+      "Thank you, Team BlackSheep"
+    ],
+    "_keptHeadings": "The owner's own headings (23 Oct 2026); rule S6 lets them stand without the aircraft name."
   },
   "crumb": "TBS Chupito simulator",
   "title": "TBS Chupito simulator: fly it free in your browser",
@@ -22,21 +27,24 @@
     "imageAlt": "The TBS Chupito, Team BlackSheep’s black flying wing, against a dark background beside the words The only Chupito simulator",
     "card": {
       "eyebrow": "NANAWING · FREE FPV WING SIMULATOR",
-      "headline": "The only Chupito simulator",
+      "headline": [
+        "The only Chupito simulator",
+        "on the internet"
+      ],
       "aircraft": [
         "Fly the TBS Chupito free,",
         "in your browser"
       ],
       "details": [
         "Flick it round at 360°/s.",
-        "Race it on 5 courses.",
-        "Keyboard, RC radio or phone. No install."
+        "Race it on 5 courses, no install needed."
       ],
       "cta": "Fly it free",
       "credit": "Picture made from Team BlackSheep’s product photographs.",
       "background": "assets-src/nanawing/chupito/share-bg.png",
       "_about": "Owner, 24 Oct 2026: the card’s picture is made by Astra (ChatGPT’s image model, in the Codex app) from Team BlackSheep’s product photographs, which their permission covers (owner, 24 Oct); the script only prints the words over it. imageInBackground: the wing is already in the backdrop, so no render is composited.",
-      "imageInBackground": true
+      "imageInBackground": true,
+      "_headline": "Owner, 24 Oct 2026: \"we have a good headline. use it in the social share\" — the card carries the full H1, the same words as og:title and twitter:title."
     }
   },
   "hero": {
@@ -166,17 +174,6 @@
         ]
       },
       {
-        "h3": "Learn to tune it",
-        "videos": [
-          {
-            "id": "59JK9k5QsTA",
-            "title": "How to Tune a FPV Flying Wing | Mechanical & Software | TBS Chupito",
-            "channel": "kofikofikofi",
-            "published": 1756808243
-          }
-        ]
-      },
-      {
         "h3": "Admire the sunset with the Chupito",
         "videos": [
           {
@@ -187,7 +184,8 @@
           }
         ]
       }
-    ]
+    ],
+    "_layout": "Owner, 24 Oct 2026: \"reduce the video section to 2 rows… drop one video if needed\". Eight videos in a four-column grid: the owner's three flights and one single on row one, four singles on row two. Dropped: How to Tune a FPV Flying Wing | Mechanical & Software | TBS Chupito (kofikofikofi, 59JK9k5QsTA), the channel's second video; put it back by adding its group and dropping another."
   },
   "specs": {
     "eyebrow": "Fly the Chupito in the sim",
@@ -537,7 +535,7 @@
     ]
   },
   "faq": {
-    "h2": "Answers before you fly",
+    "h2": "Answers before you fly the Chupito",
     "items": [
       {
         "q": "Is this the real TBS Chupito?",
@@ -599,7 +597,7 @@
   },
   "faqNote": "Sim time is no substitute for instruction, aircraft checks or safe flying at the field.",
   "final": {
-    "h2": "Get some stick time in before it arrives",
+    "h2": "Get stick time on the Chupito before yours arrives",
     "lede": "Take the Chupito round Windmill Run, then thread it through Estate Run’s giant oaks. Fly it in your browser on a laptop, or on your phone.",
     "cta": "Fly the Chupito now"
   },

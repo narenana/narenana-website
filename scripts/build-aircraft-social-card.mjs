@@ -16,7 +16,14 @@ const photo = card.background && existsSync(card.background)
 // card.aircraft may be one line or several (a narrow column clears an aircraft already in the
 // backdrop); the details and the button follow it down. One line keeps the original layout.
 const sub = [].concat(card.aircraft);
-const detailsTop = 325 + (sub.length - 1) * 40;
+// card.headline may be one line (68px, the original layout) or two (60px, so a long headline
+// keeps its full words); everything under it moves down with it.
+const head = [].concat(card.headline);
+const headSize = head.length > 1 ? 60 : 68;
+const headY = (i) => (head.length > 1 ? 132 + i * 66 : 155);
+const barY = head.length > 1 ? headY(head.length - 1) + 28 : 195;
+const subTop = barY + 60;
+const detailsTop = subTop + 70 + (sub.length - 1) * 40;
 const ctaTop = detailsTop + (card.details.length - 1) * 37 + 54;
 const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630">
   <defs><linearGradient id="sky" x2="1" y2="1"><stop stop-color="#087bc1"/><stop offset="1" stop-color="#063958"/></linearGradient>
@@ -25,9 +32,9 @@ const background = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1
   <path d="M700 0H1200V580H360Z" fill="#ffffff" opacity="${photo ? 0 : 0.04}"/>
   <path d="M850 0H1200V580H530Z" fill="#ffffff" opacity="${photo ? 0 : 0.04}"/>
   <text x="62" y="65" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="3">${text(card.eyebrow)}</text>
-  <text x="58" y="155" fill="#fff" font-family="Arial,sans-serif" font-size="68" font-weight="700" letter-spacing="-3">${text(card.headline)}</text>
-  <rect x="62" y="195" width="60" height="5" fill="#f2c200"/>
-  ${sub.map((line, i) => `<text x="62" y="${255 + i * 40}" fill="#fff" font-family="Arial,sans-serif" font-size="33" font-weight="700">${text(line)}</text>`).join('')}
+  ${head.map((line, i) => `<text x="58" y="${headY(i)}" fill="#fff" font-family="Arial,sans-serif" font-size="${headSize}" font-weight="700" letter-spacing="-3">${text(line)}</text>`).join('')}
+  <rect x="62" y="${barY}" width="60" height="5" fill="#f2c200"/>
+  ${sub.map((line, i) => `<text x="62" y="${subTop + i * 40}" fill="#fff" font-family="Arial,sans-serif" font-size="33" font-weight="700">${text(line)}</text>`).join('')}
   ${card.details.map((line, i) => `<text x="62" y="${detailsTop + i * 37}" fill="#d3ebfa" font-family="Arial,sans-serif" font-size="26">${text(line)}</text>`).join('')}
   <rect x="62" y="${ctaTop}" width="340" height="58" rx="4" fill="#ff8500"/>
   <text x="85" y="${ctaTop + 37}" fill="#15191c" font-family="Arial,sans-serif" font-size="24" font-weight="700">${text(card.cta)}</text>

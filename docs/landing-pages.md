@@ -27,6 +27,10 @@ Rules the auditor cannot judge (taste, truth of a claim) are marked **(human)**.
   and credit), the print pictures (the designers', beside their credit) and a picture of the log viewer.
 - S8. Curated third-party links (the prints) are checked weekly by the Worker (src/prints-live.js): a print whose page or
   picture is definitely gone is dropped from the page and its ItemList; a bot check never retires one.
+- S9. Every content image has alt text (empty only inside a link that is labelled another way), real width and height,
+  and loads lazily, except the hero, which loads first with `fetchpriority="high"`.
+- S10. Every internal link on the page answers 200 on the local Worker (the auditor checks it when `wrangler dev` runs).
+- S11. The page HTML stays under 120 KB and the hero picture under 150 KB.
 
 ## H. Hero and first screen
 
@@ -80,3 +84,22 @@ Rules the auditor cannot judge (taste, truth of a claim) are marked **(human)**.
 - G1. The share card is 1200×630, shows this aircraft clearly, carries the tagline as its headline and the maker
   credit in its footer. `og:title`, `og:description`, `og:image`, `twitter:card` and an image alt are present.
 - G2. **(human)** Read the card as a stranger would in a WhatsApp preview: one idea, one aircraft, legible at 300px wide.
+- G3. The share card shows the page headline in full (owner, 24 Oct 2026: "we have a good headline. use it in the social
+  share"), the same words as `og:title` and `twitter:title`; `og:image` declares 1200×630 and its type.
+
+## SEO checklist (10 points)
+
+`npm run landing:audit` ends with a score; a point counts only when every rule under it passes. Ship at 10/10
+(owner, 24 Oct 2026: "make sure this page has all the seo checklist 10/10").
+
+1. Title and URL carry the phrase (S1).
+2. Meta description: the aircraft, a benefit, 70–155 characters (S2).
+3. One H1 with the phrase, no skipped heading levels, every H2 anchored (S3).
+4. Every H2 names the aircraft in search words (S6).
+5. Structured data: WebPage, BreadcrumbList, FAQPage, a VideoObject per video, the ItemList, and the sim as a free
+   SoftwareApplication (S4).
+6. Images: alt, real sizes, the hero first and the rest lazy (S9).
+7. Discovery: in both sitemaps with a lastmod, linked from three or more pages, every internal link resolves (S5, S10).
+8. Share: the headline on the card and in `og:title`, the card's size declared, twitter tags matching (G1–G3).
+9. First screen: the play button visible on a laptop and a phone, no sideways scroll (H1).
+10. Weight: the page and its hero stay light (S11).

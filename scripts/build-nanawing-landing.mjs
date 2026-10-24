@@ -95,10 +95,11 @@ const stage = `<div class="ac-stage"><div class="ac-stage-in">${wing}${flySectio
 
 // Groups with several videos get a full-width grid under their heading; groups with one video sit
 // two to a row on wide screens, each heading above its card, so no card is left alone in a row.
-const videoGroup = (g) => `<h3>${esc(g.h3)}</h3><ul class="ac-videos">${g.videos.map(videoCard).join('')}</ul>`;
-const singles = copy.watch.groups.filter((g) => g.videos.length === 1);
-const multis = copy.watch.groups.filter((g) => g.videos.length > 1);
-const watch = `<section class="ac-practice ac-watch" id="watch" aria-labelledby="watch-title"><h2 id="watch-title">${esc(copy.watch.h2)}</h2><p>${esc(copy.watch.intro)}</p>${multis.map(videoGroup).join('')}${singles.length ? `<div class="ac-watch-singles">${singles.map((g) => `<div>${videoGroup(g)}</div>`).join('')}</div>` : ''}</section>`;
+// Two rows on a laptop (owner, 24 Oct 2026): one four-column grid where a group spans as many
+// columns as it has videos, so the owner's three flights and the first single fill row one and
+// the next four singles fill row two. Two columns on a tablet, one on a phone.
+const videoGroup = (g) => `<div class="ac-watch-group" style="--n:${g.videos.length}"><h3>${esc(g.h3)}</h3><ul class="ac-videos">${g.videos.map(videoCard).join('')}</ul></div>`;
+const watch = `<section class="ac-practice ac-watch" id="watch" aria-labelledby="watch-title"><h2 id="watch-title">${esc(copy.watch.h2)}</h2><p>${esc(copy.watch.intro)}</p><div class="ac-watch-grid">${copy.watch.groups.map(videoGroup).join('')}</div></section>`;
 
 // The price line is a slot: the Worker fills it per request from the catalog (src/wings-live.js);
 // the fallback sentence stays when the catalog has nothing to say.
@@ -170,6 +171,8 @@ const schema = {
       { '@type': 'ListItem', position: 3, name: copy.crumb, item: site + path },
     ] },
     { '@type': 'FAQPage', mainEntity: copy.faq.items.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.link ? `${f.a} ${f.link.label}: ${f.link.href.startsWith('#') ? site + path : site}${f.link.href}` : f.a } })) },
+    // The sim itself, free in the browser: what a search for the aircraft's simulator should find.
+    { '@type': 'SoftwareApplication', '@id': 'https://sim.narenana.com/#app', name: 'Nanawing', url: 'https://sim.narenana.com/', applicationCategory: 'GameApplication', applicationSubCategory: 'FPV flight simulator', operatingSystem: 'Web browser', offers: { '@type': 'Offer', price: 0, priceCurrency: 'INR' }, description: `A free FPV wing simulator in your browser: fly the ${a.name} and race it on ${facts.courses.length} courses.` },
     // The curated prints as an ItemList: each entry is the designer's own page.
     ...(copy.prints ? [{ '@type': 'ItemList', name: `${a.name} 3D prints`, itemListElement: copy.prints.groups.flatMap((g) => g.items).map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: p.title, url: p.href })) }] : []),
     // One VideoObject per embedded video: video rich-result eligibility, as on the product pages.
@@ -242,7 +245,7 @@ const css = [
   '.ac-yt-dialog{width:min(96vw,1120px);max-width:none;margin:auto;padding:0;border:0;border-radius:8px;background:#000;overflow:visible}.ac-yt-dialog::backdrop{background:rgba(5,10,16,.86)}.ac-yt-stage{aspect-ratio:16/9;width:100%;background:#000;border-radius:8px;overflow:hidden}.ac-yt-stage iframe{width:100%;height:100%;border:0;display:block}',
   '.ac-yt-close{position:absolute;right:0;top:-48px;width:44px;height:44px;border:0;border-radius:4px;background:#fff;color:#15191c;font:400 28px/1 "DM Sans",sans-serif;cursor:pointer}.ac-yt-close:focus-visible{outline:3px solid var(--ac-orange);outline-offset:2px}',
   // Watch.
-  '.ac-watch h3{margin-top:28px}.ac-watch .ac-videos{margin-top:10px}.ac-watch-singles{display:grid;gap:8px 24px}.ac-watch-singles .ac-videos{grid-template-columns:1fr}@media(min-width:860px){.ac-watch-singles{grid-template-columns:repeat(2,minmax(0,1fr))}}.ac-yt-by{margin:2px 0 0;font-size:12px;color:var(--ac-muted)}',
+  '.ac-watch-grid{display:grid;gap:26px 18px;grid-template-columns:minmax(0,1fr);margin-top:8px}.ac-watch-group{display:flex;flex-direction:column;min-width:0}.ac-watch h3{margin:0 0 10px;font-size:21px;line-height:1.15}.ac-watch .ac-videos{grid-template-columns:repeat(var(--n),minmax(0,1fr));margin:0}.ac-yt-by{margin:2px 0 0;font-size:12px;color:var(--ac-muted)}@media(max-width:699px){.ac-watch .ac-videos{grid-template-columns:minmax(0,1fr)}}@media(min-width:700px){.ac-watch-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ac-watch-group[style*="--n:3"]{grid-column:1/-1}}@media(min-width:1000px){.ac-watch-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.ac-watch-group{grid-column:span var(--n)}.ac-watch-group[style*="--n:3"]{grid-column:span 3}.ac-watch h3{min-height:2.3em}}',
   // Buy: the bundles side by side, each with its listings stacked as rows at every width.
   '.ac-live{font-size:17px;text-align:center;max-width:64ch;margin:0 auto 22px}.ac-live strong{color:#C63B2E}',
   '.ac-variants{display:grid;gap:16px;margin:0 0 12px}@media(min-width:960px){.ac-variants{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}.ac-variant-other{grid-column:1/-1}}',
@@ -271,7 +274,8 @@ writeFileSync(`site${path}index.html`, page({
   social: copy.social,
   body,
   schema,
-  head: `<link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=862eb507d2"><style>${css}</style>`,
+  // The share card's real size and type, so link previews lay it out before fetching it.
+  head: `<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:type" content="image/jpeg"><link rel="stylesheet" href="/assets/nanawing-aircraft.css?v=862eb507d2"><style>${css}</style>`,
   scripts: YT_LIGHTBOX,
 }));
 

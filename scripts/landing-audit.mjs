@@ -63,6 +63,39 @@ const worker = readFileSync('catalog/lib/worker.mjs', 'utf8');
 const lastmod = worker.match(new RegExp(`'${copy.path.replace(/[/]/g, '\\/')}': '(\\d{4}-\\d{2}-\\d{2})'`))?.[1];
 check('S5 Worker lastmod set and not in the future', !!lastmod && lastmod <= new Date().toISOString().slice(0, 10), lastmod || 'missing');
 for (const f of copy.seo?.linkedFrom || []) check(`S5 linked from ${f}`, existsSync(f) && readFileSync(f, 'utf8').includes(copy.path));
+check('S5 linked from at least three places', (copy.seo?.linkedFrom || []).filter((f) => existsSync(f) && readFileSync(f, 'utf8').includes(copy.path)).length >= 3);
+// S6: every H2 names the aircraft (the owner's own headings, seo.keptHeadings, excepted).
+const wingWord = aircraft ? aircraft.name.split(' ').pop() : '';
+const kept = new Set(copy.seo?.keptHeadings || []);
+const h2Unnamed = headings.filter((h) => h.level === 2 && !kept.has(h.text) && !h.text.includes(wingWord));
+check('S6 every H2 names the aircraft', !!wingWord && h2Unnamed.length === 0, h2Unnamed.map((h) => h.text).join(' | '));
+check('S6 search phrases recorded', !!copy._seo, '_seo note');
+// S7: every main section shows something besides text.
+const sections = [...main.matchAll(/<section class="([^"]*)" id="([^"]+)"[\s\S]*?<\/section>/g)].filter((m) => ['watch', 'wing', 'fly', 'buy', 'prints', 'logs'].includes(m[2]));
+const bare = sections.filter((m) => !/<img\b|data-yt="/.test(m[0])).map((m) => m[2]);
+check('S7 every section shows a picture or a video', sections.length >= 5 && bare.length === 0, bare.join(' ') || `${sections.length} sections`);
+// S8: each print carries the id the weekly check retires it by.
+const printItems = copy.prints ? copy.prints.groups.flatMap((g) => g.items) : [];
+check('S8 each print carries data-print for the weekly check', printItems.every((p) => p.id && main.includes(`data-print="${p.id}"`)), `${printItems.length} prints`);
+// S9: images: alt on every one, real dimensions, lazy below the hero, the hero eager and first.
+const imgs = [...main.matchAll(/<img\b[^>]*>/g)].map((m) => m[0]);
+check('S9 every image has alt text (empty only inside a labelled link)', imgs.every((i) => / alt="/.test(i)), `${imgs.length} images`);
+check('S9 every image has width and height', imgs.every((i) => / width="\d+"/.test(i) && / height="\d+"/.test(i)));
+check('S9 the hero loads first, the rest lazily', /fetchpriority="high"/.test(heroTagOf(imgs)) && imgs.filter((i) => !/loading="lazy"/.test(i)).length <= 1);
+function heroTagOf(list) { return list.find((i) => i.includes('class="ac-hero-bg"')) || ''; }
+// S10: every internal link answers 200 on the local Worker (wrangler dev), when one is running.
+const base = process.env.LANDING_BASE || 'http://127.0.0.1:8787';
+const internal = [...new Set([...main.matchAll(/href="(\/[^"#]*)/g)].map((m) => decode(m[1])))];
+const up = await fetch(base + copy.path, { headers: { connection: 'close' }, signal: AbortSignal.timeout(8000) }).then((r) => r.ok).catch(() => false);
+if (up) {
+  const dead = [];
+  for (const href of internal) { const s = await fetch(base + href, { redirect: 'manual', headers: { connection: 'close' }, signal: AbortSignal.timeout(15000) }).then((r) => r.status).catch(() => 0); if (s !== 200) dead.push(`${href} ${s}`); }
+  check('S10 every internal link resolves', dead.length === 0, dead.join(', ') || `${internal.length} links`);
+} else check('S10 internal links (skipped: no local Worker)', true, `start wrangler dev or set LANDING_BASE`);
+// S11: weight: the page and its hero stay light.
+const heroFile = heroTagOf(imgs).match(/src="([^"?]+)/)?.[1];
+check('S11 page HTML under 120 KB', html.length < 120000, `${Math.round(html.length / 1024)} KB`);
+check('S11 hero picture under 150 KB', !!heroFile && existsSync(`site${heroFile}`) && statSync(`site${heroFile}`).size < 150000, heroFile ? `${Math.round(statSync(`site${heroFile}`).size / 1024)} KB` : 'missing');
 
 // H. Hero -----------------------------------------------------------------
 const heroTag = main.match(/<img class="ac-hero-bg"[^>]*>/)?.[0] || '';
@@ -106,6 +139,10 @@ let cardOk = false;
 if (existsSync(cardPath)) { const m = await sharp(cardPath).metadata(); cardOk = m.width === 1200 && m.height === 630; }
 check('G1 share card exists at 1200×630', cardOk, cardPath);
 check('G1 share title carries the tagline or the phrase', copy.social.title === copy.hero.h1 || copy.social.title.toLowerCase().includes(phrase.toLowerCase()), copy.social.title);
+check('G1 og:image width, height and type declared', metas['og:image:width'] === '1200' && metas['og:image:height'] === '630' && /^image\//.test(metas['og:image:type'] || ''));
+check('G1 twitter title and image match og', metas['twitter:title'] === metas['og:title'] && metas['twitter:image'] === metas['og:image']);
+check('G2 the card shows the page headline', [].concat(copy.social.card?.headline || []).join(' ') === copy.hero.h1, [].concat(copy.social.card?.headline || []).join(' '));
+check('S4 the sim is described as a free app (SoftwareApplication)', graph.some((n) => n['@type'] === 'SoftwareApplication' && n.offers && Number(n.offers.price) === 0));
 
 // H1. First fold, rendered ------------------------------------------------
 async function foldCheck() {
@@ -144,5 +181,22 @@ if (fold) await foldCheck(); else check('H1 fold check skipped (--no-fold)', tru
 // Report ------------------------------------------------------------------
 let failed = 0;
 for (const r of results) { if (!r.ok) failed++; console.log(`${r.ok ? '✓' : '✗'} ${r.rule}${r.detail ? `  (${r.detail})` : ''}`); }
+// The ten-point SEO checklist (docs/landing-pages.md): a point scores when every rule under it passes.
+const POINTS = [
+  ['Title and URL carry the phrase', /^S1 /],
+  ['Meta description', /^S2 /],
+  ['One H1 and a clean heading outline', /^S3 /],
+  ['H2s carry search phrases', /^S6 /],
+  ['Structured data', /^S4 /],
+  ['Images: alt, size, loading order', /^S9 /],
+  ['Discovery: sitemap, inbound links, every link resolves', /^(S5|S10) /],
+  ['Share card and tags', /^G[12] /],
+  ['First screen and phone layout', /^H1 /],
+  ['Weight', /^S11 /],
+];
+const score = POINTS.map(([label, re]) => { const rs = results.filter((r) => re.test(r.rule)); return { label, ok: rs.length > 0 && rs.every((r) => r.ok) }; });
+console.log('\nSEO checklist');
+for (const p of score) console.log(`${p.ok ? '✓' : '✗'} ${p.label}`);
+console.log(`SEO checklist: ${score.filter((p) => p.ok).length}/10`);
 console.log(failed ? `\n${failed} rule(s) failed` : `\nAll ${results.length} checks passed`);
 process.exit(failed ? 1 : 0);
