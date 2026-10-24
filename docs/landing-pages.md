@@ -20,6 +20,13 @@ Rules the auditor cannot judge (taste, truth of a claim) are marked **(human)**.
   video and an ItemList for any curated list. Canonical is the www URL; robots is index,follow.
 - S5. The page is in `site/sitemap.xml` and in the Worker's sitemap list with a lastmod no later than today, and it is
   linked from the homepage, the hangar page and the Wings product page of the same aircraft (`seo.linkedFrom`).
+- S6. Every H2 names the aircraft and the pilot's action in the words pilots search with (owner, 24 Oct 2026: "the title
+  needs to say analyse chupito logs"). Pull the phrases from Google's suggestions for the aircraft (kit, PNP, manual, iNAV
+  setup, price, 3D print, logs) and answer the common ones in the FAQ. Record the phrases in the page's `_seo` note.
+- S7. Every section shows something, not only text: videos, the sim frame, the bundle photos (the seller's, with consent
+  and credit), the print pictures (the designers', beside their credit) and a picture of the log viewer.
+- S8. Curated third-party links (the prints) are checked weekly by the Worker (src/prints-live.js): a print whose page or
+  picture is definitely gone is dropped from the page and its ItemList; a bot check never retires one.
 
 ## H. Hero and first screen
 
@@ -34,7 +41,7 @@ Rules the auditor cannot judge (taste, truth of a claim) are marked **(human)**.
 - H5. The hero and share pictures are made by Astra (ChatGPT’s image model, in the Codex app on the owner’s machine),
   never composited by a script or by hand (owner, 24 Oct 2026). They start from the maker’s own photographs when the
   maker’s permission covers them (Team BlackSheep: yes, owner 24 Oct 2026), otherwise from the sim’s render. Masters live
-  under `assets-src/<area>/`; `npm run landing:hero` only resizes and encodes them from `hero.image.source`, and the share
+  under `assets-src/<area>/`; `npm run landing:images` only resizes and encodes them (the hero, the bundle photos, the print pictures, the log-viewer picture), and the share
   card script only prints the words over `social.card.background`. The maker is credited and linked under the picture.
 
 ## L. Layout

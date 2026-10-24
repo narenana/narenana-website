@@ -19,6 +19,7 @@ import { handleDebrief, DebriefLimiter } from '../debrief/lib/worker.mjs'
 import { handleUsage } from '../usage/lib/worker.mjs'
 import { aircraftRecords, withRecords } from './aircraft-records.js'
 import { LANDINGS, fillWings } from './wings-live.js'
+import { PRINT_PAGES, fillPrints, loadRetired, checkPrintsSlice } from './prints-live.js'
 
 // Durable Object for the Flight Debrief rate limiter + daily budget.
 // Re-exported so the runtime can instantiate the class named in
@@ -138,7 +139,8 @@ export default {
     // <noscript> fallback list from the KV feed the Worker already holds.
     const isAircraftPage = url.pathname === '/nanawing/aircraft/'
     // An aircraft landing page (content/nanawing/<page>.json with a wingsSlug) gets its
-    // live Wings price line filled the way the aircraft page gets its lap records.
+    // live Wings price line filled the way the aircraft page gets its lap records, and drops any
+    // 3D print the weekly check has retired (src/prints-live.js).
     const landing = LANDINGS[url.pathname]
     const response =
       url.pathname === '/'
@@ -146,7 +148,7 @@ export default {
         : isAircraftPage
           ? await cachedAircraftPage(request, env, ctx, isLocal)
           : landing
-            ? await cachedFilledPage(request, env, ctx, isLocal, { path: url.pathname, tag: landing.tag, fill: (page, state) => fillWings(page, env, state, landing) })
+            ? await cachedFilledPage(request, env, ctx, isLocal, { path: url.pathname, tag: landing.tag, fill: async (page, state) => fillPrints(await fillWings(page, env, state, landing), await loadRetired(env), PRINT_PAGES[url.pathname]) })
             : await staticAsset(request, env)
 
     return harden(response, url, isLocal, { staticFile: url.pathname !== '/' && !isAircraftPage && !landing })
@@ -158,6 +160,8 @@ export default {
     if (event.cron === '0 * * * *') {
       ctx.waitUntil(refreshFeed(env))
       ctx.waitUntil(refreshStats(env).catch(() => null)) // fail-soft: keep last-good snapshot
+      // Sundays from 04:00 UTC: this hour's slice of the weekly check on the landing pages' 3D prints.
+      ctx.waitUntil(checkPrintsSlice(env, event.scheduledTime).catch((e) => console.error('prints check failed:', e)))
     }
     catalogScheduled(event, env, ctx)
   },

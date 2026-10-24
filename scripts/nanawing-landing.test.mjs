@@ -97,7 +97,7 @@ test('structured data: WebPage, a 3-level breadcrumb and a FAQPage matching the 
   assert.equal(crumbs[2].name, copy.crumb);
   const faq = graph.find((entry) => entry['@type'] === 'FAQPage');
   const questions = [...main.matchAll(/<summary>([\s\S]*?)<\/summary>/g)].map(([, q]) => text(q));
-  assert.equal(questions.length, 7);
+  assert.ok(questions.length >= 7, `${questions.length} questions`);
   assert.deepEqual(faq.mainEntity.map((q) => q.name), questions);
   assert.deepEqual(copy.faq.items.map((f) => f.q), questions);
 });
@@ -139,6 +139,24 @@ test('watch, buy, replay: the videos, the live price slot and the log viewer lin
     assert.ok(p.by && p.site && p.what.length > 20, `${p.title} has a credit and a line`);
     assert.ok(main.includes(`href="${p.href}" target="_blank" rel="noopener"`), `${p.title} opens in a new tab`);
   }
+  // Each print card carries its id for the weekly check (src/prints-live.js), inside a group wrapper,
+  // and shows the designer's picture once it has been fetched (npm run landing:prints, landing:images).
+  for (const p of prints) {
+    assert.match(p.id, /^(mw|tv)-\d+$/, `${p.title} id`);
+    assert.ok(main.includes(`<li data-print="${p.id}">`), `${p.title} card carries data-print`);
+    if (p.master) assert.ok(main.includes(`/assets/nanawing/${copy.aircraft}-print-${p.id}-400.webp`) && p.image.startsWith('https://'), `${p.title} picture`);
+  }
+  assert.ok(prints.filter((p) => p.master).length >= prints.length - 2, 'nearly every print shows its picture');
+  assert.equal((main.match(/data-print-group="/g) || []).length, copy.prints.groups.length, 'one wrapper per print group');
+  // The bundle cards show the seller's photos (owner, 24 Oct 2026), credited under the cards.
+  for (const v of copy.buy.variants) assert.ok(main.includes(`/assets/nanawing/${copy.aircraft}-bundle-${v.id}-400.webp`), `${v.id} photo`);
+  assert.ok(visible.includes(`${copy.buy.photoCredit.split('{maker}')[0]}${aircraft.credit.designer}`), 'the bundle photos are credited, and the maker with them');
+  assert.ok(main.includes(`${copy.buy.photoCredit.split('{maker}')[0]}<a href="${aircraft.credit.url}"`), 'the maker credit links their page');
+  // The logs section: the picture, the AI flight analysis and the iNAV line, as the log viewer states it.
+  assert.match(copy.logs.h2, /^Analyse your Chupito flight logs/);
+  assert.ok(main.includes('class="ac-log-shot"'), 'the log-viewer picture');
+  assert.ok(/AI flight analysis/.test(visible) && /iNAV blackbox logs from 9\.x and earlier/.test(visible) && visible.includes(copy.logs.note), 'AI analysis and iNAV support are on the page; the version range is the one small-print line');
+  assert.doesNotMatch(visible, /all (versions|releases) of iNAV/i, 'never claims every iNAV version');
   const list = graph.find((entry) => entry['@type'] === 'ItemList');
   assert.deepEqual(list.itemListElement.map((e) => e.url), prints.map((p) => p.href));
   // Buy: the Worker's slot with the fallback sentence; no price is baked into the page.

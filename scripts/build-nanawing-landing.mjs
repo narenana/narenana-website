@@ -56,7 +56,7 @@ const subnav = `<div class="ac-subnav"><div class="ac-subnav-in"><a class="ac-su
 
 // The hero: the words first (eyebrow, the tagline as the H1, one line, the play button and the
 // way to the bundles), then the wing itself: the maker's photographs, made into the page's
-// pictures by Astra (owner, 24 Oct 2026), sized by scripts/build-landing-hero.mjs. The pictures
+// pictures by Astra (owner, 24 Oct 2026), sized by scripts/build-landing-images.mjs. The pictures
 // show this aircraft and nothing else (docs/landing-pages.md, H2); a square crop serves phones.
 // The maker is credited under the picture, as their terms ask wherever the wing appears.
 const heroImg = copy.hero.image;
@@ -105,13 +105,29 @@ const watch = `<section class="ac-practice ac-watch" id="watch" aria-labelledby=
 // One card per bundle (copy.buy.variants), side by side on a wide screen: what is in the box, who
 // it is for, and a slot the Worker fills with that bundle's listings (src/wings-live.js:
 // offersTable). A hidden card takes any listing that matches no bundle.
-const variantCard = (v) => `<article class="ac-variant" id="buy-${esc(v.id)}"><h3>${esc(v.name)}</h3><p class="ac-variant-sub">${esc(v.sub)}</p><p>${esc(v.includes)}</p><p>${esc(v.pick)}</p><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:${esc(v.id)}"><p class="ac-note">${esc(copy.buy.tableFallback)}</p></div></article>`;
-const variants = `<div class="ac-variants">${copy.buy.variants.map(variantCard).join('')}<article class="ac-variant ac-variant-other" id="buy-other" hidden><h3>${esc(copy.buy.otherName)}</h3><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:other"></div></article></div><p class="ac-note ac-centre">${esc(copy.buy.note)}</p>`;
+// A landing picture written by scripts/build-landing-images.mjs (400/800 wide), or nothing yet.
+const pic = (base, alt, sizes, cls) => {
+  const file = (w) => `/assets/nanawing/${base}-${w}.webp`;
+  if (!existsSync(`site${file(400)}`)) { console.warn(`warning: no picture at site${file(400)}; run npm run landing:images`); return ''; }
+  return `<img class="${cls}" src="${file(400)}" srcset="${file(400)} 400w, ${file(800)} 800w" sizes="${sizes}" alt="${esc(alt)}" width="400" height="300" loading="lazy" decoding="async">`;
+};
+const variantCard = (v) => `<article class="ac-variant" id="buy-${esc(v.id)}">${v.image ? pic(`${a.id}-bundle-${v.id}`, v.image.alt, '(max-width:959px) 92vw, 360px', 'ac-variant-pic') : ''}<h3>${esc(v.name)}</h3><p class="ac-variant-sub">${esc(v.sub)}</p><p>${esc(v.includes)}</p><p>${esc(v.pick)}</p><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:${esc(v.id)}"><p class="ac-note">${esc(copy.buy.tableFallback)}</p></div></article>`;
+const variants = `<div class="ac-variants">${copy.buy.variants.map(variantCard).join('')}<article class="ac-variant ac-variant-other" id="buy-other" hidden><h3>${esc(copy.buy.otherName)}</h3><div class="ac-offers" data-wings-offers="${esc(copy.wingsSlug)}:other"></div></article></div><p class="ac-note ac-centre">${esc(copy.buy.note)}${copy.buy.photoCredit ? ` ${esc(copy.buy.photoCredit).replace('{maker}', makerLink)}` : ''}</p>`;
 const buy = sec('buy', 'ac-practice ac-buy', copy.buy.h2, `<p class="ac-live" data-wings="${esc(copy.wingsSlug)}">${esc(copy.buy.fallback)}</p>${variants}<p class="ac-centre">${esc(copy.buy.p)}</p>${links(copy.buy.links)}`);
-const logs = sec('logs', 'ac-practice ac-logs', copy.logs.h2, `${paras(copy.logs.paragraphs)}${links(copy.logs.links)}`);
-// 3D prints: a curated list from the model sites, each a link to its designer's own page (none of
-// their files or images are copied here). Optional: only pages with a `prints` block render it.
-const printItem = (p) => `<li><a href="${esc(p.href)}" ${ext}>${esc(p.title)}&nbsp;<span aria-hidden="true">↗</span></a><span class="ac-print-by">${esc(p.by)} · ${esc(p.site)}</span><p>${esc(p.what)}</p></li>`;
+// The logs section: a picture of the log viewer with the Chupito in it (Astra's, from a real
+// screenshot; copy.logs.image), then the copy and the links.
+const logImg = copy.logs.image;
+const LOGPIC = (w) => `/assets/nanawing/${logImg?.file}-${w}.webp`;
+const logHas = logImg && existsSync(`site${LOGPIC(logImg.widths[0])}`);
+if (logImg && !logHas) console.warn(`warning: no log-viewer picture at site${LOGPIC(logImg.widths[0])}; run npm run landing:images`);
+const logFigure = logHas
+  ? `<figure class="ac-log-shot"><img src="${LOGPIC(logImg.widths[0])}" srcset="${logImg.widths.map((w) => `${LOGPIC(w)} ${w}w`).join(', ')}" sizes="(max-width:1180px) 100vw, 1132px" alt="${esc(logImg.alt)}" width="1600" height="1000" loading="lazy" decoding="async"><figcaption>${esc(logImg.caption)}</figcaption></figure>`
+  : '';
+const logs = sec('logs', 'ac-practice ac-logs', copy.logs.h2, `${logFigure}${paras(copy.logs.paragraphs)}${copy.logs.note ? `<p class="ac-note">${esc(copy.logs.note)}</p>` : ''}${links(copy.logs.links)}`);
+// 3D prints: a curated list from the model sites, each a link to its designer's own page with the
+// designer's own preview picture (scripts/fetch-print-images.mjs). data-print and
+// data-print-group let the Worker drop a print the weekly check has retired (src/prints-live.js).
+const printItem = (p) => `<li data-print="${esc(p.id)}">${p.master ? `<a class="ac-print-pic" href="${esc(p.href)}" ${ext} tabindex="-1" aria-hidden="true">${pic(`${a.id}-print-${p.id}`, p.alt || p.title, '(max-width:599px) 92vw, (max-width:959px) 45vw, 360px', 'ac-print-img')}</a>` : ''}<a href="${esc(p.href)}" ${ext}>${esc(p.title)}&nbsp;<span aria-hidden="true">↗</span></a><span class="ac-print-by">${esc(p.by)} · ${esc(p.site)}</span><p>${esc(p.what)}</p></li>`;
 // The owner's own build: each part, what he flies, and the alternates he would stand behind.
 // Optional: rendered only once the list is in the page's JSON.
 const build = copy.build
@@ -119,8 +135,8 @@ const build = copy.build
     `<tr><th scope="row">${esc(p.part)}</th><td>${p.href ? `<a href="${esc(p.href)}" ${ext}>${esc(p.mine)}&nbsp;<span aria-hidden="true">↗</span></a>` : esc(p.mine)}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td>${(p.alternates || []).map(esc).join(', ') || '—'}</td></tr>`).join('')}</tbody></table></div>${copy.build.note ? `<p class="ac-note">${esc(copy.build.note)}</p>` : ''}`)
   : '';
 const prints = copy.prints
-  ? `<section class="ac-practice ac-prints" id="prints" aria-labelledby="prints-title"><h2 id="prints-title">${esc(copy.prints.h2)}</h2><p>${esc(copy.prints.intro)}</p>${copy.prints.groups.map((g) =>
-    `<h3>${esc(g.h3)}</h3><ul class="ac-print-list">${g.items.map(printItem).join('')}</ul>`).join('')}${copy.prints.note ? `<p class="ac-note">${esc(copy.prints.note)}</p>` : ''}</section>`
+  ? `<section class="ac-practice ac-prints" id="prints" aria-labelledby="prints-title"><h2 id="prints-title">${esc(copy.prints.h2)}</h2><p>${esc(copy.prints.intro)}</p>${copy.prints.groups.map((g, i) =>
+    `<div class="ac-print-group" data-print-group="${i}"><h3>${esc(g.h3)}</h3><ul class="ac-print-list">${g.items.map(printItem).join('')}</ul></div>`).join('')}${copy.prints.note ? `<p class="ac-note">${esc(copy.prints.note)}</p>` : ''}</section>`
   : '';
 // The owner's thank-you to the maker, with links to their site and the product page. Optional.
 const thanks = copy.thanks ? sec('thanks', 'ac-practice ac-thanks', copy.thanks.h2, `${paras(copy.thanks.paragraphs)}${links(copy.thanks.links)}`) : '';
@@ -230,7 +246,7 @@ const css = [
   // Buy: the bundles side by side, each with its listings stacked as rows at every width.
   '.ac-live{font-size:17px;text-align:center;max-width:64ch;margin:0 auto 22px}.ac-live strong{color:#C63B2E}',
   '.ac-variants{display:grid;gap:16px;margin:0 0 12px}@media(min-width:960px){.ac-variants{grid-template-columns:repeat(3,minmax(0,1fr));align-items:start}.ac-variant-other{grid-column:1/-1}}',
-  ".ac-variant{padding:20px 20px 16px;border:1px solid var(--ac-line);border-radius:12px;background:var(--ac-sky)}.ac-variant h3{margin:0 0 2px;font-size:28px}.ac-variant .ac-variant-sub{margin:0 0 12px;font:600 15px/1.35 'DM Sans',sans-serif;color:var(--ac-ink)}.ac-variant p{margin:0 0 8px;font-size:15px}.ac-variant .ac-offers{margin:12px 0 0}.ac-variant .ac-offers .ac-note{margin:0}.ac-variant .ac-table-wrap{background:#fff}",
+  ".ac-variant-pic{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;background:#fff;border-radius:10px;margin:0 0 14px}.ac-variant{padding:20px 20px 16px;border:1px solid var(--ac-line);border-radius:12px;background:var(--ac-sky)}.ac-variant h3{margin:0 0 2px;font-size:28px}.ac-variant .ac-variant-sub{margin:0 0 12px;font:600 15px/1.35 'DM Sans',sans-serif;color:var(--ac-ink)}.ac-variant p{margin:0 0 8px;font-size:15px}.ac-variant .ac-offers{margin:12px 0 0}.ac-variant .ac-offers .ac-note{margin:0}.ac-variant .ac-table-wrap{background:#fff}",
   '.ac-offers{margin:14px 0 18px}.ac-offers .ac-table-wrap{overflow:visible}.ac-offers-table{width:100%;min-width:0;border-collapse:collapse;font-size:14px;line-height:1.35;background:#fff;display:block}.ac-offers-table thead{display:none}.ac-offers-table tbody{display:block}',
   ".ac-offers-table tr{display:grid;grid-template-columns:1fr auto;grid-template-areas:'seller price' 'config price' 'stock buy';gap:2px 12px;align-items:start;padding:12px 14px;border-bottom:1px solid var(--ac-line)}.ac-offers-table tbody tr:last-child{border-bottom:0}.ac-offers-table th,.ac-offers-table td{display:block;padding:0;border:0;text-align:left}",
   ".ac-offers-table tbody th{font-weight:700}.ac-offers-table small{display:block;font-weight:400;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-offer-seller{grid-area:seller}.ac-offer-config{grid-area:config;color:var(--ac-muted);font-size:13px}.ac-offer-price{grid-area:price;text-align:right;font:600 15px/1.3 'JetBrains Mono',monospace;white-space:nowrap}.ac-offer-price small{font-family:'DM Sans',sans-serif;white-space:normal}.ac-offer-held{font:600 13px/1.3 'DM Sans',sans-serif;color:var(--ac-muted);white-space:normal}",
@@ -239,8 +255,8 @@ const css = [
   '.ac-buy .ac-links{justify-content:center}',
   // The build table, the prints, the logs, the thanks.
   '.ac-build .ac-table{min-width:0}.ac-build .ac-table th,.ac-build .ac-table td{white-space:normal;vertical-align:top}.ac-build-table small{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}',
-  '.ac-prints h3{margin-top:28px}.ac-print-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}.ac-print-list li{padding:14px 16px;border:1px solid var(--ac-line);border-radius:8px;background:#fff}.ac-print-list a{font-weight:700}.ac-print-by{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-print-list p{margin:6px 0 0;font-size:15px}@media(min-width:600px){.ac-print-list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:960px){.ac-print-list{grid-template-columns:repeat(3,minmax(0,1fr))}}',
-  '.ac-logs p,.ac-thanks p{text-align:center;max-width:64ch;margin:0 auto 14px}.ac-logs .ac-links,.ac-thanks .ac-links{justify-content:center}',
+  '.ac-prints h3{margin-top:28px}.ac-print-list{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:12px}.ac-print-list li{padding:14px 16px;border:1px solid var(--ac-line);border-radius:10px;background:#fff;overflow:hidden}.ac-print-pic{display:block;margin:-14px -16px 12px;text-decoration:none}.ac-print-img{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;background:#fff;border-bottom:1px solid var(--ac-line)}.ac-print-list a{font-weight:700}.ac-print-by{display:block;font-size:12px;color:var(--ac-muted);margin-top:2px}.ac-print-list p{margin:6px 0 0;font-size:15px}@media(min-width:600px){.ac-print-list{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(min-width:960px){.ac-print-list{grid-template-columns:repeat(3,minmax(0,1fr))}}',
+  '.ac-log-shot{margin:0 0 24px}.ac-log-shot img{display:block;width:100%;height:auto;border-radius:12px;border:1px solid var(--ac-line);box-shadow:0 18px 40px rgba(13,29,42,.12)}.ac-log-shot figcaption{font-size:12px;color:var(--ac-muted);margin-top:8px;text-align:center}.ac-logs p,.ac-thanks p{text-align:center;max-width:64ch;margin:0 auto 14px}.ac-logs .ac-links,.ac-thanks .ac-links{justify-content:center}',
   '.ac-links{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-wrap:wrap;gap:8px 28px}.ac-links a{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:700;text-underline-offset:4px}',
   // The closing band.
   `.ac-landing .ac-final{margin:clamp(56px,9vh,96px) calc(50% - 50vw) 0;padding:clamp(48px,8vh,96px) 24px;border:0;border-radius:0;background:${DARK};color:#fff}.ac-landing .ac-final h2{color:#fff;font-size:clamp(30px,4.4vw,48px);line-height:1.05;max-width:22ch;margin:0 auto 12px;text-wrap:balance}.ac-landing .ac-final p{color:#dbe6ee;max-width:60ch;margin:0 auto 22px}`,
