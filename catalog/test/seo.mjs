@@ -1,6 +1,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile, cp, mkdtemp, rm } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { comparableOfferSchema, comparableOffers, renderMaster } from '../lib/public.mjs'
 import { manufacturerReference, productOverview } from '../lib/product-overview.mjs'
 
@@ -827,6 +832,41 @@ test('homepage share tags describe narenana.com as a whole, not one product', as
   assert.equal(meta('property', 'og:image'), 'https://www.narenana.com/og.jpg', 'the umbrella card')
   assert.match((html.match(/<title>([^<]*)<\/title>/) || [])[1], /^Nanawing/, '<title> stays Nanawing-first')
   assert.equal(meta('name', 'twitter:image:alt'), meta('property', 'og:image:alt'), 'one alt for the share card')
+})
+
+// 24 Oct 2026: scripts/seo-content.mjs stamped its own meta and Organization/WebSite descriptions over the homepage,
+// so a run reverted newer copy. It may only sync the homepage's VideoObject entries. Run it in a scratch copy of the
+// repo (it writes relative to its cwd and its own folder): site/index.html must come out byte-identical, run after run,
+// and a homepage with its videos removed must get them back exactly.
+test('seo-content.mjs leaves the homepage as it is and only syncs its videos', async () => {
+  const root = fileURLToPath(new URL('../../', import.meta.url))
+  const tmp = await mkdtemp(join(tmpdir(), 'seo-content-'))
+  const home = join(tmp, 'site', 'index.html')
+  const run = () => promisify(execFile)(process.execPath, [join('scripts', 'seo-content.mjs')], { cwd: tmp })
+  const changed = (before, after) => {
+    const a = before.split('\n'), b = after.split('\n')
+    return b.flatMap((line, i) => line === a[i] ? [] : [`line ${i + 1}: ${line.trim().slice(0, 160)}`]).slice(0, 5)
+  }
+  try {
+    for (const dir of ['scripts', 'site', 'src', 'catalog/lib']) await cp(join(root, dir), join(tmp, dir), { recursive: true })
+    const committed = await readFile(home, 'utf8')
+    for (const n of [1, 2]) {
+      await run()
+      assert.deepEqual(changed(committed, await readFile(home, 'utf8')), [], `run ${n} rewrote site/index.html`)
+    }
+    const ld = /(<script type="application\/ld\+json">)([\s\S]*?)(<\/script>)/
+    const noVideos = committed.replace(ld, (_, open, raw, close) => {
+      const data = JSON.parse(raw)
+      data['@graph'] = data['@graph'].filter((n) => n['@type'] !== 'VideoObject')
+      return open + JSON.stringify(data) + close
+    })
+    assert.doesNotMatch(noVideos, /"VideoObject"/)
+    await writeFile(home, noVideos)
+    await run()
+    assert.deepEqual(changed(committed, await readFile(home, 'utf8')), [], 'the VideoObject sync put the videos back')
+  } finally {
+    await rm(tmp, { recursive: true, force: true })
+  }
 })
 
 // Owner, 15 Oct 2026: "why does this even exist. exactly the type of content we wanted to avoid", about a "Where the
