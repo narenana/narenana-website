@@ -1,0 +1,9 @@
+out/
+out2/
+frames/
+fixture-build/
+unused/
+review/
+logs/
+*.log
+control-*.json
