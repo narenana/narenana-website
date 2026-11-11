@@ -35,6 +35,7 @@ export function installShare() {
   const open = event => {
     const data = shareData(); if (!data) return;
     trigger = event?.currentTarget || button;
+    dialog.querySelector('#nn-share-heading').textContent = trigger.dataset?.shareHeading || 'Share with a flying friend';
     const u = encodeURIComponent(data.url), t = encodeURIComponent(data.title);
     const urls = {whatsapp:`https://wa.me/?text=${encodeURIComponent(data.title+' '+data.url)}`,facebook:`https://www.facebook.com/sharer/sharer.php?u=${u}`,linkedin:`https://www.linkedin.com/sharing/share-offsite/?url=${u}`,x:`https://twitter.com/intent/tweet?text=${t}&url=${u}`,email:`mailto:?subject=${t}&body=${encodeURIComponent(data.text+'\n\n'+data.url)}`};
     dialog.querySelectorAll('[data-service]').forEach(a => a.href = urls[a.dataset.service]);
@@ -49,7 +50,7 @@ export function installShare() {
   dialog.addEventListener('cancel', event => { event.preventDefault(); close(); });
   dialog.addEventListener('click', event => { if (event.target === dialog) { const r=dialog.getBoundingClientRect(); if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom) close(); } });
   dialog.querySelector('[data-copy]').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(input.value); status.textContent = 'Link copied. Ready to share!'; }
+    try { await navigator.clipboard.writeText(input.value); status.textContent = 'Link copied.'; }
     catch { input.focus(); input.select(); status.textContent = 'Select and copy the link above.'; }
   });
   dialog.querySelector('[data-native]').addEventListener('click', async () => {

@@ -42,7 +42,7 @@ ${body}
 <aside class="foot" aria-label="Catalog checks"><p>Prices and stock reflect the latest completed seller checks. Confirm availability on the seller’s page before buying.</p><p><a href="/catalog-methodology/">How prices, stock and listings are checked</a></p></aside>
 ${familyFooter({home:''})}
 
-<script type="module" src="/assets/family/preview-links.js?v=be680653c7"></script></body></html>`
+<script type="module" src="/assets/family/preview-links.js?v=314f2599ae"></script></body></html>`
 }
 
 // Power class from a listing's text. LOGIC is in code; the text (engine

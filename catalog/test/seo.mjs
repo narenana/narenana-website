@@ -517,7 +517,8 @@ test('flagged listings: stock is kept, price withheld, never a false or empty Pr
   const availability = (p) => JSON.stringify(p?.offers || {}).match(/schema\.org\/(InStock|OutOfStock)/g) || []
   // A withheld amount must not appear in ANY form: formatted or raw, in the
   // offers table, the headline or the JSON-LD.
-  const leaks = (html, n) => html.includes(n.toLocaleString('en-IN')) || html.includes(String(n))
+  // Asset fingerprints (?v=314f2599ae) are hex and can contain the digits by chance; they are not prices.
+  const leaks = (html, n) => { const text = html.replace(/\?v=[0-9a-f]+/g, ''); return text.includes(n.toLocaleString('en-IN')) || text.includes(String(n)) }
 
   // Only live listing is flagged: in stock, price under review, no Product.
   let html = page([offer({ flagged: 'price_jump', price_inr: 2599 })])
