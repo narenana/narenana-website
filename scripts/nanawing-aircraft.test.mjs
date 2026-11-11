@@ -351,8 +351,13 @@ test('the homepage lists, races and credits every aircraft, the TBS Chupito incl
   // Estate Run's option carries the course allow-list the board script reads (site/assets/leaderboard.js).
   const estate = attributes(match(home, /(<option value="parkland-estate-run"[^>]*>)/, 'the Estate Run option exists'));
   assert.deepEqual(estate['data-aircraft'].split(/\s+/), facts.courses.find((course) => course.id === 'parkland-estate-run').aircraft);
-  const pick = text(match(home, /<a href="\/nanawing\/aircraft\/">(Pick your wing:[\s\S]*?)<\/a>/, 'the Pick your wing list exists'));
-  for (const aircraft of facts.aircraft) assert.ok(pick.includes(aircraft.name), `the homepage list names the ${aircraft.name}`);
+  // The Pick your wing section (Nov 2026 redesign): one card per aircraft, each linking to its own section of the
+  // aircraft page, plus a link to the whole page.
+  const fleet = match(home, /<ul class="fleet[^"]*" id="nanawing-fleet"[^>]*>([\s\S]*?)<\/ul>/, 'the Pick your wing list exists');
+  const cards = [...fleet.matchAll(/<a class="craft" href="\/nanawing\/aircraft\/#([a-z]+)">([\s\S]*?)<\/a>/g)].map(([, id, body]) => ({ id, name: text((body.match(/<h3>([\s\S]*?)<\/h3>/) || [])[1] || '') }));
+  assert.deepEqual(cards.map((card) => card.id).sort(), facts.aircraft.map((aircraft) => aircraft.id).sort(), 'one card per aircraft');
+  for (const card of cards) assert.equal(card.name, byId.get(card.id).name, `the ${card.id} card names its aircraft`);
+  assert.ok(home.includes(`href="/nanawing/aircraft/">Compare all ${facts.aircraft.length} wings`), 'the section links to the aircraft page and counts every wing');
   // The page that names the Chupito credits Team BlackSheep and links the product page.
   const credits = [...home.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g)].filter(([, attrs]) => attributes(attrs).href === TBS_PRODUCT);
   assert.equal(credits.length, 1, 'one Team BlackSheep product link');
