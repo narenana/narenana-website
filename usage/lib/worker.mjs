@@ -22,6 +22,7 @@ const ALLOW = {
   narration_requested: [''],
   narration_completed: ['', 'cached', 'fresh'],
   share_opened: [''],
+  feedback_opened: [''], // the Feedback dialog was opened (submissions live in lv_feedback)
   // Anonymous fleet dimensions derived from the log in the browser — no
   // position, no filename, no content; only one low-cardinality bucket.
   fw_family: ['', 'betaflight', 'inav', 'emuflight'], // flight-controller firmware (blackbox logs)
@@ -145,6 +146,7 @@ export async function usageSummary(env, days = 30) {
     byPeakSpeed: byDim('peak_speed'),
     byCells: byDim('cells'),
     byDetector: byDim('detector'), // which debrief issues fired, most-common first
+    feedbackOpened: sum('feedback_opened', null),
     daily,
   }
 }
