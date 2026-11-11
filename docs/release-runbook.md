@@ -1,5 +1,13 @@
 # Redesign release runbook
 
+## Release record — 11 November 2026 (RELEASED): seo-content.mjs stops reverting the homepage
+
+The owner asked to deploy it to production on 11 November. Website only; a build-script and test change, with nothing under `site/` changed.
+
+| App | Merge on production branch | Production deployment | Rollback target | Verified |
+|---|---|---|---|---|
+| Website | `master` 892c087 (merge of PR #7, `claude/hungry-chatterjee-7d6d67`, fix a1b6943) | Worker version 8a3bc5c0 (Workers Builds) | 7b6e5434 (ff60036) | SEO suite on the release tree with `wrangler dev`: 40 pass, 1 todo; asset gate current (137 files). Live: homepage meta description, Organization/WebSite descriptions and VideoObjects identical to before; `/`, both video pages, `/catalog-methodology/`, `/chupito/`, sitemap 200; workers.dev noindex |
+
 ## Release record — 24 October 2026 (RELEASED): the TBS Chupito page
 
 Owner approved on 24 October ("lets go to production"). Website only; the sims and the log viewer are unchanged.
