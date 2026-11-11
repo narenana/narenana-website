@@ -17,6 +17,7 @@ import { ASSET_VERSIONS } from './asset-versions.mjs'
 import { handleStats, refreshStats } from './stats.js'
 import { handleDebrief, DebriefLimiter } from '../debrief/lib/worker.mjs'
 import { handleUsage } from '../usage/lib/worker.mjs'
+import { handleFeedback } from '../usage/lib/feedback.mjs'
 import { aircraftRecords, withRecords } from './aircraft-records.js'
 import { LANDINGS, fillWings } from './wings-live.js'
 import { PRINT_PAGES, fillPrints, loadRetired, checkPrintsSlice } from './prints-live.js'
@@ -107,6 +108,13 @@ export default {
     // no consent dependency (pure aggregate counts).
     if (url.pathname === '/api/usage') {
       return handleUsage(request, env)
+    }
+
+    // Product feedback (usage/lib/feedback.mjs) — the log viewer's Feedback
+    // dialog posts a 1–10 rating + optional comment, stored in D1
+    // (lv_feedback). Sets its own CORS + no-store + noindex headers.
+    if (url.pathname === '/api/feedback') {
+      return handleFeedback(request, env)
     }
 
     // Private portfolio dashboard (src/stats.js). Sets its own security headers

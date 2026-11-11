@@ -21,6 +21,7 @@
 // Vars: GA4_PROPERTY_ID, CF_ACCOUNT_TAG. See docs/STATS-SETUP.md.
 
 import { usageSummary } from '../usage/lib/worker.mjs'
+import { feedbackSummary } from '../usage/lib/feedback.mjs'
 import { DASHBOARD as NANAWING_DASHBOARD } from './nanawing-dashboard.js'
 
 const SNAPSHOT_KEY = 'stats_snapshot'
@@ -144,7 +145,7 @@ export async function handleStats(request, env, ctx, url) {
 
 /** Fetch every source (independently fail-soft) and persist the snapshot. */
 export async function refreshStats(env) {
-  const [ga, gsc, cf, lastcall, nanawing, youtube, logviewer] = await Promise.all([
+  const [ga, gsc, cf, lastcall, nanawing, youtube, logviewer, feedback] = await Promise.all([
     section(() => fetchGa(env)),
     section(() => fetchGsc(env)),
     section(() => fetchCf(env)),
@@ -152,6 +153,7 @@ export async function refreshStats(env) {
     section(() => fetchNanawing(env)),
     section(() => fetchYouTube(env)),
     section(() => usageSummary(env, WINDOW_DAYS)),
+    section(() => feedbackSummary(env)),
   ])
   const json = JSON.stringify({
     v: 1,
@@ -164,6 +166,7 @@ export async function refreshStats(env) {
     nanawing,
     youtube,
     logviewer,
+    feedback,
   })
   try {
     await env.VIDEOS_KV.put(SNAPSHOT_KEY, json)
