@@ -159,9 +159,13 @@ Run the brand-voice reviewer in strict mode on the **whole** page, fix every fin
   ```
   rm -rf /tmp/www-preview && cp -r site /tmp/www-preview
   printf '/*\n  X-Robots-Tag: noindex, nofollow\n' > /tmp/www-preview/_headers
-  npx wrangler pages project create narenana-www-preview --production-branch=main   # first time only
-  npx wrangler pages deploy /tmp/www-preview --project-name=narenana-www-preview --branch=ccr-257b3a00-pltw47
+  mkdir -p /tmp/empty && cd /tmp/empty        # NOT the repo: see the warning below
+  node <repo>/node_modules/wrangler/bin/wrangler.js pages deploy /tmp/www-preview --project-name=narenana-www-preview --branch=ccr-257b3a00-pltw47 --commit-dirty=true
   ```
+
+  **A preview is up (11 Nov).** Redeploy with the commands above after each change.
+
+  **Never run `wrangler pages project create` inside the repo.** The project already exists (created 11 Nov). wrangler 4.137 hands that command to a Workers deploy, which reads the repo's `wrangler.toml` and publishes the whole Worker, with production bindings and cron schedules, under the project's name. That happened on 11 Nov; the stray Worker was deleted within a minute and no schedule fired. If the project ever has to be made again, run the command from an empty folder with `--force`.
 
   It ends up at `https://ccr-257b3a00-pltw47.narenana-www-preview.pages.dev/` and `…/nanawing2/`.
 - **Local preview of the full Worker:** `npx wrangler dev`, then open http://localhost:8787. Local data is empty.
