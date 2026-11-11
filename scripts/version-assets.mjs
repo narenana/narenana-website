@@ -44,6 +44,7 @@ const referrers = () => [
   join(ROOT, 'scripts', 'seo-content.mjs'),
   join(ROOT, 'scripts', 'page-shell.mjs'),
   join(ROOT, 'scripts', 'build-nanawing-pages.mjs'),
+  join(ROOT, 'scripts', 'build-nanawing-landing.mjs'),
 ]
 
 // Absolute (/assets/x.css, https://www.narenana.com/assets/x.css) and, inside

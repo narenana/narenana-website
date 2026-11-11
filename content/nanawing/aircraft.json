@@ -80,6 +80,7 @@
     },
     "chupito": {
       "role": "Quickest roll in the hangar",
+      "more": { "href": "/chupito/", "label": "Learn what bites when you fly the Chupito, and where to buy one in India" },
       "paragraphs": [
         "Fly Team BlackSheep's 800mm pusher wing, recreated in Nanawing. It snaps round at 360°/s, the quickest roll in the hangar, so you can flick it from bank to bank between gates. Then open it up to 140 km/h on its 6S 1800 mAh pack.",
         "It stalls at 35 km/h, so keep your speed up through the turns, then ease it down gently when you land.",

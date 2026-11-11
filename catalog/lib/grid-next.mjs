@@ -289,7 +289,7 @@ function hubCopy(cat, all) {
 // sim, also flies on phones with two on-screen thumb sticks (since 9 Oct 2026).
 const PRACTISE = {
   Trainer: 'Practise circuits and landings line of sight in <a href="https://nanawing2.narenana.com/">Nanawing 2</a> before you risk the real plane. It runs free in your browser on a laptop or desktop.',
-  'FPV / Flying Wing': 'Practise hand launches and landings in <a href="https://sim.narenana.com/">Nanawing</a> before you risk the real wing. Fly it free in your browser, on a laptop or on your phone with two thumb sticks. After a real flight, replay your iNAV or EdgeTX log on a 3D map in the <a href="/log-viewer/">log viewer</a>.',
+  'FPV / Flying Wing': 'Practise hand launches and landings in <a href="https://sim.narenana.com/">Nanawing</a> before you risk the real wing. Fly it free in your browser, on a laptop or on your phone with two thumb sticks. After a real flight, replay your iNAV or EdgeTX log on a 3D map in the <a href="/log-viewer/">log viewer</a>. For the TBS Chupito, <a href="/chupito/">watch it fly, fly it yourself, find one in India and print the parts</a>.',
 }
 // Types a buyer of each type often compares next.
 const RELATED = {
@@ -419,8 +419,8 @@ export async function browseData(env, cat) {
 }
 
 const BZ_CSS = `<style>
-.bz{max-width:1000px;margin:0 auto;padding:22px 20px 60px}
-.bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:14px}
+.bz{max-width:1000px;margin:0 auto;padding:20px 20px 60px}@media(max-width:640px){.bz{padding-top:14px}}
+.bz-crumbs{font-size:12px;color:var(--muted);margin-bottom:20px}@media(max-width:640px){.bz-crumbs{margin-bottom:14px}}
 .bz-crumbs a{color:var(--muted);text-decoration:none}.bz-crumbs a:hover{text-decoration:underline}
 .bz-h1{font-family:'Barlow Condensed',system-ui,sans-serif;font-weight:800;font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:0 0 8px}
 .bz-lede{color:var(--muted);max-width:66ch;margin:0 0 26px}
@@ -755,8 +755,8 @@ export function renderGridNext(cat, rows, opts = {}) {
 
 // ---- namespaced styles (reuse catalog.css tokens; --line→--faint, --good→--green) ----
 const FX_CSS = `
-.fx-crumbs{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.fx-crumbs a{color:var(--muted);text-decoration:none}
+.fx-crumbs{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin:0 0 20px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fx-crumbs a{color:var(--muted);text-decoration:none}@media(max-width:640px){.fx-crumbs{margin-bottom:14px}}
 .fx-crumbs a:hover{color:var(--ink);text-decoration:underline}
 .fx-crumbs i{font-style:normal;opacity:.5}
 .fx-crumbs [aria-current]{color:var(--ink);font-weight:700}
