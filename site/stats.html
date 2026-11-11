@@ -81,7 +81,21 @@
     .tabh { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 26px 0 12px; }
     .tabh:first-child { margin-top: 4px; }
     #nwframe { width: 100%; min-height: 70vh; border: 0; border-radius: 14px; background: var(--card); display: block; }
-    #lv-activity { margin-bottom: 14px; }
+    #lv-activity, #lv-feedback { margin-bottom: 14px; }
+    /* Feedback: 1–10 distribution + latest comments (comments are escaped). */
+    .fb-dist { display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px; margin: 12px 0 16px; max-width: 560px; }
+    .fb-bar { text-align: center; font-size: 0.72rem; color: var(--muted); }
+    .fb-track { height: 64px; display: flex; align-items: flex-end; background: rgba(139, 148, 158, 0.08); border-radius: 4px; }
+    .fb-track span { display: block; width: 100%; min-height: 2px; border-radius: 4px; }
+    .fb-bar b { display: block; color: var(--fg); font-weight: 600; margin-top: 3px; }
+    .fb-bar i { display: block; font-style: normal; font-variant-numeric: tabular-nums; min-height: 1.2em; }
+    .fb-list { list-style: none; margin: 4px 0 0; padding: 0; max-height: 560px; overflow-y: auto; }
+    .fb-list li { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .fb-list li:last-child { border-bottom: 0; }
+    .fb-r { flex: none; width: 34px; height: 34px; border: 2px solid; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .fb-meta { color: var(--muted); font-size: 0.75rem; }
+    .fb-c { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.9rem; }
+    .fb-c.empty { color: var(--muted); font-style: italic; font-size: 0.82rem; }
     .lv-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 12px; }
     @media (max-width: 640px) { .lv-mini { grid-template-columns: 1fr; } }
     .chlbl { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 2px; }
@@ -137,6 +151,7 @@
     </section>
     <section class="tabpanel" data-panel="logviewer" hidden>
       <div id="lv-activity"></div>
+      <div id="lv-feedback"></div>
       <div class="cols" id="logviewer"></div>
     </section>
     <section class="tabpanel" data-panel="sites" hidden>
@@ -295,11 +310,20 @@
           <div class="value">${fmt(val)} ${series.length ? deltaChip(series) : ''}</div>
           <div class="note">${note}</div></div>`
       }
+      // All-time average of the log viewer's 1–10 feedback (lv_feedback).
+      const fb = data.feedback
+      const fbTile = `<div class="tile"><div class="label">Log Viewer rating</div>${
+        ok(fb) && fb.total
+          ? `<div class="value">${fb.avg.toFixed(1)}<span style="font-size:0.9rem;color:var(--muted);font-weight:600"> /10</span></div>
+             <div class="note">${fmt(fb.total)} rating${fb.total === 1 ? '' : 's'} all-time · ${fmt(fb.last7.count)} in the last 7 days</div>`
+          : `<div class="value">—</div><div class="note">${ok(fb) ? 'no ratings yet' : esc((fb && fb.error) || 'feedback unavailable')}</div>`
+      }</div>`
       $('tiles').innerHTML =
         tile('Sessions — all projects', gaAll, ok(data.ga) ? 'google analytics, every hostname' : 'GA not configured yet') +
         tile('Search clicks', gscClicks, ok(data.gsc) ? 'google search → any page' : 'Search Console not configured yet') +
         tile('Game plays', plays, playsNote) +
-        tile('Edge visit-days', cfUniq, ok(data.cf) ? 'daily uniques summed — repeat visitors count each day' : 'Cloudflare API not configured yet')
+        tile('Edge visit-days', cfUniq, ok(data.cf) ? 'daily uniques summed — repeat visitors count each day' : 'Cloudflare API not configured yet') +
+        fbTile
 
       /* ---- project cards (known projects + any unlisted GA hosts) ---- */
       const known = new Set(PROJECTS.map((p) => p.host))
@@ -449,6 +473,9 @@
         $('logviewer').innerHTML = `<div class="panel empty">Log Viewer: ${esc((data.logviewer && data.logviewer.error) || 'no first-party data yet')}</div>`
       }
 
+      /* ---- Log Viewer feedback (lv_feedback): 1–10 rating + comments ---- */
+      $('lv-feedback').innerHTML = fbHtml(fb, ok(data.logviewer) ? data.logviewer.feedbackOpened : null)
+
       /* ---- www page split (wings catalog etc.) appended to search column ---- */
       if (ok(data.ga) && data.ga.wwwPages.length) {
         const rows = data.ga.wwwPages.slice(0, 12).map((r) =>
@@ -493,7 +520,36 @@
       $('sources').innerHTML =
         chip('Google Analytics', data.ga) + chip('Search Console', data.gsc) +
         chip('Cloudflare', data.cf) + chip('Last Call D1', data.lastcall) +
-        chip('Nanawing', data.nanawing) + chip('YouTube', data.youtube)
+        chip('Nanawing', data.nanawing) + chip('YouTube', data.youtube) +
+        chip('Log Viewer D1', data.logviewer) + chip('Feedback D1', data.feedback)
+    }
+
+    const FB_CTX = { landing: 'landing page', blackbox: 'blackbox log open', 'edgetx-csv': 'EdgeTX log open', sample: 'sample flight open' }
+    const fbColor = (r) => (r >= 9 ? 'var(--up)' : r >= 7 ? '#d29922' : 'var(--down)')
+    /** Feedback panel: headline numbers, the 1–10 distribution, latest comments. */
+    function fbHtml(fb, opened) {
+      const head = '<div class="title">Feedback · rating 1–10</div>'
+      if (!fb || fb.error) return `<div class="panel">${head}<div class="empty">${esc((fb && fb.error) || 'no data')}</div></div>`
+      const openedTxt = opened ? ` · dialog opened <b style="color:var(--fg)">${fmt(opened)}</b>× in 28d` : ''
+      if (!fb.total) return `<div class="panel">${head}<div class="empty">No feedback yet${openedTxt}.</div></div>`
+      const max = Math.max(...fb.dist, 1)
+      const bars = fb.dist.map((n, i) => `<div class="fb-bar" title="${i + 1}/10: ${n}">
+          <div class="fb-track"><span style="height:${Math.round((n / max) * 100)}%;background:${fbColor(i + 1)}"></span></div>
+          <b>${i + 1}</b><i>${n || ''}</i></div>`).join('')
+      const items = fb.recent.map((r) => `<li>
+          <span class="fb-r" style="color:${fbColor(r.rating)};border-color:${fbColor(r.rating)}">${Number(r.rating) || '?'}</span>
+          <div><div class="fb-meta">${esc(String(r.at || '').replace('T', ' ').replace('Z', ' UTC'))}${r.context ? ' · ' + esc(FB_CTX[r.context] || r.context) : ''}</div>
+          ${r.comment ? `<div class="fb-c">${esc(r.comment)}</div>` : '<div class="fb-c empty">rating only</div>'}</div></li>`).join('')
+      const score = fb.score > 0 ? '+' + fb.score : String(fb.score)
+      return `<div class="panel">${head}
+        <div class="facts" style="color:var(--muted);font-size:0.82rem">
+          avg <b style="color:var(--fg)">${fb.avg.toFixed(1)}</b> from <b style="color:var(--fg)">${fmt(fb.total)}</b> ·
+          score <b style="color:var(--fg)">${score}</b> <span title="% rating 9–10 minus % rating 1–6">(9–10 minus 1–6)</span> ·
+          28d <b style="color:var(--fg)">${fmt(fb.last28.count)}</b>${fb.last28.avg != null ? ` (avg ${Number(fb.last28.avg).toFixed(1)})` : ''} ·
+          7d <b style="color:var(--fg)">${fmt(fb.last7.count)}</b> · with a comment <b style="color:var(--fg)">${fmt(fb.commented)}</b>${openedTxt}</div>
+        <div class="fb-dist">${bars}</div>
+        <div class="chlbl">Latest${fb.total > fb.recent.length ? ` ${fb.recent.length}` : ''}</div>
+        <ul class="fb-list">${items}</ul></div>`
     }
 
     async function load(force) {

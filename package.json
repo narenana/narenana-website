@@ -19,6 +19,7 @@
     "catalog:test": "node --test catalog/test/suite.mjs",
     "seo:test": "node --test catalog/test/seo.mjs catalog/test/prints-live.mjs",
     "curator:test": "node --test catalog/test/curator.mjs catalog/test/curator-dedup.mjs",
+    "usage:test": "node --test usage/test/feedback.test.mjs",
     "seo:audit": "node scripts/sitemap-audit.mjs && node scripts/seo-audit.mjs --local && node scripts/release-link-audit.mjs",
     "sitemap:audit": "node scripts/sitemap-audit.mjs",
     "assets:version": "node scripts/version-assets.mjs",
