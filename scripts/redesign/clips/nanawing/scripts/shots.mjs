@@ -76,4 +76,24 @@ export const SHOTS = {
     prepare: waitNear, prepareArgs: { actor: "stock0", near: [1295, -868, 30] },
     opts: (o) => islandTrain(0, o),
   },
+  // 2-3. One chase-camera pass on each of the other two maps, beside that map's own race line. The camera rides
+  //      rigidly 3.6 m behind the wing (these are 1 m wings: any further and they are a speck).
+  //      Scout a line first:  node render.mjs <shot> --every 15   (stills + ../out/<shot>-scout.jpg)
+  // The Desert: the Desert Wing along the Pyramid Run straight, heading west with the pyramids to the south (screen right).
+  "desert-pyramids": {
+    map: "desert-airfield", aircraft: "desertwing", frames: 210, loopFrames: 0, preroll: 60,
+    opts: { path: [[420, -560], [300, -640], [165, -700], [0, -690], [-121, -683], [-410, -680]],
+      agl: 16, speed: 30, maxBank: 45, fov: 0.6, camOffset: [-1.2, 0.8, -3.6], camLook: [5, 0, 30], camPosTau: 0.001, camLookTau: 0.001, camHeadTau: 0.7 },
+  },
+  // Parkland: the WUDFLY Spectre along the lake and over the estate bridge (at 205, -185), heading towards +x.
+  "parkland-lake": {
+    map: "parkland", aircraft: "spectre", frames: 150, loopFrames: 0, preroll: 90,
+    opts: { path: [[10, -228], [73, -200], [205, -185], [300, -205], [368, -205], [430, -205]], waterY: -1,
+      agl: 12, speed: 28, maxBank: 45, fov: 0.6, camOffset: [0.7, 0.8, -3.6], camLook: [0, 0, 30], camPosTau: 0.001, camLookTau: 0.001, camHeadTau: 0.7 },
+  },
+  // Overhead reference stills for choosing a line (not for the site).
+  "parkland-top": { map: "parkland", aircraft: "spectre", frames: 1, loopFrames: 0, preroll: 2,
+    opts: { path: [[45, 110], [7, 375]], agl: 40, fov: 1.1, extras: `({ camera() { return { pos: [-60, 900, -40], look: [-60, 0, 20] }; } })` } },
+  "desert-top": { map: "desert-airfield", aircraft: "desertwing", frames: 1, loopFrames: 0, preroll: 2,
+    opts: { path: [[45, 165], [291, 405]], agl: 40, fov: 1.1, extras: `({ camera() { return { pos: [300, 1700, 100], look: [300, 0, 160] }; } })` } },
 };

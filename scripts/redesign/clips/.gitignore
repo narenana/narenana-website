@@ -7,3 +7,4 @@ review/
 logs/
 *.log
 control-*.json
+.vite-cache/

@@ -84,7 +84,11 @@ The tests are `catalog/test/seo.mjs`, `catalog/test/suite.mjs`, `scripts/nanawin
   - The take-off and loop clips show a short double exposure where they dissolve back to the start. A straight cut would need a re-render, because the frames were deleted.
   - The loops are filmed against plain sky.
   - The landing poster is a small plane on a grey sky.
-- **Nanawing (FPV) clips:** a cloud container has no GPU, so its renders came out soft and weren't used. The homepage uses the sim's map renders, the Hangar capture and the approved formation art instead. To make Nanawing video, run `scripts/redesign/clips/nanawing/scripts/` on a machine with a GPU, or use the owner's footage.
+- **Nanawing (FPV) clips (12 Nov):** the homepage's maps switcher plays three clips rendered on the owner's computer from fpvsim `main` (`aeb7d16`): `clip-island` (Spectre beside the freight train, 6 s, seamless loop), `clip-desert` (Desert Wing past the pyramids, 7 s) and `clip-parkland` (Spectre over the lake and bridge, 5 s), in `site/assets/home/`. The desert and parkland loops restart with a straight cut. The hero still uses the approved formation art.
+  - To re-render, from `scripts/redesign/clips/nanawing/scripts/`: set `FPVSIM_REPO` to a clean checkout of fpvsim `main` with `node_modules` (not a work-in-progress branch), `CLIP_CAPTURE=jpeg` (ten times faster grabs) and `FFMPEG` to ffmpeg with `libsvtav1`.
+  - `node render.mjs <shot> --every 15` scouts a line (stills and `../out/<shot>-scout.jpg`); `node render.mjs <shot> --ss 2` renders (add `--auto` for `island-train`); `node encode.mjs <shot> --maxrate <kbit> --av1max <kbit>` encodes. Used: desert 1800/1200, parkland 2200/1700, island 4000/3000 with `--crf 21`.
+  - Shots are in `shots.mjs`. The pilot follows a path over the ground and does not dodge trees or buildings, so scout every new line.
+  - A cloud container has no GPU and renders soft; on Linux the scripts still default to software rendering (`CLIP_GPU=1` to change).
 - **Re-rendering Nanawing 2 clips:**
   - The scripts expect a sibling nanawing2 checkout with `npm ci`, or set `NW2_REPO`, plus `ffmpeg` with `libsvtav1`.
   - Run them from `scripts/redesign/clips/nanawing2/scripts/`:
@@ -177,7 +181,7 @@ Run the brand-voice reviewer in strict mode on the **whole** page, fix every fin
 2. **Nanawing 2 share card.** It says "8 aircraft · No install" (nanawing2 `scripts/social-card.html`).
 3. **New milestone dates.** M4 (20 Oct), M5 (4 Nov) and M6 (10 Nov) have passed, and the plan closes 17 Nov.
 4. **The M4 redirect, on merge day.** The header's "Nanawing 2" link still goes to the bare `nanawing2.narenana.com/`, and "Read the Nanawing 2 flying guide" goes to `nanawing2.narenana.com/guides/how-to-play`. Both should follow the redirect rule.
-5. **Nanawing hero video.** Render it on a machine with a GPU, or supply flight footage.
+5. **Nanawing hero video.** The maps now play as clips (12 Nov); the hero is still the formation art. Say if the hero should be a clip too, or supply flight footage.
 6. **The "In the sim" label** on clips filmed from camera positions the sim doesn't offer: keep it or reword it.
 7. **The other share-script copies.** fpvsim's and nanawing2's `public/assets/family/share.js` still say "Link copied. Ready to share!". They had already drifted (plan §8, Family assets row).
 

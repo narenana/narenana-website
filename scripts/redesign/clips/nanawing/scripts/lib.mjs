@@ -3,15 +3,15 @@
 // Chromium (SwiftShader), every request to a non-loopback host aborted, service workers blocked.
 import { createRequire } from "node:module";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 export const REPO = process.env.FPVSIM_REPO ?? resolve(HERE, "../../../../../../fpvsim"); // sibling checkout of narenana-website
 const require = createRequire(join(REPO, "package.json"));
 const { chromium } = require("playwright");
-const { createServer } = await import(join(REPO, "node_modules/vite/dist/node/index.js"));
+const { createServer } = await import(pathToFileURL(join(REPO, "node_modules/vite/dist/node/index.js")).href);
 export const sharp = require("sharp");
-const { launchFromMenu } = await import(join(REPO, "tools/probeKit.mjs"));
+const { launchFromMenu } = await import(pathToFileURL(join(REPO, "tools/probeKit.mjs")).href);
 export const SCRATCH = resolve(HERE, ".."); // frames/ and out/ land next to scripts/ (gitignored)
 
 const LOOPBACK = (host) => host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost");
@@ -30,13 +30,15 @@ export async function startServer() {
 }
 
 export async function launchBrowser() {
+  // CLIP_SWIFTSHADER=1 (or Linux without a GPU): software rendering, slow and soft. Otherwise the machine's own GPU
+  // through ANGLE, in Chromium's new headless mode (the headless shell has no GPU path). Always headless and muted.
+  const soft = process.env.CLIP_SWIFTSHADER === "1" || (process.platform === "linux" && process.env.CLIP_GPU !== "1");
   return chromium.launch({
-    executablePath: "/opt/pw-browsers/chromium",
+    ...(process.env.CLIP_CHROMIUM ? { executablePath: process.env.CLIP_CHROMIUM } : soft && process.platform === "linux" ? { executablePath: "/opt/pw-browsers/chromium" } : { channel: "chromium" }),
     headless: true,
     args: [
       "--mute-audio",
-      "--use-angle=swiftshader",
-      "--enable-unsafe-swiftshader",
+      ...(soft ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] : [process.platform === "win32" ? "--use-angle=d3d11" : "--use-angle=default", "--enable-gpu"]),
       "--ignore-gpu-blocklist",
       "--disable-background-timer-throttling",
       "--disable-renderer-backgrounding",

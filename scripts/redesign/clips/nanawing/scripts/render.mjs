@@ -14,7 +14,8 @@ const arg = (k, def) => { const i = process.argv.indexOf(k); return i > 0 ? Numb
 const SS = arg("--ss", shot.ss ?? 1);
 const W = 1920, H = 1080, FPS = 30;
 const TOTAL = arg("--frames", shot.frames + (shot.loopFrames ?? 0));
-const dir = `${SCRATCH}/frames/${name}`;
+const EVERY = arg("--every", 1); // --every K: scout the shot, rendering only every Kth frame as a small still + a contact sheet
+const dir = `${SCRATCH}/frames/${name}${EVERY > 1 ? "-scout" : ""}`;
 const ctlFile = `${SCRATCH}/control-${name}.json`;
 if (!process.argv.includes("--keep-control")) rmSync(ctlFile, { force: true });
 mkdirSync(`${SCRATCH}/out`, { recursive: true });
@@ -35,8 +36,11 @@ try {
   await page.evaluate(() => window.__clock.freeze());
   await page.evaluate(readFileSync(new URL("./pageRuntime.js", import.meta.url), "utf8"));
   const shoot = async (file) => {
-    const png = await page.screenshot({ type: "png", timeout: 300000 });
-    if (SS !== 1) await sharp(png).resize(W, H, { kernel: "lanczos3" }).png({ compressionLevel: 3 }).toFile(file);
+    // CLIP_CAPTURE=jpeg: a quality-98 JPEG grab re-saved as PNG (about 0.5 s a frame instead of 5 s for a PNG grab)
+    const jpg = process.env.CLIP_CAPTURE === "jpeg" || file.endsWith(".jpg");
+    const png = await page.screenshot(jpg ? { type: "jpeg", quality: 98, timeout: 300000 } : { type: "png", timeout: 300000 });
+    if (file.endsWith(".jpg")) await sharp(png).resize(960, 540).jpeg({ quality: 85 }).toFile(file);
+    else if (SS !== 1 || jpg) await sharp(png).resize(W, H, { kernel: "lanczos3" }).png({ compressionLevel: 1 }).toFile(file);
     else writeFileSync(file, png);
   };
   const settle = (n) => page.evaluate(async (n) => { // real renders at a held clock (dt = 0): streamed props land
@@ -90,13 +94,22 @@ try {
   console.log(`[${t()}] check frame written`);
   console.log(`[${t()}] rendering ${TOTAL} frames at ${W}x${H} from a ${Math.round(W * SS)}x${Math.round(H * SS)} backbuffer`);
   const tR = Date.now();
+  const stills = [];
   for (let i = 0; i < TOTAL; i++) {
+    if (EVERY > 1 && i % EVERY !== 0) { await page.evaluate(() => window.__clipStep(false)); continue; }
     const rec = await page.evaluate(() => window.__clipStep(true));
-    await shoot(`${dir}/f${String(i).padStart(5, "0")}.png`);
+    if (EVERY > 1) { stills.push(`${dir}/s${String(i).padStart(5, "0")}.jpg`); await shoot(stills.at(-1)); }
+    else await shoot(`${dir}/f${String(i).padStart(5, "0")}.png`);
     if (i % 10 === 0 || i === TOTAL - 1) {
       const per = (Date.now() - tR) / 1000 / (i + 1);
       console.log(`[${t()}] frame ${i}/${TOTAL} ${per.toFixed(1)} s/frame, eta ${((TOTAL - i - 1) * per / 60).toFixed(1)} min ${JSON.stringify(rec)}`);
     }
+  }
+  if (EVERY > 1) { // scouting: a contact sheet of the stills, 4 across
+    const rows = Math.ceil(stills.length / 4);
+    await sharp({ create: { width: 1920, height: rows * 270, channels: 3, background: "#000" } })
+      .composite(await Promise.all(stills.map(async (f, k) => ({ input: await sharp(f).resize(480, 270).toBuffer(), left: (k % 4) * 480, top: Math.floor(k / 4) * 270 }))))
+      .jpeg({ quality: 85 }).toFile(`${SCRATCH}/out/${name}-scout.jpg`);
   }
   const log = await page.evaluate(() => window.__clipLog());
   writeFileSync(`${SCRATCH}/out/${name}.log.json`, JSON.stringify(log));
