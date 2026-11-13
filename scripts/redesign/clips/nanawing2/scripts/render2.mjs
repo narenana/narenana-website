@@ -35,7 +35,11 @@ await buildFixture();
 const { server, url } = await serveFixture();
 const browser = await chromium.launch({
   // Headless (Playwright default) and muted, per the repo's local test etiquette.
-  args: ['--mute-audio', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
+  // CLIP_GPU=1: the machine's own GPU (new headless mode); otherwise software rendering as in the cloud.
+  ...(process.env.CLIP_GPU === '1' ? { channel: 'chromium' } : {}),
+  args: process.env.CLIP_GPU === '1'
+    ? ['--mute-audio', '--ignore-gpu-blocklist', '--enable-gpu', process.platform === 'win32' ? '--use-angle=d3d11' : '--use-angle=default']
+    : ['--mute-audio', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 try {
   const page = await browser.newPage({ viewport: { width: 640, height: 360 } });
@@ -130,7 +134,7 @@ try {
       if (ow !== vw || oh !== vh) {
         const big = file + '.big.png';
         writeFileSync(big, png);
-        execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', big, '-vf', `scale=${ow}:${oh}:flags=area`, file]);
+        execFileSync(process.env.FFMPEG ?? 'ffmpeg', ['-v', 'error', '-y', '-i', big, '-vf', `scale=${ow}:${oh}:flags=area`, file]);
         rmSync(big);
       } else writeFileSync(file, png);
       times.push(Date.now() - t);

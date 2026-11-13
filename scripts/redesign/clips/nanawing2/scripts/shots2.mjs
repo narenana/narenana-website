@@ -61,22 +61,50 @@ const cands = {
   c2: { mode: 'chase', eye: [6, 1.8], dz: -14, screen: [0.4, 0.15], fov: 0.22 },
   c3: { mode: 'chase', eye: [14, 2.0], dz: -12, screen: [0.4, 0.1], fov: 0.22 },
   c4: { mode: 'chase', eye: [3, 2.4], dz: -20, screen: [0.4, 0.2], fov: 0.17 },
+  // Round 3 (owner, 14 Nov: "hero video needs to be better"): a wider lens close to the aircraft, so the strip and
+  // the tree line move through the frame instead of a small aircraft hanging on a long lens against cloud.
+  w1: { mode: 'chase', eye: [5, 1.3], dz: -8, screen: [0.3, 0.15], fov: 0.55, pin: true },
+  w2: { mode: 'chase', eye: [7, 1.0], dz: -10, screen: [0.35, 0.2], fov: 0.45, pin: true },
+  w3: { mode: 'chase', eye: [3, 2.6], dz: -7, screen: [0.25, 0.0], fov: 0.6, pin: true },
+  t1: { mode: 'frame', eye: [10, 1.72, 8], widthFraction: 0.3, lead: 0.12, rate: 4, zoomRate: 1.5, minFov: 0.08, maxFov: 0.9 },
+};
+// The same flight with the pass at 2.5 m, for cameras close enough that the strip rushes through the frame.
+const lowFlight = {
+  ...heroFlight,
+  route: [
+    { to: [0, 110], alt: 5 },
+    { to: [28, 175], alt: 5, radius: 10 },
+    { to: [-4, 0], line: Math.PI, alt: 4, align: [2, 0.08] },
+    { to: [-4, -500], line: Math.PI, alt: 2.5 },
+  ],
+  pick: () => 36.0,
+};
+const near = {
+  n1: { flight: heroFlight, camera: { mode: 'chase', eye: [2, 5.0], dz: -5.5, screen: [0.2, 0.1], fov: 0.45, pin: true } },
+  n2: { flight: lowFlight, camera: { mode: 'chase', eye: [3, 2.6], dz: -5.5, screen: [0.2, 0.15], fov: 0.45, pin: true } },
+  h2: { flight: lowFlight, camera: { mode: 'chase', eye: [4, 1.9], dz: -4, screen: [0.35, 0.2], fov: 0.26, pin: true } },
+  h3: { flight: lowFlight, camera: { mode: 'chase', eye: [5, 1.6], dz: -6, screen: [0.35, 0.25], fov: 0.3, pin: true } },
+  n3: { flight: lowFlight, camera: { mode: 'chase', eye: [-2, 3.3], dz: 6, screen: [-0.1, -0.05], fov: 0.6, pin: true } },
 };
 export const SHOTS = {
+  ...Object.fromEntries(Object.entries(near).map(([k, v]) => [`hero-${k}`, { ...v.flight, viewport: [1920, 1080], camera: v.camera }])),
   ...Object.fromEntries(Object.entries(cands).map(([k, camera]) => [`hero-${k}`, { ...heroFlight, viewport: [1920, 1080], camera }])),
-  // 1. Camera car on the runway (x = 6, 1.8 m up) running 14 m ahead of the aircraft and looking
-  //    back at it: front-quarter view against the clouds, fixed orientation (sky static, distant
-  //    tree line drifts), aircraft held at 70% across / slightly above centre.
+  // 1. Round 3 hero (14 Nov): the NanaTrainer on a 2.5 m pass down the strip, filmed from a camera car 4 m to its
+  //    side and 4 m ahead at head height, on a long lens: the aircraft fills about a seventh of the frame and the
+  //    tree line, fence and hill sweep behind it. (Round 2 was a 4.5 m pass on a longer lens against cloud: a small
+  //    aircraft and almost no movement.)
   hero: {
-    ...heroFlight,
+    ...lowFlight,
+    pick: () => 34.5,
     viewport: [1920, 1080],
-    camera: { mode: 'chase', eye: [6, 1.8], dz: -14, screen: [0.4, 0.1], fov: 0.2, pin: true },
+    camera: { mode: 'chase', eye: [4, 1.9], dz: -4, screen: [0.35, 0.1], fov: 0.26, pin: true },
   },
-  // 2. Same flight and camera car, native portrait, lower and looking up: aircraft upper-middle.
+  // 2. The same pass, native portrait: aircraft centred in the upper part of the frame, above the page's copy.
   'hero-portrait': {
-    ...heroFlight,
+    ...lowFlight,
+    pick: () => 34.5,
     viewport: [720, 1280],
-    camera: { mode: 'chase', eye: [6, 1.0], dz: -14, screen: [0.0, 0.35], fov: 0.317, pin: true },
+    camera: { mode: 'chase', eye: [4, 1.9], dz: -4, screen: [0.0, 0.42], fov: 0.42, pin: true },
   },
   // 3. Take-off, the game's own pilot camera, rendered 1080p and downscaled to 720p.
   'takeoff-short': {
