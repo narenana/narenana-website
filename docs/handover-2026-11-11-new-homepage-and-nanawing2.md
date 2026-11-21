@@ -72,10 +72,10 @@ The tests are `catalog/test/seo.mjs`, `catalog/test/suite.mjs`, `scripts/nanawin
 
   | Clip | Length | Aircraft | Notes |
   |---|---|---|---|
-  | `hero` | 10.5 s, 1920×1080 | NanaTrainer | Re-shot 14 Nov on the owner's GPU from nanawing2 `main` `1dff93b`: a 2.5 m pass down the strip, camera 4 m to the side, 0.5 s dissolve at the loop. `hero-portrait` (720×1280) is a separate portrait render for phones. Commands: `CLIP_GPU=1 node render2.mjs hero,hero-portrait`, then `./encode2.sh hero 10.5 0.5 3.6 3.4` and `./encode2.sh hero-portrait 10.5 0.5 2.4 2.35` (needs `python3` and `ffmpeg` on PATH). |
+  | `hero` | 10.5 s, 1920×1080 | NanaTrainer | Re-shot 14 Nov on the owner's GPU from nanawing2 `main` `1dff93b`, all clips and pictures re-rendered 21 Nov from `50c80a4` (NanaSurfer, new field): a 2.5 m pass down the strip, camera 4 m to the side, 0.5 s dissolve at the loop. `hero-portrait` (720×1280) is a separate portrait render for phones. Commands: `CLIP_GPU=1 node render2.mjs hero,hero-portrait`, then `./encode2.sh hero 10.5 0.5 3.6 3.4` and `./encode2.sh hero-portrait 10.5 0.5 2.4 2.35` (needs `python3` and `ffmpeg` on PATH). |
   | `takeoff` | 3 s | NanaTrainer | Lifts off from the mown grass runway, which the sim calls a runway. |
   | `landing` | 5.5 s | NanaTrainer | Touches down at about 3.9 s; the sim rates it "good, on runway". |
-  | `aerobatic` | 7.5 s | NanaEdge | Two full inside loops (flight trace), no knife-edge, no rolls. |
+  | `aerobatic` | 6.5 s | NanaEdge | Two full inside loops (flight trace), no knife-edge, no rolls. |
 
   The 8 aircraft pictures are 1600×900 WebP with transparency.
 - **Known weak spots, all in the owner's hands:**
@@ -100,7 +100,7 @@ The tests are `catalog/test/seo.mjs`, `catalog/test/suite.mjs`, `scripts/nanawin
     ./encode2.sh hero-portrait 10 1 2.35 2.35
     ROTATE=1 ./encode2.sh takeoff-short 3 0.5 0.95 1.1
     ./encode2.sh landing 5.5 0 0.95 1.1
-    ROTATE=1 ./encode2.sh aerobatic 7.5 0.5 0.95 1.1
+    ROTATE=1 ./encode2.sh aerobatic 6.5 0.5 0.95 1.1
     node studio.mjs                                      # the 8 aircraft pictures
     ```
 
