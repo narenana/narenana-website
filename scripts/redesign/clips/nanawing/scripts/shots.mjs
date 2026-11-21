@@ -91,6 +91,25 @@ export const SHOTS = {
     opts: { path: [[10, -228], [73, -200], [205, -185], [300, -205], [368, -205], [430, -205]], waterY: -1,
       agl: 12, speed: 28, maxBank: 45, fov: 0.6, camOffset: [0.7, 0.8, -3.6], camLook: [0, 0, 30], camPosTau: 0.001, camLookTau: 0.001, camHeadTau: 0.7 },
   },
+  // v2 (21 Nov, owner: "make good videos of the 3 maps"): the same lines, filmed from a rear three-quarter about 3 m
+  // off the wing on a long lens, so the wing reads large and banking against each map's landmark.
+  "island-train-v2": {
+    map: "island", aircraft: "spectre", frames: 180, loopFrames: 18, preroll: 60, ss: 1,
+    knobs: { treeMeshDist: 220, treeRadius: 1500, grassRadius: 60 },
+    rehearse: { prepareArgs: { actor: "stock12", near: [1295, -868, 30] }, opts: (o) => islandTrain(12, { ...o, opts: { fov: 0.62, ...(o?.opts ?? {}) } }), stills: [99] },
+    prepare: waitNear, prepareArgs: { actor: "stock0", near: [1295, -868, 30] },
+    opts: (o) => islandTrain(0, { ...o, opts: { fov: 0.5, ...(o?.opts ?? {}) }, train: { cam: [1.5, 0.9, -2.5], look: [-2.2, -2.4, 9], ...(o?.train ?? {}) } }),
+  },
+  "desert-pyramids-v2": {
+    map: "desert-airfield", aircraft: "desertwing", frames: 210, loopFrames: 0, preroll: 60,
+    opts: { path: [[420, -560], [300, -640], [165, -700], [0, -690], [-121, -683], [-410, -680]],
+      agl: 12, speed: 30, maxBank: 45, fov: 0.45, camOffset: [-2.3, 0.55, -2.1], camLook: [3.7, -0.45, 4.8], camPosTau: 0.001, camLookTau: 0.001, camHeadTau: 0.7 },
+  },
+  "parkland-lake-v2": {
+    map: "parkland", aircraft: "spectre", frames: 135, loopFrames: 0, preroll: 108,
+    opts: { path: [[10, -228], [73, -200], [205, -185], [300, -205], [368, -205], [430, -205]], waterY: -1,
+      agl: 12, speed: 28, maxBank: 45, fov: 0.42, camOffset: [2.4, 1.1, -2.0], camLook: [-3.8, -0.9, 4.8], camPosTau: 0.001, camLookTau: 0.001, camHeadTau: 0.7 },
+  },
   // Overhead reference stills for choosing a line (not for the site).
   "parkland-top": { map: "parkland", aircraft: "spectre", frames: 1, loopFrames: 0, preroll: 2,
     opts: { path: [[45, 110], [7, 375]], agl: 40, fov: 1.1, extras: `({ camera() { return { pos: [-60, 900, -40], look: [-60, 0, 20] }; } })` } },
