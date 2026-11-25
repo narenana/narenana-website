@@ -1,5 +1,6 @@
 import { PLAY_PANEL, PLAY_SCRIPT } from './play-dashboard.js';
-// VENDORED from fpvsim stats-worker/src/dashboard.js (branch parkland 794c959, the Parkland release that reaches
+// November 25 mode/landing follow-up: aligned with fpvsim PR 12; play-dashboard.js is byte-identical.
+// Original base VENDORED from fpvsim stats-worker/src/dashboard.js (branch parkland 794c959, the Parkland release that reaches
 // fpvsim main on 2026-10-14; names Parkland and Estate Run) to unify
 // stats at www.narenana.com/stats/nanawing. Served by this worker (gated, src/stats.js); the public
 // workers.dev home redirects here. ONLY changes vs upstream: simQ() prepends the absolute fpvsim-stats
@@ -586,7 +587,7 @@ function renderInsights(){
   if(A&&A.latest_week&&A.latest_week.pilots>=5&&A.latest_week.prev_pilots){var lw=A.latest_week,dl=Math.round((lw.pilots-lw.prev_pilots)/lw.prev_pilots*100);
     if(Math.abs(dl)>=10)add(dl>0?"good":"warn",fmtN(lw.pilots)+" pilots flew last week, "+(dl>0?"up ":"down ")+Math.abs(dl)+"% on the week before.","Unique IP identities (week of "+lbl(lw.week)+" vs "+fmtN(lw.prev_pilots)+" the week before).","activity",92);}
   if(A&&A.latest_week&&A.latest_week.pilots>=5){var w=A.latest_week,rr=Math.round(w.pilots_returning/w.pilots*100);
-    add(rr>=30?"good":"warn",rr+"% of last week's "+fmtN(w.pilots)+" pilots had also flown the week before.",rr>=30?"At least 30% of these identities also appeared the previous week.":"Most of these identities were not recorded the previous week; they may be new or returning after a longer gap.","activity",90);}
+    add(rr>=30?"good":"warn",rr+"% of last week's "+fmtN(w.pilots)+" pilots had also flown the week before.",rr>=30?"These identities were also recorded the previous week.":"Most of these identities were not recorded the previous week; they may be new or returning after a longer gap.","activity",90);}
   if(A&&A.rows&&A.rows.length>=8){var rows=A.rows.filter(function(r){return !r.partial;}),n=rows.length;if(n>=8){var half=Math.floor(n/2),a=0,b=0,i;for(i=0;i<half;i++)a+=rows[i].flights;for(i=n-half;i<n;i++)b+=rows[i].flights;var g=a?Math.round((b-a)/a*100):null;
     if(g!=null&&Math.abs(g)>=15)add(g>0?"good":"warn","Flights are "+(g>0?"up ":"down ")+Math.abs(g)+"% in the last "+half+" "+(A.bucket==="week"?"weeks":"days")+" vs the first "+half+".","Sum of launches, filtered pilots, equal halves of "+n+" closed "+(A.bucket==="week"?"weeks":"days")+(n%2?" (middle one skipped)":"")+".","activity",85);}}
   if(A&&A.heat){var best=null,d,h;for(d=0;d<7;d++)for(h=0;h<24;h++){var v=A.heat[d][h];if(!best||v>best.v)best={d:d,h:h,v:v};}
