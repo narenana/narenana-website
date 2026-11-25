@@ -1,3 +1,4 @@
+import { PLAY_PANEL, PLAY_SCRIPT } from './play-dashboard.js';
 // VENDORED from fpvsim stats-worker/src/dashboard.js (branch parkland 794c959, the Parkland release that reaches
 // fpvsim main on 2026-10-14; names Parkland and Estate Run) to unify
 // stats at www.narenana.com/stats/nanawing. Served by this worker (gated, src/stats.js); the public
@@ -12,7 +13,7 @@
 // SECURITY: telemetry strings (gpu, os, browser, wing ids, examples…) are CLIENT-SUPPLIED and the ingest
 // endpoints are public. esc() is the ONLY path into innerHTML — every string, server-generated labels
 // included, goes through it. Chart helpers take numbers only.
-// HONESTY: every panel says what it counts (real players / raw counter), its window, and its caveat; a
+// HONESTY: every panel says what it counts (filtered pilots / raw counter), its window, and its caveat; a
 // route failure keeps the panel's last render and marks it stale, never a blank or a zero.
 // String.raw so the regexes below keep single backslashes; the page must not contain a backtick or "${".
 export const DASHBOARD = String.raw`<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -114,7 +115,7 @@ ul.ins li .go:hover{text-decoration:underline}
   <span class="live" style="margin-left:14px">● Live</span>
 </div>
 <script>(function(){if(!new URLSearchParams(location.search).get("embed"))return;var b=document.getElementById("pf-back");if(b)b.style.display="none";var w=document.querySelector(".wrap");if(w)w.style.paddingTop="16px";function ph(){try{parent.postMessage({t:"nwh",h:document.documentElement.scrollHeight},"*")}catch(e){}}addEventListener("load",ph);var n=0,iv=setInterval(function(){ph();if(++n>15)clearInterval(iv)},800);try{new ResizeObserver(ph).observe(document.body)}catch(e){}})();</script>
-<h1>Every flight, counted.</h1>
+<h1>Recorded flight activity</h1>
 <nav class="sims" role="tablist" aria-label="Product">
   <button role="tab" data-sim="nanawing1">Nanawing 1 <span>FPV</span></button><button role="tab" data-sim="nanawing2">Nanawing 2 <span>line of sight</span></button>
 </nav>
@@ -122,10 +123,11 @@ ul.ins li .go:hover{text-decoration:underline}
 <div class="grid" id="grid"><div class="tile"><div class="k">Loading…</div></div></div>
 
 <nav class="tabs" role="tablist" aria-label="Sections">
-  <button role="tab" data-tab="summary">Summary</button><button role="tab" data-tab="activity">Activity</button><button role="tab" data-tab="maps">Maps</button><button role="tab" data-tab="racing">Racing</button><button role="tab" data-tab="wings">Wings</button><button role="tab" data-tab="hardware">Hardware</button><button role="tab" data-tab="audience">Audience</button>
+  <button role="tab" data-tab="summary">Summary</button><button role="tab" data-tab="activity">Activity</button><button role="tab" data-tab="play">Play &amp; landings</button><button role="tab" data-tab="maps">Maps</button><button role="tab" data-tab="racing">Racing</button><button role="tab" data-tab="wings">Wings</button><button role="tab" data-tab="hardware">Hardware</button><button role="tab" data-tab="audience">Audience</button>
 </nav>
 
 <section class="tab" id="tab-summary" role="tabpanel">
+<div class="panel" id="playOverview" style="margin-top:20px"><div class="ptitle">Free flight and landing challenge <span class="psub" id="subPlaySummary">last 30 days</span></div><div id="chPlaySummary"><div class="chload">Loading…</div></div><a href="#play">View modes and landing grades →</a></div>
 <div class="charts" style="margin-top:20px">
   <div class="panel"><div class="ptitle">What matters right now <span class="psub">the five findings that most deserve a look · each links to its section</span></div><div id="insightsTop"><div class="chload">Waiting for data…</div></div></div>
   <div class="panel"><div class="ptitle">Flights per day <span class="psub" id="subPulse">last 30 days</span></div><div class="chart" id="chPulse"><div class="chload">Loading…</div></div></div>
@@ -147,6 +149,7 @@ ul.ins li .go:hover{text-decoration:underline}
 </div>
 </section>
 
+${PLAY_PANEL}
 <section class="tab" id="tab-racing" role="tabpanel" hidden>
 <div id="ins-racing"></div>
 <div class="charts" style="margin-top:20px">
@@ -159,7 +162,7 @@ ul.ins li .go:hover{text-decoration:underline}
 <div id="ins-maps"></div>
 <div class="chips sm" id="mapChips" role="group" aria-label="Window" style="margin-top:16px"><button data-d="14">14 d</button><button data-d="30">30 d</button><button data-d="90">90 d</button></div>
 <div class="charts">
-  <div class="panel"><div class="ptitle">Which map people fly <span class="psub" id="subMaps">real players · every launch</span></div><div id="chMaps"><div class="chload">Loading…</div></div></div>
+  <div class="panel"><div class="ptitle">Which map people fly <span class="psub" id="subMaps">filtered pilots · every launch</span></div><div id="chMaps"><div class="chload">Loading…</div></div></div>
   <div class="panel"><div class="ptitle">Flights per day by map <span class="psub">stacked · today is partial</span></div><div class="legend" id="mapLegend"></div><div class="chart" id="chMapDays"><div class="chload">Loading…</div></div></div>
 </div>
 </section>
@@ -170,7 +173,7 @@ ul.ins li .go:hover{text-decoration:underline}
 <div class="charts">
   <div class="panel"><div class="ptitle">Which wing people fly <span class="psub" id="subWings">all flights, not just laps · 120-day retention</span></div><div id="chWings"><div class="chload">Loading…</div></div></div>
   <div class="two">
-    <div class="panel"><div class="ptitle">FPV vs chase <span class="psub">camera at launch</span></div><div id="chCam"><div class="chload">Loading…</div></div></div>
+    <div class="panel"><div class="ptitle">Camera at launch <span class="psub">camera at launch</span></div><div id="chCam"><div class="chload">Loading…</div></div></div>
     <div class="panel"><div class="ptitle">How long a flight lasts <span class="psub">bins 0–15 · 15–30 · 30–60 · 60–120 · 120–300 · 300+ s</span></div><div id="chDur"><div class="chload">Loading…</div></div></div>
   </div>
 </div>
@@ -205,7 +208,7 @@ ul.ins li .go:hover{text-decoration:underline}
 </div>
 </section>
 
-<div class="foot">Daily charts are UTC and begin 22 Jul 2026 (flights) / 30 Jul 2026 (perf). Real players = dev builds, ?tier= probe runs and software renderers excluded; identity is a salted IP hash (approximate). Perf records are kept 120 days; daily rollups are permanent. Hours flown are recorded but not shown yet. · <a href="https://sim.narenana.com">Fly Nanawing →</a></div>
+<div class="foot">Daily charts are UTC and begin 22 Jul 2026 (flights) / 30 Jul 2026 (perf). Filtered pilots = dev builds, ?tier= probe runs and software renderers excluded; Activity and daily pilot chart identity is a salted IP hash (approximate); Play &amp; landings uses anonymous browser ids with IP fallback, so pilot totals can differ. Perf records are kept 120 days; daily rollups are permanent. · <a href="https://sim.narenana.com">Fly Nanawing →</a></div>
 </div>
 <script>
 "use strict";
@@ -238,7 +241,7 @@ var rendered={};
 function setStale(id,on){var t=el(id);if(!t)return;var p=t.parentNode.querySelector(".ptitle");if(!p)return;var s=p.querySelector(".pill.stale");if(on&&!s){s=document.createElement("span");s.className="pill stale";s.textContent="stale";s.title="The last refresh failed or the server served an old copy; the numbers may be behind.";p.appendChild(s);}if(!on&&s)s.remove();}
 function fail(id,msg){if(rendered[id]){setStale(id,true);return;}el(id).innerHTML='<div class="cherr">'+esc(msg)+'</div>';}
 function ok(id,html){el(id).innerHTML=html;rendered[id]=true;setStale(id,false);}
-function realPill(n){return '<span class="pill" title="Excludes dev builds, forced-tier (?tier=) probe runs and software renderers.'+(n!=null?' '+esc(fmtN(n))+' sessions excluded in this window.':'')+'">real players</span>';}
+function realPill(n){return '<span class="pill" title="Excludes dev builds, forced-tier (?tier=) probe runs and software renderers.'+(n!=null?' '+esc(fmtN(n))+' sessions excluded in this window.':'')+'">filtered pilots</span>';}
 // The two sims are stored separately and read independently. SIM comes from this page's own ?sim=,
 // so a view is shareable, and rides on every SAME-ORIGIN stats request below. The leaderboard's
 // /summary is absolute and racing-only, so it is deliberately left alone.
@@ -333,12 +336,12 @@ function renderTiles(){
   var d=S.stats;if(!d)return;
   var flights=d.flights||0,air=d.air_seconds||0,land=d.landings||0,crash=(d.crashes||0)+(d.stalls||0),resets=d.resets||0,lefts=d.lefts||0;
   var done=land+crash,landPct=done?Math.round(land/done*100):0,ended=done+resets+lefts,avg=ended?air/ended:0;
-  var raw='<span class="pill raw" title="All-time counters, every launch ever seen — not filtered to real players.">all-time · raw</span>';
+  var raw='<span class="pill raw" title="All-time counters, every launch ever seen — not filtered to filtered pilots.">all-time · raw</span>';
   var wk=S.activity&&S.activity.latest_week,wkHtml;
   if(wk){var delta=wk.prev_pilots?Math.round((wk.pilots-wk.prev_pilots)/wk.prev_pilots*100):null;
-    wkHtml=tile("Pilots last week",fmtN(wk.pilots),"exact unique · wk of "+esc(lbl(wk.week))+(delta==null?"":" · "+(delta>=0?"+":"")+delta+"% vs prior")+" · "+fmtN(wk.pilots_returning)+" returning","good");}
+    wkHtml=tile("Pilots last week",fmtN(wk.pilots),"unique IP identities · wk of "+esc(lbl(wk.week))+(delta==null?"":" · "+(delta>=0?"+":"")+delta+"% vs prior")+" · "+fmtN(wk.pilots_returning)+" returning","good");}
   else wkHtml=tile("Pilots last week","—","no closed week yet");
-  var at=S.activity&&S.activity.all_time,atHtml=at?tile("Unique pilots",fmtN(at.pilots),"all-time real players"+(at.since?" · since "+esc(lbl(at.since)):""),"good"):tile("Unique pilots","—","all-time");
+  var at=S.activity&&S.activity.all_time,atHtml=at?tile("Unique pilots",fmtN(at.pilots),"all-time filtered pilots"+(at.since?" · since "+esc(lbl(at.since)):""),"good"):tile("Unique pilots","—","all-time");
   // The leaderboard is Nanawing 1's, and its worker has no product dimension: this tile is racing
   // data and must never appear under another product, the way the Racing tab does not.
   var sm=S.summary&&S.summary.totals,smHtml=RACING?(sm?tile("Laps on the boards",fmtN(sm.laps_submitted),"all-time · "+fmtN(sm.pilots)+" pilots on "+fmtN(sm.board_rows>0?(S.summary.boards||[]).length:0)+" boards","blue"):tile("Laps on the boards","—","leaderboard unavailable")):"";
@@ -347,7 +350,7 @@ function renderTiles(){
     tile("Flights flown",fmtN(flights),raw,"blue")+
     tile("Total air-time",fmtT(air),raw)+
     tile("Avg flight",fmtT(avg),"per ended flight · resets and tab-closes included")+
-    '<div class="tile"><div class="k">Landings vs crashes</div><div class="v good">'+landPct+'%</div><div class="u">clean landings</div>'+
+    '<div class="tile"><div class="k">Landings vs crashes</div><div class="v good">'+landPct+'%</div><div class="u">landed outcomes</div>'+
       '<div class="bar"><i class="land" style="width:'+landPct+'%"></i><i class="crash" style="width:'+(100-landPct)+'%"></i></div>'+
       '<div class="u" style="margin-top:8px">'+fmtN(land)+' landed · '+fmtN(crash)+' crashed'+(resets||lefts?' · '+fmtN(resets)+' reset · '+fmtN(lefts)+' left':'')+'</div></div>'+
     wkHtml+smHtml;
@@ -372,7 +375,7 @@ function renderActivity(){
   barChart(el("chFlights"),rows,function(r){return r.flights;},"#3eb5e8","#7cc9ef","flights",weekly);
   barChart(el("chSessions"),rows,function(r){return r.sessions;},"#e3a83a","#f3c256","sessions",weekly);
   if(weekly){
-    el("subPilots").innerHTML=esc("exact per week · returning = also flew the previous week · partial week shows avg daily unique")+realPill();
+    el("subPilots").innerHTML=esc("unique IP identities per week · returning = also flew the previous week · partial week shows avg daily unique")+realPill();
     var prow=rows.map(function(r){return {key:r.key,partial:r.partial,ret:r.pilots_returning||0,other:r.pilots!=null?Math.max(0,r.pilots-(r.pilots_returning||0)):(r.pilots_daily_avg||0),note:r.pilots==null?"avg daily unique (partial week)":null};});
     stackChart(el("chPilots"),prow,["ret","other"],["#59d98a","#2c7a48"],["returning","new / other"],function(r,k){return r[k];},true,"pilots");
   }else{
@@ -449,7 +452,7 @@ function mname(m){return m==="island"?"Island":m==="desert-airfield"?"Desert":m=
 function dayAfter(day){return new Date(Date.parse(day+"T00:00:00Z")+864e5).toISOString().slice(0,10);}
 function renderMaps(){
   var d=S.maps,a=d.by_map||[];
-  el("subMaps").innerHTML=esc("real players · last "+d.days+" days · "+fmtN(d.flights)+" flights"+(d.desert_release_ms?" · flights before the Desert release (3 Oct 2026) count as Island":""))+realPill();
+  el("subMaps").innerHTML=esc("filtered pilots · last "+d.days+" days · "+fmtN(d.flights)+" flights"+(d.desert_release_ms?" · flights before the Desert release (3 Oct 2026) count as Island":""))+realPill();
   if(!a.length){ok("chMaps",'<div class="empty">No flights in this window.</div>');ok("chMapDays",'<div class="empty">—</div>');el("mapLegend").innerHTML="";renderInsights();return;}
   var h=barList(a.map(function(x){return {label:mname(x.map),v:x.flights,title:pc(x.share*100,1)+" of flights"};}),"#3eb5e8",function(it){return fmtN(it.v)+" flights";});
   var t='<div class="perfwrap"><table class="perf"><tr><th>Map</th><th class="n">Flights</th><th class="n">Share</th><th class="n">Pilots</th><th class="n">Air time</th><th class="n">Avg s</th><th class="n">Landed</th><th class="n">Crashed</th><th class="n">Reset</th><th class="n">Laps</th></tr>';
@@ -509,7 +512,7 @@ function renderHardware(){
       '<td class="n">'+esc(num(x.p90_ms))+'</td><td class="n">'+esc(num(x.p99_ms))+'</td><td class="n" title="flights whose p90 frame was slower than 33.4 ms (≥10 % of frames under 30 fps)">'+esc(pc(x.pct_choppy))+'</td><td class="n" title="share of flights on battery (Chromium only)">'+esc(pc(x.pct_battery))+'</td>'+
       '<td>'+esc(x.tier_top||"—")+'</td><td><span class="vd '+vdCls(x.verdict)+'" title="'+esc(vdTitle(x.verdict))+'">'+esc(x.verdict)+'</span></td></tr>';}
   h+='</table></div><div class="callout">Bench floor: <b>'+esc(num(d.bench_pass_ms))+' ms</b> per frame is the first-run benchmark pass mark. '+
-    'Verdicts — <b>locked</b>: ≥55 fps on ultra · <b>under-tiered</b>: ≥55 fps below ultra (headroom the bench did not give them) · <b>playable</b>: 30–55 · <b>over-tiered</b>: &lt;30 fps above lite · <b>below floor</b>: &lt;30 fps on lite, nothing lower to offer · <b>thin</b>: under 20 flights.</div>';
+    'Verdicts — <b>locked</b>: ≥55 fps on ultra · <b>under-tiered</b>: ≥55 fps below ultra · <b>playable</b>: 30–55 · <b>over-tiered</b>: &lt;30 fps above lite · <b>below floor</b>: &lt;30 fps on lite, nothing lower to offer · <b>thin</b>: under 20 flights.</div>';
   ok("chHw",h);
   // ladder: bucket × tier, cell = share under 30 fps
   var tiers=["ultra","high","lite"],real=b.filter(function(x){return x.real&&x.flights>=5;});
@@ -526,12 +529,12 @@ function renderHardware(){
   ok("chLadder",lh);
   var bt=d.battery||[],bh='<div class="perfwrap"><table class="perf"><tr><th>Power</th><th class="n">Flights</th><th class="n">Median fps</th><th class="n">≥30</th><th class="n">p90 ms</th></tr>';
   for(i=0;i<bt.length;i++){var y=bt[i];bh+='<tr><td class="hd">'+esc(y.label)+'</td><td class="n">'+fmtN(y.flights)+'</td><td class="n '+fpsCls(+y.median_fps||0)+'">'+esc(num(y.median_fps))+'</td><td class="n">'+esc(pc(y.pct_ge30))+'</td><td class="n">'+esc(num(y.p90_ms))+'</td></tr>';}
-  ok("chBatt",bh+'</table></div><div class="callout">Compare within a bucket, not across: laptops on battery are also the cheaper laptops.</div>');
+  ok("chBatt",bh+'</table></div><div class="callout">Compare within a bucket, not across: hardware composition can differ between these groups.</div>');
   var of=d.offers;
   if(of&&of.total){var oh='<div class="bl">';var keys=["accepted","kept","timeout","floor","none"],names={accepted:"accepted",kept:"kept their tier",timeout:"ignored (timed out)",floor:"under 30 on lite, nothing to offer",none:"no offer needed"};
     for(i=0;i<keys.length;i++){var v=of[keys[i]]||0;oh+='<div class="row"><span class="lab">'+esc(names[keys[i]])+'</span><span class="trk"><i style="width:'+(100*v/of.total).toFixed(1)+'%;background:'+(keys[i]==="floor"?"var(--red)":keys[i]==="accepted"?"var(--osd)":"#3eb5e8")+'"></i></span><span class="val">'+fmtN(v)+'</span></div>';}
     ok("chOffer",oh+'</div><div class="callout">'+fmtN(of.total)+' sessions reported an offer outcome · '+fmtN(of.down||0)+' down-offers · '+fmtN(of.up||0)+' up-offers</div>');}
-  else ok("chOffer",'<div class="empty">No offer outcomes yet — arrives with the next client build.</div>');
+  else ok("chOffer",'<div class="empty">No offer outcomes recorded in this window.</div>');
   var rows=d.top_systems||[];
   if(!rows.length)ok("chPerf",'<div class="empty">No perf data in this window.</div>');
   else{var ph='<div class="perfwrap"><table class="perf"><tr><th>GPU</th><th>System</th><th>Tier</th><th class="n">Flights</th><th class="n">Avg fps</th><th class="n">p90 ms</th><th class="n">Worst-s fps</th></tr>';
@@ -539,7 +542,7 @@ function renderHardware(){
     ok("chPerf",ph+'</table></div>');}
   renderInsights();
 }
-function vdTitle(v){return {locked:"vsync-locked at the top tier",playable:"30–55 fps: fine","under-tiered":"≥55 fps below ultra — the benchmark placed them too low","over-tiered":"under 30 fps above lite — the tier is too heavy for this hardware","below floor":"under 30 fps on lite — the ladder has no rung low enough",thin:"fewer than 20 flights: no verdict",excluded:"not players (probe or software renderer)"}[v]||"";}
+function vdTitle(v){return {locked:"at least 55 fps at the top tier",playable:"30–55 fps: fine","under-tiered":"at least 55 fps below ultra","over-tiered":"under 30 fps above lite","below floor":"under 30 fps on the lowest tier",thin:"fewer than 20 flights: no verdict",excluded:"not players (probe or software renderer)"}[v]||"";}
 async function loadHardware(){
   try{var d=await getJson("/hardware?days="+hwDays);if(d.days!==hwDays)return;S.hardware=d;renderHardware();staleMark(["chHw","chLadder","chBatt","chOffer","chPerf"],d);}
   catch(e){["chHw","chLadder","chBatt","chOffer","chPerf"].forEach(function(id){fail(id,"Could not load hardware ("+e.message+").");});}
@@ -577,35 +580,35 @@ function renderInsights(){
   var out=[],A=S.pulse||S.activity,H=S.hardware,W=S.wings,U=S.audience,L=S.summary,M=S.maps;
   function add(cls,head,why,tab,score){out.push({cls:cls,head:head,why:why,tab:tab||"activity",score:score!=null?score:(cls==="warn"?70:cls==="good"?55:35)});}
   if(M&&M.flights>=30){var dz=(M.by_map||[]).filter(function(x){return x.map==="desert-airfield";})[0];
-    if(dz)add("note","Desert takes "+pc(dz.share*100)+" of flights ("+fmtN(dz.flights)+" in "+M.days+" days).","Share of all real-player launches in the window. Flights before the Desert release (3 Oct 2026) count as Island, so the share keeps moving until the window rolls past that date.","maps",45);
+    if(dz)add("note","Desert takes "+pc(dz.share*100)+" of flights ("+fmtN(dz.flights)+" in "+M.days+" days).","Share of all filtered launches in the window. Flights before the Desert release (3 Oct 2026) count as Island, so the share keeps moving until the window rolls past that date.","maps",45);
     var unk=(M.by_map||[]).filter(function(x){return x.map==="unknown";})[0];
     if(unk&&unk.share>=0.2)add("note",pc(unk.share*100)+" of flights come from clients older than the map field.","Cached pre-release builds update on their next page load; this share should fall within days.","maps",30);}
   if(A&&A.latest_week&&A.latest_week.pilots>=5&&A.latest_week.prev_pilots){var lw=A.latest_week,dl=Math.round((lw.pilots-lw.prev_pilots)/lw.prev_pilots*100);
-    if(Math.abs(dl)>=10)add(dl>0?"good":"warn",fmtN(lw.pilots)+" pilots flew last week, "+(dl>0?"up ":"down ")+Math.abs(dl)+"% on the week before.","Exact weekly uniques (week of "+lbl(lw.week)+" vs "+fmtN(lw.prev_pilots)+" the week before).","activity",92);}
+    if(Math.abs(dl)>=10)add(dl>0?"good":"warn",fmtN(lw.pilots)+" pilots flew last week, "+(dl>0?"up ":"down ")+Math.abs(dl)+"% on the week before.","Unique IP identities (week of "+lbl(lw.week)+" vs "+fmtN(lw.prev_pilots)+" the week before).","activity",92);}
   if(A&&A.latest_week&&A.latest_week.pilots>=5){var w=A.latest_week,rr=Math.round(w.pilots_returning/w.pilots*100);
-    add(rr>=30?"good":"warn",rr+"% of last week's "+fmtN(w.pilots)+" pilots had also flown the week before.",rr>=30?"Retention is real: a third or more come back week to week.":"Most pilots are new each week — acquisition is carrying the numbers, retention is not.","activity",90);}
+    add(rr>=30?"good":"warn",rr+"% of last week's "+fmtN(w.pilots)+" pilots had also flown the week before.",rr>=30?"At least 30% of these identities also appeared the previous week.":"Most of these identities were not recorded the previous week; they may be new or returning after a longer gap.","activity",90);}
   if(A&&A.rows&&A.rows.length>=8){var rows=A.rows.filter(function(r){return !r.partial;}),n=rows.length;if(n>=8){var half=Math.floor(n/2),a=0,b=0,i;for(i=0;i<half;i++)a+=rows[i].flights;for(i=n-half;i<n;i++)b+=rows[i].flights;var g=a?Math.round((b-a)/a*100):null;
-    if(g!=null&&Math.abs(g)>=15)add(g>0?"good":"warn","Flights are "+(g>0?"up ":"down ")+Math.abs(g)+"% in the last "+half+" "+(A.bucket==="week"?"weeks":"days")+" vs the first "+half+".","Sum of launches, real players, equal halves of "+n+" closed "+(A.bucket==="week"?"weeks":"days")+(n%2?" (middle one skipped)":"")+".","activity",85);}}
+    if(g!=null&&Math.abs(g)>=15)add(g>0?"good":"warn","Flights are "+(g>0?"up ":"down ")+Math.abs(g)+"% in the last "+half+" "+(A.bucket==="week"?"weeks":"days")+" vs the first "+half+".","Sum of launches, filtered pilots, equal halves of "+n+" closed "+(A.bucket==="week"?"weeks":"days")+(n%2?" (middle one skipped)":"")+".","activity",85);}}
   if(A&&A.heat){var best=null,d,h;for(d=0;d<7;d++)for(h=0;h<24;h++){var v=A.heat[d][h];if(!best||v>best.v)best={d:d,h:h,v:v};}
     var tot=0;for(d=0;d<7;d++)for(h=0;h<24;h++)tot+=A.heat[d][h];if(best&&tot>=50)add("note","Busiest hour: "+WD[best.d]+" "+(best.h<10?"0":"")+best.h+":00 UTC ("+fmtN(best.v)+" launches, "+Math.round(best.v/tot*100)+"% of the range).","Plan deploys and benchmarks away from it.","activity",20);}
   if(H){var bs=H.buckets.filter(function(x){return x.real;}),floor=bs.filter(function(x){return x.verdict==="below floor";}),over=bs.filter(function(x){return x.verdict==="over-tiered";}),under=bs.filter(function(x){return x.verdict==="under-tiered";});
-    if(floor.length)add("warn",floor.map(function(x){return x.label;}).join(", ")+" run under 30 fps on lite — there is no lower tier to offer them.","Lite is the floor of the ladder; these players need a cheaper render path, not a different tier. "+fmtN(floor.reduce(function(s,x){return s+x.flights;},0))+" flights in the window.","hardware",95);
-    if(over.length)add("warn",over.map(function(x){return x.label;}).join(", ")+" sit above lite but median under 30 fps.","The benchmark placed them too high — the mid-flight down-offer should be catching this; check the Tier offers panel.","hardware",80);
-    if(under.length)add("note",under.map(function(x){return x.label;}).join(", ")+" hold ≥55 fps below ultra.","Headroom the first-run benchmark did not give them; an up-offer or a higher bench cut-off would move them.","hardware",45);
-    var lt=H.ladder.filter(function(l){return l.tier==="lite";})[0];if(lt&&lt.flights>=20)add(lt.pct_lt30>=25?"warn":"good",pc(lt.pct_lt30)+" of lite flights run under 30 fps.",lt.pct_lt30>=25?"A quarter or more of the floor tier is still choppy: the cheapest path is not cheap enough for the machines that reach it.":"The floor tier mostly delivers 30 fps.","hardware",lt.pct_lt30>=25?75:40);
+    if(floor.length)add("warn",floor.map(function(x){return x.label;}).join(", ")+" run under 30 fps on lite — there is no lower tier to offer them.","These flights used the lowest graphics tier. "+fmtN(floor.reduce(function(s,x){return s+x.flights;},0))+" flights in the window.","hardware",95);
+    if(over.length)add("warn",over.map(function(x){return x.label;}).join(", ")+" sit above lite but median under 30 fps.","Check the hardware and chosen tiers for these slower flights.","hardware",80);
+    if(under.length)add("note",under.map(function(x){return x.label;}).join(", ")+" hold ≥55 fps below ultra.","These flights reached at least 55 fps on their selected tiers.","hardware",45);
+    var lt=H.ladder.filter(function(l){return l.tier==="lite";})[0];if(lt&&lt.flights>=20)add(lt.pct_lt30>=25?"warn":"good",pc(lt.pct_lt30)+" of lite flights run under 30 fps.",lt.pct_lt30>=25?"At least a quarter of the recorded lite flights were under 30 fps.":"The floor tier mostly delivers 30 fps.","hardware",lt.pct_lt30>=25?75:40);
     var batt=H.battery||[],onb=batt.filter(function(x){return x.battery===1;})[0],plug=batt.filter(function(x){return x.battery===0;})[0];
-    if(onb&&plug&&onb.flights>=20&&plug.flights>=20&&onb.median_fps!=null&&plug.median_fps!=null){var dd=Math.round(plug.median_fps-onb.median_fps);if(Math.abs(dd)>=5)add("note","On battery, the median flight runs "+Math.abs(dd)+" fps "+(dd>0?"slower":"faster")+" than plugged in.","Median "+onb.median_fps+" vs "+plug.median_fps+" fps · Chromium Battery API only · laptops on battery are also the cheaper laptops.","hardware",35);}}
+    if(onb&&plug&&onb.flights>=20&&plug.flights>=20&&onb.median_fps!=null&&plug.median_fps!=null){var dd=Math.round(plug.median_fps-onb.median_fps);if(Math.abs(dd)>=5)add("note","On battery, the median flight runs "+Math.abs(dd)+" fps "+(dd>0?"slower":"faster")+" than plugged in.","Median "+onb.median_fps+" vs "+plug.median_fps+" fps · Chromium Battery API only · hardware composition can differ between these groups.","hardware",35);}}
   if(W&&W.flights>=100){var landed=0,ended=0;W.by_aircraft.forEach(function(x){landed+=x.outcomes.landed;ended+=x.outcomes.landed+x.outcomes.crashed+x.outcomes.stalled;});
-    if(ended>=50){var lr=Math.round(landed/ended*100);add(lr<10?"warn":lr<30?"note":"good",(lr<30?"Only ":"")+lr+"% of ended flights are landings.","Landed as a share of landed + crashed + stalled, last "+W.days+" days, all wings."+(lr<10?" Landing is the hardest thing in the sim: nine in ten flights that end, end in a crash.":""),"wings",lr<10?88:50);}}
+    if(ended>=50){var lr=Math.round(landed/ended*100);add(lr<10?"warn":lr<30?"note":"good",(lr<30?"Only ":"")+lr+"% of ended flights are landings.","Landed as a share of landed + crashed + stalled, last "+W.days+" days, all wings."+(lr<10?"":""),"wings",lr<10?88:50);}}
   if(W&&W.by_aircraft.length>=2){var a0=W.by_aircraft[0];add("note",a0.aircraft+" is the most flown wing at "+pc(a0.share*100)+" of flights ("+fmtN(a0.flights)+" in "+W.days+" days).","Share of all launches, not laps.","wings",42);
-    var withEnds=W.by_aircraft.filter(function(x){return x.landing_rate!=null&&x.flights>=30;});if(withEnds.length>=2){withEnds.sort(function(x,y){return y.landing_rate-x.landing_rate;});var hi=withEnds[0],lo=withEnds[withEnds.length-1];if(hi.landing_rate-lo.landing_rate>=0.15)add("note",hi.aircraft+" lands "+pc(hi.landing_rate*100)+" of ended flights; "+lo.aircraft+" only "+pc(lo.landing_rate*100)+".","Handling difference or pilot self-selection — both are real; the reset rate ("+pc(lo.reset_rate*100)+" vs "+pc(hi.reset_rate*100)+") says which wing people bail on.","wings",60);}
-    var resets=W.by_aircraft.reduce(function(s,x){return s+x.outcomes.reset;},0);if(W.flights>=100&&resets/W.flights>=0.1)add("note",Math.round(resets/W.flights*100)+"% of flights end in a relaunch from the pad, not a landing or a crash.","Share of all flights in the window. Resets are mostly racers restarting a lap; they were counted as crashes before Sep 2026.","wings",48);}
-  if(U&&U.funnel.sessions>=50){var nf=Math.round((1-U.funnel.flew_1/U.funnel.sessions)*100);add(nf>=40?"warn":"good",nf+"% of page loads never launch a flight.",nf>=40?"Roughly "+(nf>=60?"two in three":"one in two")+" leave from the Hangar — the first-run benchmark and the controls card are the two things they see.":"Most page loads turn into a flight.","audience",nf>=40?86:40);
+    var withEnds=W.by_aircraft.filter(function(x){return x.landing_rate!=null&&x.flights>=30;});if(withEnds.length>=2){withEnds.sort(function(x,y){return y.landing_rate-x.landing_rate;});var hi=withEnds[0],lo=withEnds[withEnds.length-1];if(hi.landing_rate-lo.landing_rate>=0.15)add("note",hi.aircraft+" lands "+pc(hi.landing_rate*100)+" of ended flights; "+lo.aircraft+" only "+pc(lo.landing_rate*100)+".","Pilot experience, handling and flight choices may differ. Reset rates ("+pc(lo.reset_rate*100)+" vs "+pc(hi.reset_rate*100)+") are another observation.","wings",60);}
+    var resets=W.by_aircraft.reduce(function(s,x){return s+x.outcomes.reset;},0);if(W.flights>=100&&resets/W.flights>=0.1)add("note",Math.round(resets/W.flights*100)+"% of flights end in a relaunch from the pad, not a landing or a crash.","Share of recorded flights in the window. Resets were counted as crashes before Sep 2026.","wings",48);}
+  if(U&&U.funnel.sessions>=50){var nf=Math.round((1-U.funnel.flew_1/U.funnel.sessions)*100);add(nf>=40?"warn":"good",nf+"% of page loads never launch a flight.","No launch was recorded for these page loads; the event does not identify why.","audience",nf>=40?86:40);
     var fps=U.flights_per_session,one=fps["1"]||0,many=(fps["3-5"]||0)+(fps["6-10"]||0)+(fps["11+"]||0),fl=U.funnel.flew_1;if(fl>=30)add("note",Math.round(many/fl*100)+"% of sessions that fly at all fly three times or more.","Per page load · "+Math.round(one/fl*100)+"% fly exactly once.","audience",30);
-    if(U.touch.sessions>=10)add(U.touch.flew/U.touch.sessions<0.3?"warn":"note",fmtN(U.touch.sessions)+" touch sessions, "+Math.round(U.touch.flew/U.touch.sessions*100)+"% flew.","Phones and tablets have no sticks; a low share is the missing touch-control story.","audience",U.touch.flew/U.touch.sessions<0.3?58:30);}
-  if(L&&L.boards.length){var tb=L.boards.slice().sort(function(x,y){return y.pilots-x.pilots;})[0];add("note",cname(tb.course)+" · "+tb.aircraft+" is the most raced board: "+fmtN(tb.pilots)+" pilots, best "+fmtMs(tb.best_ms)+", median PB "+fmtMs(tb.median_pb_ms)+".","Medians are over personal bests, one per pilot.","racing",44);
-    var l7=L.boards.reduce(function(s,b){return s+b.laps_7d;},0),act7=L.boards.reduce(function(s,b){return s+b.active_7d;},0);if(L.laps_by_day&&L.laps_by_day.rows.length)add(l7?"note":"warn",fmtN(l7)+" qualifying laps uploaded in the last 7 days by "+fmtN(act7)+" active board entries.","Uploads are a lower bound (offline laps never arrive). Zero for a week means the race loop has gone quiet.","racing",l7?46:80);
-    if(L.totals.pilots>=10&&L.by_course.length>=2){var mc=Math.round(L.totals.multi_course/L.totals.pilots*100);add(mc>=25?"good":"note",mc+"% of board pilots have raced both tracks.","River Run threading needs a second arch; the cross-over rate says whether people find it.","racing",38);}}
+    if(U.touch.sessions>=10)add(U.touch.flew/U.touch.sessions<0.3?"warn":"note",fmtN(U.touch.sessions)+" touch sessions, "+Math.round(U.touch.flew/U.touch.sessions*100)+"% flew.","Touch-capable page loads with a recorded flight; this includes tablets and touch-screen laptops.","audience",U.touch.flew/U.touch.sessions<0.3?58:30);}
+  if(L&&L.boards.length){var tb=L.boards.slice().sort(function(x,y){return y.pilots-x.pilots;})[0];add("note",cname(tb.course)+" · "+tb.aircraft+" is the board with the most pilots: "+fmtN(tb.pilots)+" pilots, best "+fmtMs(tb.best_ms)+", median PB "+fmtMs(tb.median_pb_ms)+".","Medians are over personal bests, one per pilot.","racing",44);
+    var l7=L.boards.reduce(function(s,b){return s+b.laps_7d;},0),act7=L.boards.reduce(function(s,b){return s+b.active_7d;},0);if(L.laps_by_day&&L.laps_by_day.rows.length)add(l7?"note":"warn",fmtN(l7)+" qualifying laps uploaded in the last 7 days by "+fmtN(act7)+" active board entries.","Uploads are a lower bound (offline laps never arrive). Zero means no qualifying uploads were recorded in the last 7 days.","racing",l7?46:80);
+    if(L.totals.pilots>=10&&L.by_course.length>=2){var mc=Math.round(L.totals.multi_course/L.totals.pilots*100);add(mc>=25?"good":"note",mc+"% of board pilots have raced more than one course.","Share of leaderboard pilots with entries on multiple courses.","racing",38);}}
   out.sort(function(x,y){return y.score-x.score;});
   var li=function(it,withLink){return '<li class="'+it.cls+'"><b>'+esc(it.head)+'</b><span class="why">'+esc(it.why)+'</span>'+(withLink?'<a class="go" href="#'+it.tab+'" data-tab="'+it.tab+'">'+esc(TAB_NAMES[it.tab]||it.tab)+' →</a>':'')+'</li>';};
   el("insightsTop").innerHTML=out.length?'<ul class="ins">'+out.slice(0,5).map(function(it){return li(it,true);}).join("")+'</ul>':'<div class="empty">Not enough data for an insight yet.</div>';
@@ -618,7 +621,8 @@ function renderInsights(){
 }
 
 // ---- tabs -------------------------------------------------------------------------------------------
-var TABS=["summary","activity","maps","racing","wings","hardware","audience"];
+${PLAY_SCRIPT}
+var TABS=["summary","activity","play","maps","racing","wings","hardware","audience"];
 var RERENDER={summary:function(){renderPulse();},activity:function(){if(S.activity)renderActivity();},maps:function(){if(S.maps)renderMaps();},racing:function(){if(S.summary)renderSummary();},wings:function(){if(S.wings)renderWings();},hardware:function(){if(S.hardware)renderHardware();},audience:function(){if(S.audience)renderAudience();}};
 function showTab(name){
   if(TABS.indexOf(name)<0)name="summary";
@@ -642,7 +646,7 @@ var SIM_COPY={
 (function(){
   var c=SIM_COPY[SIM]||SIM_COPY.nanawing1;
   var lede=el("lede");
-  if(lede)lede.textContent="Live numbers across everyone flying "+c.what+" at "+c.host+". The totals count every launch ever; everything else counts real players only (dev builds, probe runs and software renderers filtered out).";
+  if(lede)lede.textContent="Recorded flight activity for "+c.what+" at "+c.host+". Totals include received launches. Each panel states its filters; blocked or missing events can leave gaps.";
   var sb=document.querySelectorAll(".sims button");
   for(var i=0;i<sb.length;i++){
     var s=sb[i].getAttribute("data-sim");
@@ -655,6 +659,10 @@ var SIM_COPY={
       u.hash=location.hash; // keep the reader on the same section across the switch
       location.assign(u.href);
     };
+  }
+  if(SIM!=="nanawing2"){
+    document.querySelector('.tabs button[data-tab="play"]').remove();
+    el("tab-play").remove();el("playOverview").remove();TABS.splice(TABS.indexOf("play"),1);
   }
   if(SIM!=="nanawing1"){
     var rt=document.querySelector('.tabs button[data-tab="racing"]');
@@ -683,6 +691,9 @@ chips("mapChips","data-d",mapsDays,function(v){mapsDays=+v;loadMaps();});
 chips("wingChips","data-d",wingsDays,function(v){wingsDays=+v;loadWings();});
 chips("hwChips","data-d",hwDays,function(v){hwDays=+v;loadHardware();});
 chips("audChips","data-d",audDays,function(v){audDays=+v;loadAudience();});
+chips("playChips","data-d",playDays,function(v){playDays=+v;loadPlay();});
+loadPlay();
+setInterval(loadPlay,60000);
 loadTotals();loadActivity().then(loadPulse);loadSummary();loadMaps();loadWings();loadHardware();loadAudience();
 setInterval(loadTotals,8000);
 setInterval(function(){loadActivity().then(loadPulse);},300000);
